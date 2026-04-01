@@ -190,7 +190,9 @@ export class Agent {
       void loopPromise.then(() => {
         if (this.memoryManager?.shouldExtract(userContent)) {
           this.memoryManager.resetExtractionCounter();
-          // In a real impl, this would call the LLM to extract memories
+          void this.extractMemories(threadId).catch(err => {
+            this.logger.debug('Memory extraction failed', { error: String(err) });
+          });
         }
       });
 
@@ -294,6 +296,64 @@ export class Agent {
       const dbPath = this.config.dbPath === '~/.agent/data.db' ? ':memory:' : this.config.dbPath;
       this.database = new SQLiteDatabase(dbPath);
       this.database.initialize();
+    }
+  }
+
+  /**
+   * Extracts memories from recent conversation history via LLM.
+   */
+  private async extractMemories(threadId: string): Promise<void> {
+    if (!this.memoryManager) return;
+
+    const history = this.conversations.getHistory(threadId);
+    const recentMessages = history.slice(-6); // Last 3 turns (user + assistant)
+    if (recentMessages.length < 2) return;
+
+    const conversationText = recentMessages.map(m => {
+      const text = typeof m.content === 'string' ? m.content : '[multimodal]';
+      return `${m.role}: ${text}`;
+    }).join('\n');
+
+    try {
+      const response = await this.client.chat({
+        messages: [
+          {
+            role: 'system',
+            content: `Extract important facts, preferences, or context from this conversation that would be useful to remember for future interactions. Return a JSON array of objects with "content" (the fact), "category" (one of: fact, preference, procedure, insight, context), and "scope" (one of: persistent, thread). If nothing worth remembering, return an empty array []. Only return the JSON array, nothing else.`,
+          },
+          {
+            role: 'user',
+            content: conversationText,
+          },
+        ],
+        temperature: 0,
+        maxTokens: 500,
+      });
+
+      let extracted: Array<{ content: string; category: string; scope: string }>;
+      try {
+        // Try to parse JSON from the response (may be wrapped in markdown code blocks)
+        const jsonStr = response.content.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+        extracted = JSON.parse(jsonStr);
+      } catch {
+        return; // Failed to parse — skip
+      }
+
+      if (!Array.isArray(extracted)) return;
+
+      for (const item of extracted) {
+        if (item.content && item.category) {
+          const memory = this.memoryManager.saveExtracted(
+            item.content,
+            item.category as 'fact' | 'preference' | 'procedure' | 'insight' | 'context',
+            (item.scope === 'thread' ? 'thread' : 'persistent') as 'thread' | 'persistent',
+            item.scope === 'thread' ? threadId : undefined,
+          );
+          this.logger.debug('Memory extracted', { id: memory.id, content: memory.content });
+        }
+      }
+    } catch (error) {
+      this.logger.debug('Memory extraction LLM call failed', { error: String(error) });
     }
   }
 
