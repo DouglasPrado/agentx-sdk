@@ -1,0 +1,77 @@
+%% Deployment Escalado — Pure Agent
+%% Cenário: múltiplas instâncias da aplicação host com stores plugáveis
+%% Referência: docs/blueprint/14-scalability.md
+
+graph TB
+
+    subgraph Instance1["🖥️ Node.js Instance 1"]
+        App1["Aplicação Host 1"]
+        Agent1["Pure Agent<br/>(in-process)"]
+        App1 --> Agent1
+    end
+
+    subgraph Instance2["🖥️ Node.js Instance 2"]
+        App2["Aplicação Host 2"]
+        Agent2["Pure Agent<br/>(in-process)"]
+        App2 --> Agent2
+    end
+
+    subgraph Instance3["🖥️ Node.js Instance N"]
+        App3["Aplicação Host N"]
+        Agent3["Pure Agent<br/>(in-process)"]
+        App3 --> Agent3
+    end
+
+    LB["⚖️ Load Balancer"]
+    LB --> App1
+    LB --> App2
+    LB --> App3
+
+    subgraph SharedStores["📦 Stores Plugáveis (compartilhados)"]
+        PgMemory["PostgreSQL<br/>MemoryStore<br/>(memórias compartilhadas)"]
+        PgConv["PostgreSQL<br/>ConversationStore<br/>(histórico compartilhado)"]
+        Pinecone["Pinecone / PgVector<br/>VectorStore<br/>(knowledge escalável)"]
+        Redis["Redis<br/>Cache distribuído<br/>(embeddings, sessões)"]
+    end
+
+    subgraph External["🌐 Serviços Externos"]
+        OpenRouter["OpenRouter API<br/>Chat + Embeddings"]
+        MCPServers["MCP Servers"]
+    end
+
+    %% Cada instância conecta aos stores compartilhados
+    Agent1 --> PgMemory
+    Agent1 --> PgConv
+    Agent1 --> Pinecone
+    Agent1 --> Redis
+    Agent2 --> PgMemory
+    Agent2 --> PgConv
+    Agent2 --> Pinecone
+    Agent2 --> Redis
+    Agent3 --> PgMemory
+    Agent3 --> PgConv
+    Agent3 --> Pinecone
+    Agent3 --> Redis
+
+    %% Cada instância conecta ao OpenRouter
+    Agent1 -->|"HTTPS + SSE"| OpenRouter
+    Agent2 -->|"HTTPS + SSE"| OpenRouter
+    Agent3 -->|"HTTPS + SSE"| OpenRouter
+
+    Agent1 -->|"stdio/SSE"| MCPServers
+    Agent2 -->|"stdio/SSE"| MCPServers
+    Agent3 -->|"stdio/SSE"| MCPServers
+
+    %% Estilos
+    style Instance1 fill:#E3F2FD,stroke:#438DD5,stroke-width:2px,color:#333
+    style Instance2 fill:#E3F2FD,stroke:#438DD5,stroke-width:2px,color:#333
+    style Instance3 fill:#E3F2FD,stroke:#438DD5,stroke-width:2px,color:#333
+    style SharedStores fill:#E8F5E9,stroke:#67BE4B,stroke-width:2px,color:#333
+    style External fill:#FFF3E0,stroke:#F5A623,stroke-width:2px,color:#333
+    style LB fill:#F5A623,stroke:#E09100,color:#fff
+    style PgMemory fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style PgConv fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style Pinecone fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style Redis fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style OpenRouter fill:#F5A623,stroke:#E09100,color:#fff
+    style MCPServers fill:#F5A623,stroke:#E09100,color:#fff

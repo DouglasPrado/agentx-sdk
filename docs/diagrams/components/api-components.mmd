@@ -1,0 +1,101 @@
+%% C4 Nível 3: Componentes Internos — Pure Agent
+%% Referência: docs/blueprint/06-system-architecture.md
+
+graph TB
+    subgraph ContainerBoundary["⚙️ Pure Agent — Componentes Internos"]
+        direction TB
+
+        subgraph EntryLayer["Camada de Entrada (API Pública)"]
+            direction LR
+            AgentClass["🔀 Agent<br/>chat() / stream()<br/>addTool() / addSkill() / connectMCP()"]
+            Config["🔀 AgentConfig<br/>Zod schema validation<br/>apiKey, model, tools, memory, etc."]
+        end
+
+        subgraph CoreLayer["Core Layer"]
+            direction LR
+            ReactLoop["📋 ReactLoop<br/>Loop ReAct iterativo<br/>error recovery + cost guard"]
+            StreamEmitter["📋 StreamEmitter<br/>Bounded queue<br/>backpressure + async pull"]
+            CtxPipeline["📋 ContextPipeline<br/>5 stages ordenados<br/>SystemPrompt→Skills→Knowledge→Memory→History"]
+            CtxBuilder["📋 ContextBuilder<br/>Token budget + compaction<br/>pinned messages"]
+            ConvManager["📋 ConversationManager<br/>Thread isolation + mutex<br/>persistence opcional"]
+            ExecCtx["📋 ExecutionContext<br/>traceId + threadId + timing"]
+        end
+
+        subgraph ToolsLayer["Tools Subsystem"]
+            direction LR
+            ToolExec["🗃️ ToolExecutor<br/>register + validate (Zod) + execute<br/>parallel / sequential"]
+            MCPAdapt["🔌 MCPAdapter<br/>dynamic import<br/>reconnect + health + fault isolation"]
+        end
+
+        subgraph MemoryLayer["Memory Subsystem"]
+            direction LR
+            MemMgr["🗃️ MemoryManager<br/>extract + recall + decay<br/>consolidation + feedback"]
+            SQLiteMemStore["🗃️ SQLiteMemoryStore<br/>FTS5 + embeddings + RRF"]
+        end
+
+        subgraph KnowledgeLayer["Knowledge Subsystem"]
+            direction LR
+            KnowMgr["🗃️ KnowledgeManager<br/>ingest + search + cache"]
+            SQLiteVecStore["🗃️ SQLiteVectorStore<br/>cosine similarity in JS"]
+            EmbedSvc["🔌 EmbeddingService<br/>OpenRouter + LRU cache"]
+            Chunking["🗃️ Chunking<br/>FixedSize + RecursiveCharacter"]
+        end
+
+        subgraph SkillsLayer["Skills Subsystem"]
+            direction LR
+            SkillMgr["🗃️ SkillManager<br/>prefix + custom + semantic matching<br/>priority desempate"]
+        end
+
+        subgraph StorageLayer["Storage Layer"]
+            SQLiteDB["🗃️ SQLiteDatabase<br/>auto-create + migrations + WAL"]
+        end
+    end
+
+    %% Dependências Externas
+    OpenRouter["📦 OpenRouter API<br/>Chat + Embeddings"]
+    MCPServers["📦 MCP Servers<br/>Tools externas"]
+    DBFile["📦 ~/.agent/data.db<br/>SQLite file"]
+
+    %% Fluxo: Entrada → Core
+    AgentClass --> Config
+    AgentClass --> ReactLoop
+    AgentClass --> CtxPipeline
+    AgentClass --> ConvManager
+    AgentClass --> StreamEmitter
+    AgentClass --> ExecCtx
+
+    %% Fluxo: Core → Subsistemas
+    ReactLoop --> ToolExec
+    CtxPipeline --> SkillMgr
+    CtxPipeline --> KnowMgr
+    CtxPipeline --> MemMgr
+    CtxPipeline --> CtxBuilder
+
+    %% Fluxo: Subsistemas → Storage
+    MemMgr --> SQLiteMemStore
+    SQLiteMemStore --> SQLiteDB
+    KnowMgr --> SQLiteVecStore
+    KnowMgr --> EmbedSvc
+    KnowMgr --> Chunking
+    SQLiteVecStore --> SQLiteDB
+    ConvManager --> SQLiteDB
+    ToolExec --> MCPAdapt
+
+    %% Conexões Externas
+    ReactLoop -->|"HTTPS + SSE"| OpenRouter
+    EmbedSvc -->|"HTTPS"| OpenRouter
+    MCPAdapt -->|"stdio / SSE"| MCPServers
+    SQLiteDB -->|"read/write"| DBFile
+
+    %% Estilos
+    style ContainerBoundary fill:none,stroke:#2e6295,stroke-width:2px,stroke-dasharray:5 5,color:#2e6295
+    style EntryLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style CoreLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style ToolsLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style MemoryLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style KnowledgeLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style SkillsLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style StorageLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style OpenRouter fill:#999999,stroke:#6b6b6b,color:#fff
+    style MCPServers fill:#999999,stroke:#6b6b6b,color:#fff
+    style DBFile fill:#999999,stroke:#6b6b6b,color:#fff

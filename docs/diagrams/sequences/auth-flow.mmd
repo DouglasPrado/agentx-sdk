@@ -1,0 +1,67 @@
+%% ============================================================
+%% Fluxo Crítico: Autenticação
+%% Referência: docs/07-critical_flows.md
+%% ============================================================
+%% Pergunta-guia: Qual é o fluxo completo de autenticação do
+%% seu sistema, desde a requisição do usuário até a emissão
+%% e armazenamento do token?
+%%
+%% Instruções:
+%%   1. Substitua todos os {{placeholders}} pelos valores reais do projeto.
+%%   2. Adicione ou remova participantes conforme a arquitetura.
+%%   3. Documente os códigos HTTP e payloads relevantes.
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    actor User as {{nome-do-ator-usuario}}
+
+    participant GW  as {{nome-api-gateway}}<br/>API Gateway
+    participant Auth as {{nome-auth-service}}<br/>Auth Service
+    participant DB  as {{nome-banco-dados}}<br/>Database
+    participant TS  as {{nome-token-store}}<br/>Token Store
+
+    %% --- Passo 1: Requisição de login ---
+    %% Pergunta: Qual endpoint recebe as credenciais? Qual o método HTTP?
+    User ->>+ GW: {{metodo-http}} {{endpoint-login}}<br/>{ email, password }
+
+    %% --- Passo 2: Encaminhamento ao serviço de autenticação ---
+    %% Pergunta: O gateway faz alguma transformação ou rate-limit antes?
+    GW ->>+ Auth: Encaminha credenciais<br/>{{protocolo-interno}}://{{host-auth-service}}
+
+    %% --- Passo 3: Validação de credenciais ---
+    %% Pergunta: Qual algoritmo de hash é usado para senhas?
+    Auth ->>+ DB: SELECT user WHERE email = ?<br/>{{protocolo-db}} porta {{porta-db}}
+    DB -->>- Auth: Dados do usuário ou vazio
+
+    %% --- Decisão: credenciais válidas ou inválidas ---
+    alt Credenciais válidas
+        %% Pergunta: Qual tipo de token é gerado (JWT, opaco, etc.)?
+        %% Pergunta: Qual o tempo de expiração do access token e do refresh token?
+        Auth ->>+ TS: Armazena refresh token<br/>TTL: {{ttl-refresh-token}}
+        TS -->>- Auth: Confirmação
+
+        Auth -->>- GW: 200 OK<br/>{ access_token, refresh_token, expires_in: {{ttl-access-token}} }
+        GW -->>- User: 200 OK<br/>Tokens + cookies configurados
+
+        Note over User, TS: {{observacao-seguranca}}<br/>Ex: Tokens assinados com {{algoritmo-assinatura}}
+
+    else Credenciais inválidas
+        Auth -->> GW: 401 Unauthorized<br/>{ error: "{{mensagem-erro-credenciais}}" }
+        GW -->> User: 401 Unauthorized
+
+        Note over Auth: %% Pergunta: Há bloqueio após N tentativas?<br/>Tentativas permitidas: {{max-tentativas-login}}<br/>Bloqueio por: {{tempo-bloqueio}}
+
+    else Usuário não encontrado
+        Auth -->> GW: 404 Not Found<br/>{ error: "{{mensagem-erro-usuario-nao-encontrado}}" }
+        GW -->> User: 401 Unauthorized
+
+        Note over GW: Retorna 401 genérico para não<br/>expor existência de contas
+
+    else Erro interno
+        Auth -->> GW: 500 Internal Server Error
+        GW -->> User: 502 Bad Gateway<br/>{ error: "{{mensagem-erro-generico}}" }
+
+        Note over Auth, DB: {{procedimento-fallback}}<br/>Ex: Circuit breaker, retry policy
+    end

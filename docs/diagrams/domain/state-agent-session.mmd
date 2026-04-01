@@ -1,0 +1,42 @@
+%% Máquina de Estados: Agent Session
+%% Referência: docs/blueprint/09-state-models.md
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> initializing : new Agent(config)
+
+    initializing : Validando config, criando subsistemas
+    ready : Pronto para chat()/stream()
+    executing : Execuções ativas (threads paralelas)
+    cost_exhausted : maxTokensPerSession atingido
+    destroying : Fechando conexões e recursos
+    destroyed : Recursos liberados
+
+    initializing --> ready : Subsistemas OK (SQLite, MCP)
+    ready --> executing : chat()/stream() chamado
+    executing --> ready : Todas execuções finalizadas
+    executing --> executing : Nova execução em outra thread
+    executing --> cost_exhausted : maxTokensPerSession (stop)
+    ready --> cost_exhausted : Limite atingido em execução anterior
+    ready --> destroying : destroy() chamado
+    executing --> destroying : destroy() (abort execuções)
+    cost_exhausted --> destroying : destroy()
+    destroying --> destroyed : MCP desconectado, SQLite fechado
+
+    destroyed --> [*]
+
+    note right of ready
+        Aceita chamadas chat()/stream()
+        getUsage() disponível
+    end note
+
+    note right of executing
+        Múltiplas threads em paralelo
+        Mesma thread serializada (mutex)
+    end note
+
+    note left of cost_exhausted
+        Permanente para esta instância
+        Criar novo Agent para continuar
+    end note

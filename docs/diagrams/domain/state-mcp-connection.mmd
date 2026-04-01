@@ -1,0 +1,39 @@
+%% Máquina de Estados: MCP Connection
+%% Referência: docs/blueprint/09-state-models.md
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> disconnected
+
+    disconnected : Sem conexão ativa
+    connecting : Estabelecendo conexão (stdio/SSE)
+    connected : Conexão ativa, tools registradas
+    error : Falha — aguardando decisão
+    reconnecting : Reconexão com backoff exponencial
+
+    disconnected --> connecting : connectMCP(config)
+    connecting --> connected : Conexão OK + tools listadas
+    connecting --> error : Timeout / falha (maxRetries)
+    connected --> error : Heartbeat falha
+    connected --> disconnected : disconnectMCP()
+    error --> reconnecting : Reconexão automática
+    reconnecting --> connected : Reconexão OK
+    reconnecting --> error : Todas tentativas falharam
+    error --> disconnected : disconnectMCP() / destroy()
+
+    note right of connected
+        Tools MCP registradas no ToolExecutor
+        Health check periódico ativo
+    end note
+
+    note right of reconnecting
+        Backoff exponencial
+        Tools removidas do ToolExecutor
+        até reconexão
+    end note
+
+    note left of error
+        isolateErrors: true →
+        outras tools não afetadas
+    end note

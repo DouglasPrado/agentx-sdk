@@ -1,0 +1,62 @@
+%% Fluxo Crítico: Stream Chat com Tool Calling
+%% Referência: docs/blueprint/07-critical_flows.md
+
+sequenceDiagram
+    autonumber
+
+    actor Host as Aplicação Host
+    participant Agent as Agent
+    participant Conv as ConversationManager
+    participant Pipeline as ContextPipeline
+    participant Loop as ReactLoop
+    participant LLM as OpenRouterClient
+    participant Tools as ToolExecutor
+    participant Stream as StreamEmitter
+
+    Host ->>+ Agent: stream(input, options?)
+    Agent ->> Agent: criar ExecutionContext (traceId)
+    Agent ->>+ Conv: withThread(threadId, fn)
+    Conv ->> Conv: adquirir mutex
+    Agent ->> Conv: addMessage(threadId, userMsg)
+
+    Agent ->>+ Pipeline: execute(contextFrame)
+    Pipeline ->> Pipeline: SystemPrompt → Skills → Knowledge → Memory → History
+    Pipeline -->>- Agent: contextFrame (system + messages)
+
+    Agent ->> Loop: criar ReactLoop
+    Agent ->> Stream: criar StreamEmitter
+
+    loop ReAct Loop (até maxIterations)
+        Loop ->> Stream: emit(turn_start)
+        Loop ->>+ LLM: streamChat(system, messages, tools)
+        LLM -->> Loop: SSE chunks (text_delta / tool_calls)
+        Loop ->> Stream: emit(text_delta) para cada chunk
+
+        alt LLM retorna tool_calls
+            Loop ->> Stream: emit(tool_call_start)
+            Loop ->>+ Tools: execute(tool, args, signal)
+            Tools ->> Tools: Zod validate → beforeHook → execute → afterHook
+            Tools -->>- Loop: result (string | AgentToolResult)
+            Loop ->> Stream: emit(tool_call_end)
+            Loop ->> Loop: append tool_results → próxima iteração
+        else LLM retorna texto final
+            LLM -->>- Loop: finish_reason: stop
+            Loop ->> Stream: emit(text_done)
+        end
+
+        alt CostPolicy limit atingido
+            Loop ->> Stream: emit(agent_end, reason: cost_limit)
+        end
+    end
+
+    Loop ->> Stream: emit(turn_end)
+    Loop ->> Stream: emit(agent_end, usage)
+    Agent ->> Conv: addMessage(threadId, assistantMsg)
+    Conv ->> Conv: liberar mutex
+    Conv -->>- Agent: done
+    Agent ->> Stream: close()
+    Agent -->>- Host: AsyncIterableIterator<AgentEvent> encerrado
+
+    Note over Host, Stream: Consumidor itera sobre eventos com backpressure
+    Note over Loop, LLM: Retry com backoff em caso de falha do OpenRouter
+    Note over Tools: onToolError: continue|stop|retry

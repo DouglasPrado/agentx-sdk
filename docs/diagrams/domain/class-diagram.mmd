@@ -1,0 +1,130 @@
+%% Modelo de Domínio — Pure Agent
+%% Referência: docs/blueprint/04-domain-model.md
+
+classDiagram
+    direction TB
+
+    class Agent {
+        -AgentConfig config
+        -ConversationManager conversations
+        -ToolExecutor toolExecutor
+        -ContextPipeline contextPipeline
+        -MemoryManager? memoryManager
+        -KnowledgeManager? knowledgeManager
+        -SkillManager? skillManager
+        -MCPAdapter? mcpAdapter
+        -TokenUsage costAccumulator
+        +chat(input, options?) String
+        +stream(input, options?) AsyncIterableIterator~AgentEvent~
+        +addTool(tool) void
+        +removeTool(name) void
+        +addSkill(skill) void
+        +connectMCP(config) void
+        +remember(fact, scope?) void
+        +recall(query) Memory[]
+        +ingestKnowledge(doc) void
+        +getUsage() TokenUsage
+        +destroy() void
+    }
+
+    class OpenRouterClient {
+        -String apiKey
+        -String model
+        -String baseUrl
+        +streamChat(params) AsyncIterableIterator~StreamChunk~
+        +chat(params) ChatResponse
+        +embed(texts, model?) number[][]
+    }
+
+    class ReactLoop {
+        -OpenRouterClient llm
+        -ToolExecutor toolExecutor
+        -ReactLoopOptions options
+        +execute(systemPrompt, messages, tools) AsyncIterableIterator~AgentEvent~
+    }
+
+    class ConversationManager {
+        -Map~string, ChatMessage[]~ threads
+        -Map~string, Promise~ locks
+        +withThread(threadId, fn) T
+        +getHistory(threadId) ChatMessage[]
+        +addMessage(threadId, message) void
+        +clearThread(threadId) void
+        +listThreads() string[]
+    }
+
+    class ContextPipeline {
+        -ContextStage[] stages
+        +addStage(stage) void
+        +execute(frame) ContextFrame
+    }
+
+    class ToolExecutor {
+        -Map~string, AgentTool~ tools
+        +register(tool) void
+        +unregister(name) void
+        +execute(name, args, signal?) AgentToolResult
+    }
+
+    class MemoryManager {
+        -MemoryStore store
+        -OpenRouterClient llm
+        +shouldExtract(messages) boolean
+        +extract(messages) Memory[]
+        +recall(query) Memory[]
+        +applyDecay() void
+    }
+
+    class KnowledgeManager {
+        -VectorStore vectorStore
+        -EmbeddingService embeddingService
+        -ChunkingStrategy chunkingStrategy
+        +ingest(doc) void
+        +search(query, topK?) RetrievedKnowledge[]
+    }
+
+    class SkillManager {
+        -AgentSkill[] skills
+        -EmbeddingService? embeddingService
+        +register(skill) void
+        +match(input) ActiveSkill[]
+    }
+
+    class MCPAdapter {
+        -MCPConnectionConfig[] configs
+        +connect(config) AgentTool[]
+        +disconnect() void
+        +reconnect() void
+        +isConnected() boolean
+        +getHealth() MCPHealthStatus
+    }
+
+    class StreamEmitter {
+        -Queue~AgentEvent~ buffer
+        -number maxSize
+        +push(event) void
+        +Symbol.asyncIterator() AsyncIterableIterator~AgentEvent~
+    }
+
+    class ExecutionContext {
+        +String traceId
+        +String threadId
+        +number startedAt
+        +String model
+        +String? parentTraceId
+    }
+
+    %% --- Relacionamentos ---
+    Agent "1" --> "1" ConversationManager : gerencia threads
+    Agent "1" --> "1" ToolExecutor : executa tools
+    Agent "1" --> "1" ContextPipeline : constrói contexto
+    Agent "1" --> "0..1" MemoryManager : extrai e recall memórias
+    Agent "1" --> "0..1" KnowledgeManager : RAG
+    Agent "1" --> "0..1" SkillManager : matching de skills
+    Agent "1" --> "0..1" MCPAdapter : tools externas
+    Agent ..> ReactLoop : cria por execução
+    Agent ..> StreamEmitter : cria por execução
+    Agent ..> ExecutionContext : cria por execução
+    ReactLoop --> OpenRouterClient : chama LLM
+    ReactLoop --> ToolExecutor : executa tools
+    MCPAdapter ..> ToolExecutor : registra tools convertidas

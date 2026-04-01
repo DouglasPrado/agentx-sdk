@@ -1,0 +1,65 @@
+%% Fluxo Crítico: Memory Extraction e Recall
+%% Referência: docs/blueprint/07-critical_flows.md
+
+sequenceDiagram
+    autonumber
+
+    participant Agent as Agent
+    participant MemMgr as MemoryManager
+    participant LLM as OpenRouterClient
+    participant Store as SQLiteMemoryStore
+    participant Embed as EmbeddingService
+    participant DB as SQLiteDatabase
+
+    rect rgb(230, 245, 255)
+        Note over Agent, DB: EXTRAÇÃO (após cada turno)
+
+        Agent ->> MemMgr: shouldExtract(messages)
+        MemMgr ->> MemMgr: avaliar triggers (explícito, turnos>10, sampling 30%)
+
+        alt trigger ativado
+            MemMgr ->>+ LLM: chat(extractionPrompt, lastMessages)
+            LLM -->>- MemMgr: fatos estruturados [{content, category, scope}]
+
+            loop para cada fato extraído
+                MemMgr ->> Store: save(memory)
+                Store ->>+ Embed: embed([content])
+                Embed ->> Embed: verificar cache LRU
+
+                alt cache miss
+                    Embed ->>+ LLM: embed(texts)
+                    LLM -->>- Embed: number[][]
+                end
+
+                Embed -->>- Store: embedding
+                Store ->> DB: INSERT INTO memories + UPDATE memories_fts
+            end
+
+            MemMgr -->> Agent: emit(memory_extracted)
+        else trigger não ativado
+            MemMgr -->> Agent: skip
+        end
+    end
+
+    rect rgb(255, 245, 230)
+        Note over Agent, DB: RECALL (durante ContextPipeline)
+
+        Agent ->> MemMgr: recall(query)
+        MemMgr ->> Store: search(query, limit)
+
+        par Busca Híbrida
+            Store ->> DB: SELECT FROM memories_fts MATCH query
+            Note right of DB: FTS5 full-text (sem API cost)
+        and
+            Store ->>+ Embed: embed([query])
+            Embed -->>- Store: queryEmbedding
+            Store ->> Store: cosine similarity vs todos embeddings
+            Note right of Store: Brute-force OK para ≤100K
+        end
+
+        Store ->> Store: Reciprocal Rank Fusion (RRF)
+        Store ->> Store: ponderar por confidence
+        Store ->> DB: UPDATE access_count, confidence (+0.05)
+        Store -->> MemMgr: Memory[] rankeadas
+        MemMgr -->> Agent: Memory[] para injeção no contexto
+    end

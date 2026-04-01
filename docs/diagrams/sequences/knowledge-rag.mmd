@@ -1,0 +1,65 @@
+%% Fluxo Crítico: Knowledge Ingestion e RAG Search
+%% Referência: docs/blueprint/07-critical_flows.md
+
+sequenceDiagram
+    autonumber
+
+    actor Host as Aplicação Host
+    participant Agent as Agent
+    participant KnowMgr as KnowledgeManager
+    participant Chunker as ChunkingStrategy
+    participant Embed as EmbeddingService
+    participant VecStore as SQLiteVectorStore
+    participant DB as SQLiteDatabase
+    participant LLM as OpenRouterClient
+
+    rect rgb(230, 255, 230)
+        Note over Host, DB: INGESTÃO
+
+        Host ->> Agent: ingestKnowledge({ content, metadata? })
+        Agent ->> KnowMgr: ingest(doc)
+
+        KnowMgr ->>+ Chunker: chunk(content)
+        Chunker -->>- KnowMgr: ChunkResult[] (content, index, start/end)
+
+        KnowMgr ->>+ Embed: embed(chunks[].content)
+        Embed ->> Embed: verificar cache LRU por chunk
+
+        loop cache misses (batch)
+            Embed ->>+ LLM: embed(texts, model?)
+            LLM -->>- Embed: number[][]
+            Embed ->> Embed: salvar no cache LRU
+        end
+
+        Embed -->>- KnowMgr: embeddings[]
+
+        loop para cada chunk
+            KnowMgr ->> VecStore: upsert(id, embedding, metadata, content)
+            VecStore ->> DB: INSERT INTO vectors (id, content, embedding BLOB, metadata JSON)
+        end
+
+        KnowMgr -->> Agent: done
+        Agent -->> Host: void
+    end
+
+    rect rgb(255, 245, 230)
+        Note over Host, DB: BUSCA RAG (durante ContextPipeline)
+
+        Agent ->> KnowMgr: search(query, topK)
+        KnowMgr ->> KnowMgr: verificar cache de resultados (LRU, TTL: 5min)
+
+        alt cache miss
+            KnowMgr ->>+ Embed: embed([query])
+            Embed -->>- KnowMgr: queryEmbedding
+
+            KnowMgr ->>+ VecStore: search(queryEmbedding, topK)
+            VecStore ->> VecStore: carregar embeddings (cache em memória)
+            VecStore ->> VecStore: calcular cosine similarity
+            VecStore ->> VecStore: sort + top-K
+            VecStore -->>- KnowMgr: VectorSearchResult[]
+
+            KnowMgr ->> KnowMgr: salvar no cache de resultados
+        end
+
+        KnowMgr -->> Agent: RetrievedKnowledge[] para injeção no contexto
+    end
