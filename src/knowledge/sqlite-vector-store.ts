@@ -45,6 +45,21 @@ export class SQLiteVectorStore implements VectorStore {
   delete(id: string): void {
     this.database.db.prepare('DELETE FROM vectors WHERE id = ?').run(id);
   }
+
+  listAll(): KnowledgeChunk[] {
+    const rows = this.database.db.prepare('SELECT * FROM vectors').all() as VectorRow[];
+    return rows.map(row => ({
+      id: row.id,
+      content: row.content,
+      embedding: new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4),
+      metadata: row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : undefined,
+      createdAt: row.created_at,
+    }));
+  }
+
+  deleteBySource(sourceId: string): void {
+    this.database.db.prepare("DELETE FROM vectors WHERE json_extract(metadata, '$.sourceId') = ?").run(sourceId);
+  }
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {

@@ -25,6 +25,8 @@ export interface VectorStore {
   upsert(chunk: KnowledgeChunk): void;
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[];
   delete(id: string): void;
+  listAll(): KnowledgeChunk[];
+  deleteBySource(sourceId: string): void;
 }
 
 /** Pluggable interface for conversation history persistence */

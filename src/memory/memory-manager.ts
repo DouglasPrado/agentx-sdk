@@ -103,12 +103,32 @@ export class MemoryManager {
       minConfidence: this.minConfidence,
     });
 
-    // Reinforce accessed memories
+    // Reinforce accessed memories — transition to 'reinforced' state
     for (const memory of results) {
       this.store.incrementAccess(memory.id);
+      if (memory.state === 'active' || memory.state === 'decaying') {
+        this.store.save({ ...memory, state: 'reinforced', confidence: Math.min(memory.confidence + 0.05, 1.0) });
+      }
     }
 
     return results;
+  }
+
+  /**
+   * Consolidates similar memories by merging content.
+   */
+  consolidate(memoryId: string, mergedContent: string): Memory | null {
+    const memory = this.store.findById(memoryId);
+    if (!memory || memory.state === 'expired' || memory.state === 'removed') return null;
+
+    const consolidated: Memory = {
+      ...memory,
+      content: mergedContent,
+      state: 'consolidated',
+      confidence: Math.min(memory.confidence + 0.1, 1.0),
+      lastAccessedAt: Date.now(),
+    };
+    return this.store.save(consolidated);
   }
 
   /**
