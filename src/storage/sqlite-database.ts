@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import type BetterSqlite3 from 'better-sqlite3';
 
@@ -19,6 +21,11 @@ export class SQLiteDatabase {
 
   initialize(): void {
     if (this._db) return;
+
+    // Auto-create parent directory for file-based databases
+    if (this.path !== ':memory:') {
+      mkdirSync(dirname(this.path), { recursive: true });
+    }
 
     this._db = new Database(this.path);
 
