@@ -12,6 +12,7 @@ export type { AgentConfig, AgentConfigInput, MCPConnectionConfig, CostPolicy } f
 // Pluggable stores (for custom implementations)
 export { SQLiteMemoryStore } from './memory/sqlite-memory-store.js';
 export { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
+export { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
 export { SQLiteDatabase } from './storage/sqlite-database.js';
 
 // Utils

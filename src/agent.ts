@@ -172,7 +172,7 @@ export class Agent {
           type: 'agent_end',
           traceId: ctx.traceId,
           usage: result.usage,
-          reason: result.reason as AgentEvent extends { type: 'agent_end' } ? AgentEvent : never extends never ? never : 'stop',
+          reason: result.reason as 'stop' | 'cost_limit' | 'max_iterations' | 'error' | 'abort',
           duration: Date.now() - ctx.startedAt,
         });
 
@@ -212,9 +212,28 @@ export class Agent {
     this.logger.debug('Tool registered', { name: tool.name });
   }
 
+  removeTool(name: string): boolean {
+    const removed = this.toolExecutor.unregister(name);
+    if (removed) this.logger.debug('Tool removed', { name });
+    return removed;
+  }
+
   addSkill(skill: AgentSkill): void {
     this.skillManager?.register(skill);
     this.logger.debug('Skill registered', { name: skill.name });
+  }
+
+  getHistory(threadId?: string): import('./contracts/entities/chat-message.js').ChatMessage[] {
+    return this.conversations.getHistory(threadId ?? 'default');
+  }
+
+  async connectMCP(_config: import('./config/config.js').MCPConnectionConfig): Promise<void> {
+    // MCP adapter is an optional feature — requires @modelcontextprotocol/sdk
+    throw new Error('MCP not implemented yet. Install @modelcontextprotocol/sdk and configure mcp in AgentConfig.');
+  }
+
+  async disconnectMCP(_name: string): Promise<void> {
+    throw new Error('MCP not implemented yet.');
   }
 
   async remember(content: string, scope?: 'thread' | 'persistent' | 'learned'): Promise<Memory> {

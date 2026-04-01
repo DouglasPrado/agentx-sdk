@@ -8,6 +8,8 @@ function createMockStore(): VectorStore {
     upsert: vi.fn(),
     search: vi.fn(() => []),
     delete: vi.fn(),
+    listAll: vi.fn(() => []),
+    deleteBySource: vi.fn(),
   };
 }
 
