@@ -45,16 +45,26 @@ export class SQLiteMemoryStore implements MemoryStore {
     const db = this.database.db;
     const { limit = 10, scope, threadId, minConfidence = 0 } = options;
 
-    // FTS5 search
-    const ftsResults = db.prepare(`
-      SELECT m.*, rank
-      FROM memories_fts fts
-      JOIN memories m ON m.rowid = fts.rowid
-      WHERE memories_fts MATCH ?
-        AND m.confidence >= ?
-      ORDER BY rank
-      LIMIT ?
-    `).all(query, minConfidence, limit * 2) as Array<MemoryRow & { rank: number }>;
+    // FTS5 search — sanitize query to avoid syntax errors
+    let ftsResults: Array<MemoryRow & { rank: number }> = [];
+    const sanitizedQuery = sanitizeFTS5Query(query);
+
+    if (sanitizedQuery) {
+      try {
+        ftsResults = db.prepare(`
+          SELECT m.*, rank
+          FROM memories_fts fts
+          JOIN memories m ON m.rowid = fts.rowid
+          WHERE memories_fts MATCH ?
+            AND m.confidence >= ?
+          ORDER BY rank
+          LIMIT ?
+        `).all(sanitizedQuery, minConfidence, limit * 2) as Array<MemoryRow & { rank: number }>;
+      } catch {
+        // FTS5 query failed — continue with empty results
+        ftsResults = [];
+      }
+    }
 
     let results = ftsResults.map(row => this.rowToMemory(row));
 
@@ -62,13 +72,33 @@ export class SQLiteMemoryStore implements MemoryStore {
     if (scope) results = results.filter(m => m.scope === scope);
     if (threadId) results = results.filter(m => !m.threadId || m.threadId === threadId);
 
-    // If we have embeddings in the query options, do RRF
+    // Embedding-based search (semantic) — used as primary fallback when FTS5 misses
     if (options.embedding) {
       const allMemories = this.getAllWithEmbeddings(scope, threadId, minConfidence);
       const vectorResults = this.cosineSimilaritySearch(options.embedding, allMemories, limit * 2);
 
-      // Reciprocal Rank Fusion
-      results = this.reciprocalRankFusion(results, vectorResults, limit);
+      if (results.length > 0) {
+        // Reciprocal Rank Fusion when both FTS5 and vector return results
+        results = this.reciprocalRankFusion(results, vectorResults, limit);
+      } else {
+        // FTS5 returned nothing — use vector results directly
+        results = vectorResults;
+      }
+    }
+
+    // Last resort: if no FTS5 and no embeddings, do a LIKE fallback
+    if (results.length === 0 && !options.embedding) {
+      const likeResults = db.prepare(`
+        SELECT * FROM memories
+        WHERE content LIKE ?
+          AND confidence >= ?
+        ORDER BY last_accessed_at DESC
+        LIMIT ?
+      `).all(`%${query}%`, minConfidence, limit) as MemoryRow[];
+
+      results = likeResults.map(row => this.rowToMemory(row));
+      if (scope) results = results.filter(m => m.scope === scope);
+      if (threadId) results = results.filter(m => !m.threadId || m.threadId === threadId);
     }
 
     return results.slice(0, limit);
@@ -160,6 +190,19 @@ export class SQLiteMemoryStore implements MemoryStore {
       state: row.confidence < 0.1 ? 'expired' : 'active',
     };
   }
+}
+
+/**
+ * Sanitizes a user query for FTS5 MATCH.
+ * Removes special characters, wraps each word as a term with OR.
+ */
+function sanitizeFTS5Query(query: string): string {
+  // Remove FTS5 special chars: *, ", (, ), :, ^, {, }, -, +
+  const cleaned = query.replace(/[*"():{}\-+^?!.,;]/g, ' ').trim();
+  const words = cleaned.split(/\s+/).filter(w => w.length > 1);
+  if (words.length === 0) return '';
+  // Use OR so ANY matching term returns results (not AND which requires ALL)
+  return words.map(w => `"${w}"`).join(' OR ');
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {

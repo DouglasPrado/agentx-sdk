@@ -150,6 +150,14 @@ export class Agent {
       // Emit start
       emitter.emit({ type: 'agent_start', traceId: ctx.traceId, threadId, model });
 
+      // Collect assistant text to persist after loop
+      let assistantText = '';
+      const originalEmit = emitter.emit.bind(emitter);
+      emitter.emit = (event) => {
+        if (event.type === 'text_delta') assistantText += event.content;
+        originalEmit(event);
+      };
+
       // Run react loop in background
       const loopPromise = executeReactLoop(contextResult.messages, {
         client: this.client,
@@ -165,6 +173,15 @@ export class Agent {
         } : undefined,
         signal: options?.signal,
       }).then(result => {
+        // Persist assistant response in conversation history
+        if (assistantText) {
+          this.conversations.appendMessage({
+            role: 'assistant',
+            content: assistantText,
+            createdAt: Date.now(),
+          }, threadId);
+        }
+
         // Accumulate cost
         this.costAccumulator.inputTokens += result.usage.inputTokens;
         this.costAccumulator.outputTokens += result.usage.outputTokens;
@@ -293,7 +310,12 @@ export class Agent {
 
   private ensureDatabase(): void {
     if (!this.database) {
-      const dbPath = this.config.dbPath === '~/.agent/data.db' ? ':memory:' : this.config.dbPath;
+      // Expand ~ to home directory
+      let dbPath = this.config.dbPath;
+      if (dbPath.startsWith('~/')) {
+        const os = require('node:os') as typeof import('node:os');
+        dbPath = dbPath.replace('~', os.homedir());
+      }
       this.database = new SQLiteDatabase(dbPath);
       this.database.initialize();
     }
@@ -383,10 +405,18 @@ export class Agent {
       }
     }
 
-    // Memory injection
+    // Memory injection — use embeddings for semantic recall
     if (this.memoryManager) {
       try {
-        const memories = this.memoryManager.recall(userInput, { threadId, limit: 5 });
+        let queryEmbedding: Float32Array | undefined;
+        if (this.embeddingService) {
+          try {
+            queryEmbedding = await this.embeddingService.embedSingle(userInput);
+          } catch {
+            // Embedding failed — will fall back to FTS5/LIKE
+          }
+        }
+        const memories = this.memoryManager.recall(userInput, { threadId, limit: 5, embedding: queryEmbedding });
         if (memories.length > 0) {
           const content = memories.map(m => `- ${m.content}`).join('\n');
           const tokens = estimateTokens(content);
