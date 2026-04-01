@@ -284,14 +284,6 @@ export class Agent {
   private ensureDatabase(): void {
     if (!this.database) {
       const dbPath = this.config.dbPath === '~/.agent/data.db' ? ':memory:' : this.config.dbPath;
-
-      // Auto-create parent directory for file-based databases
-      if (dbPath !== ':memory:') {
-        const { mkdirSync } = require('node:fs') as typeof import('node:fs');
-        const { dirname } = require('node:path') as typeof import('node:path');
-        mkdirSync(dirname(dbPath), { recursive: true });
-      }
-
       this.database = new SQLiteDatabase(dbPath);
       this.database.initialize();
     }
