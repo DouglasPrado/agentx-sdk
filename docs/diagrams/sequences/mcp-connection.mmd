@@ -1,0 +1,90 @@
+%% Fluxo Crítico: MCP Connection e Tool Execution
+%% Referência: docs/blueprint/07-critical_flows.md
+
+sequenceDiagram
+    autonumber
+
+    actor Host as Aplicação Host
+    participant Agent as Agent
+    participant MCP as MCPAdapter
+    participant Server as MCP Server (externo)
+    participant Tools as ToolExecutor
+    participant Loop as ReactLoop
+
+    rect rgb(230, 245, 255)
+        Note over Host, Tools: CONEXÃO
+
+        Host ->> Agent: connectMCP({ name, transport, command?, url? })
+        Agent ->> MCP: connect(config)
+
+        MCP ->> MCP: dynamic import('@modelcontextprotocol/sdk')
+
+        alt SDK não instalado
+            MCP -->> Agent: Error: "Install @modelcontextprotocol/sdk"
+            Agent -->> Host: throw Error
+        end
+
+        alt transport: stdio
+            MCP ->> Server: spawn processo (command + args)
+        else transport: SSE
+            MCP ->> Server: HTTP connection (url)
+        end
+
+        MCP ->>+ Server: tools/list
+        Server -->>- MCP: Tool[] (name, schema, description)
+
+        loop para cada tool MCP
+            MCP ->> MCP: converter schema → Zod, criar AgentTool wrapper
+            MCP ->> Tools: register(agentTool)
+        end
+
+        opt healthCheckInterval > 0
+            MCP ->> MCP: iniciar heartbeat periódico
+        end
+
+        MCP -->> Agent: AgentTool[] registradas
+        Agent -->> Host: void
+    end
+
+    rect rgb(255, 245, 230)
+        Note over Loop, Server: EXECUÇÃO DE TOOL MCP
+
+        Loop ->> Tools: execute("mcp_tool_name", args)
+        Tools ->> Tools: Zod validate args
+        Tools ->> MCP: executeMCPTool(name, args, timeout)
+        MCP ->>+ Server: tools/call (name, args)
+
+        alt sucesso
+            Server -->>- MCP: result
+            MCP -->> Tools: AgentToolResult
+            Tools -->> Loop: tool_call_end (isError: false)
+        else timeout
+            MCP -->> Tools: Error (timeout)
+            Tools -->> Loop: tool_call_end (isError: true)
+            Note right of MCP: isolateErrors: true → outras tools não afetadas
+        else server desconectado
+            MCP ->> MCP: status → "reconnecting"
+            MCP ->> Server: reconexão com backoff
+            MCP -->> Tools: Error (disconnected)
+        end
+    end
+
+    rect rgb(255, 230, 230)
+        Note over MCP, Server: RECONEXÃO AUTOMÁTICA
+
+        MCP ->> MCP: heartbeat falha detectada
+        MCP ->> Tools: unregister tools deste server
+        MCP ->> MCP: status → "reconnecting"
+
+        loop até maxRetries (backoff exponencial)
+            MCP ->> Server: tentativa de reconexão
+            alt sucesso
+                MCP ->> Server: tools/list
+                Server -->> MCP: Tool[]
+                MCP ->> Tools: re-register tools
+                MCP ->> MCP: status → "connected"
+            else falha
+                MCP ->> MCP: aguardar backoff
+            end
+        end
+    end

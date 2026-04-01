@@ -1,0 +1,46 @@
+%% Máquina de Estados: ReactLoop Execution
+%% Referência: docs/blueprint/09-state-models.md
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> idle
+
+    idle : Loop criado, aguardando execute()
+    streaming : Recebendo SSE chunks do OpenRouter
+    executing_tools : Executando tool calls (parallel/sequential)
+    completed : Texto final entregue
+    error : Erro irrecuperável
+    cost_limited : CostPolicy atingida
+    aborted : Cancelado via AbortSignal
+
+    idle --> streaming : execute() chamado
+    streaming --> executing_tools : LLM retorna tool_calls
+    streaming --> completed : LLM retorna texto final (stop)
+    streaming --> error : OpenRouter falha após retries
+    streaming --> cost_limited : maxTokensPerExecution (stop)
+    streaming --> aborted : AbortSignal disparado
+    executing_tools --> streaming : Tools executadas, próxima iteração
+    executing_tools --> error : maxConsecutiveErrors atingido
+    executing_tools --> completed : maxIterations atingido
+    executing_tools --> aborted : AbortSignal disparado
+
+    completed --> [*]
+    error --> [*]
+    cost_limited --> [*]
+    aborted --> [*]
+
+    note right of streaming
+        Emite: turn_start, text_delta
+        Verifica cost antes de cada chamada LLM
+    end note
+
+    note right of executing_tools
+        Emite: tool_call_start, tool_call_end
+        onToolError: continue|stop|retry
+    end note
+
+    note left of completed
+        Emite: text_done, turn_end, agent_end
+        Usage acumulado reportado
+    end note

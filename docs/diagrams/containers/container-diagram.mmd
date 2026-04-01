@@ -1,0 +1,78 @@
+%% C4 Nível 2: Container Diagram — Pure Agent
+%% Referência: docs/blueprint/06-system-architecture.md
+%% O Pure Agent é uma biblioteca in-process, não um serviço distribuído.
+
+graph TB
+    %% Atores
+    Dev["👤 Desenvolvedor<br/>Configura e registra tools/skills"]
+    HostApp["🖥️ Aplicação Host<br/>Node.js 18+ (API, CLI, Bot, etc.)"]
+
+    %% Fronteira do Sistema
+    subgraph SystemBoundary["📦 Pure Agent (pacote TypeScript in-process)"]
+        direction TB
+
+        Agent["⚙️ Agent<br/>TypeScript<br/>Ponto de entrada: chat() / stream()"]
+
+        subgraph CoreLayer["Core Layer"]
+            ReactLoop["⚙️ ReactLoop<br/>Loop ReAct + error recovery"]
+            StreamEmitter["⚙️ StreamEmitter<br/>Async channel + backpressure"]
+            CtxPipeline["⚙️ ContextPipeline<br/>5 stages + budget de tokens"]
+            ConvManager["⚙️ ConversationManager<br/>Threads + mutex"]
+        end
+
+        subgraph SubsystemsLayer["Subsistemas"]
+            ToolExec["⚙️ ToolExecutor<br/>Zod validation + parallel exec"]
+            MemMgr["⚙️ MemoryManager<br/>Extração + decay + recall"]
+            KnowMgr["⚙️ KnowledgeManager<br/>RAG: chunking + embeddings + search"]
+            SkillMgr["⚙️ SkillManager<br/>Matching 3 níveis"]
+            MCPAdapt["⚙️ MCPAdapter<br/>Dynamic import + reconnect"]
+        end
+
+        SQLiteDB[("💾 SQLiteDatabase<br/>better-sqlite3 + WAL<br/>memories + vectors + conversations")]
+    end
+
+    %% Sistemas Externos
+    OpenRouter["📦 OpenRouter API<br/>LLM Gateway (chat + embeddings)"]
+    MCPServer["📦 MCP Servers<br/>Tools externas (stdio/SSE)"]
+    DBFile["📦 ~/.agent/data.db<br/>Arquivo SQLite local"]
+
+    %% Relacionamentos
+    Dev -->|"import + configuração"| HostApp
+    HostApp -->|"instância + chat()/stream()"| Agent
+    Agent --> ReactLoop
+    Agent --> CtxPipeline
+    Agent --> ConvManager
+    Agent --> StreamEmitter
+    ReactLoop --> ToolExec
+    CtxPipeline --> MemMgr
+    CtxPipeline --> KnowMgr
+    CtxPipeline --> SkillMgr
+    ToolExec --> MCPAdapt
+    MemMgr --> SQLiteDB
+    KnowMgr --> SQLiteDB
+    ConvManager --> SQLiteDB
+    ReactLoop -->|"HTTPS + SSE"| OpenRouter
+    KnowMgr -->|"HTTPS (embeddings)"| OpenRouter
+    MCPAdapt -->|"stdio / SSE"| MCPServer
+    SQLiteDB -->|"read/write"| DBFile
+
+    %% Estilos
+    style SystemBoundary fill:none,stroke:#0b4884,stroke-width:2px,stroke-dasharray:5 5,color:#0b4884
+    style CoreLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style SubsystemsLayer fill:none,stroke:#438dd5,stroke-width:1px,color:#438dd5
+    style Agent fill:#438dd5,stroke:#2e6295,color:#fff
+    style ReactLoop fill:#438dd5,stroke:#2e6295,color:#fff
+    style StreamEmitter fill:#438dd5,stroke:#2e6295,color:#fff
+    style CtxPipeline fill:#438dd5,stroke:#2e6295,color:#fff
+    style ConvManager fill:#438dd5,stroke:#2e6295,color:#fff
+    style ToolExec fill:#438dd5,stroke:#2e6295,color:#fff
+    style MemMgr fill:#438dd5,stroke:#2e6295,color:#fff
+    style KnowMgr fill:#438dd5,stroke:#2e6295,color:#fff
+    style SkillMgr fill:#438dd5,stroke:#2e6295,color:#fff
+    style MCPAdapt fill:#438dd5,stroke:#2e6295,color:#fff
+    style SQLiteDB fill:#438dd5,stroke:#2e6295,color:#fff
+    style Dev fill:#08427b,stroke:#052e56,color:#fff
+    style HostApp fill:#08427b,stroke:#052e56,color:#fff
+    style OpenRouter fill:#999999,stroke:#6b6b6b,color:#fff
+    style MCPServer fill:#999999,stroke:#6b6b6b,color:#fff
+    style DBFile fill:#999999,stroke:#6b6b6b,color:#fff

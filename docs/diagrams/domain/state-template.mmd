@@ -1,0 +1,64 @@
+%% ============================================================
+%% Máquina de Estados: {{Nome da Entidade}}
+%% Referência: docs/09-state_models.md
+%% ============================================================
+%% GUIA: Duplique este arquivo para cada entidade com ciclo de
+%% vida. Renomeie para state-{{entidade}}.mmd
+%%
+%% Perguntas orientadoras:
+%% - Quais são os estados possíveis desta entidade?
+%% - Quais eventos/ações disparam as transições?
+%% - Existem estados compostos (com sub-estados internos)?
+%% - Quais estados são terminais (finais)?
+%% - Existem regras de negócio que impedem certas transições?
+%% ============================================================
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> {{Estado_Inicial}}
+
+    %% --- Estados principais ---
+    {{Estado_Inicial}} : {{Descrição do estado inicial}}
+    {{Estado_Em_Processamento}} : {{Descrição do processamento}}
+    {{Estado_Ativo}} : {{Descrição do estado ativo}}
+    {{Estado_Suspenso}} : {{Descrição do estado suspenso}}
+    {{Estado_Finalizado}} : {{Descrição do estado final}}
+
+    %% --- Transições simples ---
+    {{Estado_Inicial}} --> {{Estado_Em_Processamento}} : {{evento_iniciar}}
+    {{Estado_Em_Processamento}} --> {{Estado_Ativo}} : {{evento_aprovar}}
+    {{Estado_Em_Processamento}} --> {{Estado_Inicial}} : {{evento_rejeitar}}
+    {{Estado_Ativo}} --> {{Estado_Suspenso}} : {{evento_suspender}}
+    {{Estado_Suspenso}} --> {{Estado_Ativo}} : {{evento_reativar}}
+    {{Estado_Ativo}} --> {{Estado_Finalizado}} : {{evento_finalizar}}
+    {{Estado_Suspenso}} --> {{Estado_Finalizado}} : {{evento_cancelar}}
+    {{Estado_Finalizado}} --> [*]
+
+    %% --- Estado composto (exemplo de sub-estados) ---
+    %% Descomente e adapte o bloco abaixo para representar
+    %% um estado com sub-estados internos.
+    state {{Estado_Em_Processamento}} {
+        [*] --> {{SubEstado_Validacao}}
+        {{SubEstado_Validacao}} : {{Descrição da validação}}
+        {{SubEstado_Execucao}} : {{Descrição da execução}}
+
+        {{SubEstado_Validacao}} --> {{SubEstado_Execucao}} : {{evento_validado}}
+        {{SubEstado_Execucao}} --> [*] : {{evento_concluido}}
+    }
+
+    %% --- Notas explicativas ---
+    note right of {{Estado_Inicial}}
+        {{Nota: descreva pré-condições ou
+        regras para entrada neste estado}}
+    end note
+
+    note right of {{Estado_Ativo}}
+        {{Nota: descreva o que acontece
+        enquanto a entidade está neste estado}}
+    end note
+
+    note left of {{Estado_Finalizado}}
+        {{Nota: estado terminal — nenhuma
+        transição de saída é permitida}}
+    end note

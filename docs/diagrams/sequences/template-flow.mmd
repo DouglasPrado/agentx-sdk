@@ -1,0 +1,95 @@
+%% ============================================================
+%% Template: Diagrama de Sequência para Fluxos Críticos
+%% ============================================================
+%% Este arquivo é um modelo reutilizável. NÃO edite diretamente.
+%%
+%% Como usar:
+%%   1. Duplique este arquivo para cada fluxo crítico.
+%%      Renomeie para {{nome-do-fluxo}}.mmd
+%%   2. Substitua todos os {{placeholders}} pelos valores do projeto.
+%%   3. Adicione ou remova participantes conforme necessário.
+%%   4. Registre o novo diagrama em docs/07-critical_flows.md
+%%
+%% Perguntas-guia para preencher:
+%%   - Qual é o objetivo principal deste fluxo?
+%%   - Quem inicia a ação (ator)?
+%%   - Quais serviços/componentes participam?
+%%   - Qual é o caminho feliz (happy path)?
+%%   - Quais erros podem ocorrer e como são tratados?
+%%   - Existem requisitos de tempo limite (timeout)?
+%%   - Este fluxo tem implicações de segurança?
+%% ============================================================
+
+sequenceDiagram
+    autonumber
+
+    %% --- Ator principal ---
+    %% Pergunta: Quem inicia este fluxo? (usuário, sistema externo, cron job, etc.)
+    actor Ator as {{nome-do-ator}}
+
+    %% --- Participantes ---
+    %% Pergunta: Quais componentes do sistema estão envolvidos neste fluxo?
+    %% Adicione ou remova participantes conforme necessário.
+    participant P1 as {{nome-participante-1}}<br/>{{tipo-componente-1}}
+    participant P2 as {{nome-participante-2}}<br/>{{tipo-componente-2}}
+    participant P3 as {{nome-participante-3}}<br/>{{tipo-componente-3}}
+    participant P4 as {{nome-participante-4}}<br/>{{tipo-componente-4}}
+
+    %% ===========================================================
+    %% FLUXO PRINCIPAL (Happy Path)
+    %% Pergunta: Quais são as etapas do caminho feliz?
+    %% ===========================================================
+
+    %% --- Etapa 1: {{descricao-etapa-1}} ---
+    Ator ->>+ P1: {{metodo-http}} {{endpoint-ou-acao}}<br/>{{descricao-payload-entrada}}
+
+    %% --- Etapa 2: {{descricao-etapa-2}} ---
+    P1 ->>+ P2: {{mensagem-entre-servicos}}<br/>{{protocolo}}: {{detalhes}}
+
+    %% --- Etapa 3: {{descricao-etapa-3}} ---
+    P2 ->>+ P3: {{operacao-dados}}<br/>{{protocolo}}: porta {{porta}}
+    P3 -->>- P2: {{resposta-dados}}
+
+    %% --- Etapa 4: {{descricao-etapa-4}} ---
+    P2 ->>+ P4: {{acao-complementar}}<br/>{{detalhes-complementares}}
+    P4 -->>- P2: {{confirmacao}}
+
+    %% --- Respostas de retorno ---
+    P2 -->>- P1: {{resposta-servico}}<br/>{{codigo-status}} + {{payload-resposta}}
+    P1 -->>- Ator: {{resposta-final}}<br/>{{codigo-status-final}}
+
+    %% ===========================================================
+    %% TRATAMENTO DE ERROS
+    %% Pergunta: Quais cenários de erro existem?
+    %% ===========================================================
+
+    alt {{condicao-sucesso}}
+        %% Pergunta: Há alguma ação pós-sucesso (log, evento, notificação)?
+        Note over Ator, P4: {{observacao-caminho-feliz}}
+
+    else {{condicao-erro-1}}
+        %% Pergunta: Qual é a causa mais comum de falha neste fluxo?
+        P2 -->> P1: {{codigo-erro-1}}<br/>{ error: "{{mensagem-erro-1}}" }
+        P1 -->> Ator: {{codigo-erro-cliente-1}}<br/>{{mensagem-amigavel-1}}
+
+    else {{condicao-erro-2}}
+        %% Pergunta: Há cenários de timeout ou indisponibilidade?
+        P3 -->> P2: {{codigo-erro-2}}<br/>{{descricao-erro-2}}
+        P2 -->> P1: {{codigo-erro-propagado}}
+        P1 -->> Ator: {{codigo-erro-cliente-2}}<br/>{{mensagem-amigavel-2}}
+
+        Note over P1, P3: {{estrategia-resiliencia}}<br/>Ex: retry, circuit breaker, fallback
+    end
+
+    %% ===========================================================
+    %% NOTAS E OBSERVAÇÕES
+    %% Pergunta: Há requisitos não-funcionais relevantes?
+    %% ===========================================================
+
+    Note over Ator: {{nota-experiencia-usuario}}<br/>Ex: tempo máximo de resposta esperado
+
+    Note over P1, P2: {{nota-seguranca}}<br/>Ex: autenticação, autorização, criptografia
+
+    Note over P3, P4: {{nota-dados}}<br/>Ex: consistência, replicação, backup
+
+    Note right of P4: {{nota-monitoramento}}<br/>Ex: métricas, alertas, logs

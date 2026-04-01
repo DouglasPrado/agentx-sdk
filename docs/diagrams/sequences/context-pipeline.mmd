@@ -1,0 +1,79 @@
+%% Fluxo Crítico: Context Pipeline com Budget Management
+%% Referência: docs/blueprint/07-critical_flows.md
+
+sequenceDiagram
+    autonumber
+
+    participant Agent as Agent
+    participant Pipeline as ContextPipeline
+    participant SysStage as SystemPromptStage
+    participant SkillStage as SkillsStage
+    participant KnowStage as KnowledgeStage
+    participant MemStage as MemoryStage
+    participant HistStage as HistoryStage
+    participant Builder as ContextBuilder
+    participant LLM as OpenRouterClient
+
+    Agent ->>+ Pipeline: execute(contextFrame)
+    Note right of Pipeline: frame: systemPrompt, messages, tokenBudget, injections=[]
+
+    %% Stage 1: System Prompt
+    Pipeline ->>+ SysStage: execute(frame)
+    SysStage ->> SysStage: injetar system prompt base
+    SysStage ->> SysStage: contabilizar tokens
+    SysStage -->>- Pipeline: frame (tokensUsed += N)
+
+    %% Stage 2: Skills
+    Pipeline ->>+ SkillStage: execute(frame)
+    SkillStage ->> SkillStage: SkillManager.match(input)
+    alt skills ativas encontradas
+        SkillStage ->> SkillStage: injetar instructions (prioridade ALTA)
+        SkillStage ->> SkillStage: registrar tools exclusivas
+    end
+    SkillStage -->>- Pipeline: frame + skill injections
+
+    %% Stage 3: Knowledge
+    Pipeline ->>+ KnowStage: execute(frame)
+    KnowStage ->> KnowStage: KnowledgeManager.search(input)
+    alt knowledge encontrado
+        KnowStage ->> KnowStage: injetar resultados RAG (prioridade MÉDIA)
+    end
+    KnowStage -->>- Pipeline: frame + knowledge injections
+
+    %% Stage 4: Memory
+    Pipeline ->>+ MemStage: execute(frame)
+    MemStage ->> MemStage: MemoryManager.recall(input)
+    alt memórias encontradas
+        MemStage ->> MemStage: injetar memórias (prioridade MÉDIA-BAIXA)
+    end
+    MemStage -->>- Pipeline: frame + memory injections
+
+    %% Stage 5: History
+    Pipeline ->>+ HistStage: execute(frame)
+    HistStage ->> HistStage: preservar últimas 10 mensagens
+    HistStage ->> HistStage: preservar mensagens pinned=true
+
+    alt tokensUsed > tokenBudget
+        Note over Pipeline, Builder: BUDGET EXCEDIDO — cortar por prioridade
+
+        HistStage ->> HistStage: remover injections (memory primeiro, skills por último)
+
+        alt ainda excede após corte de injections
+            HistStage ->>+ Builder: compactar histórico antigo
+            alt LLM de compactação disponível
+                Builder ->>+ LLM: sumarizar mensagens antigas
+                LLM -->>- Builder: resumo (1-2 parágrafos)
+                Builder ->> Builder: substituir mensagens antigas por resumo
+            else sem LLM de compactação
+                Builder ->> Builder: truncar mensagens mais antigas
+            end
+            Builder -->>- HistStage: histórico compactado
+        end
+    end
+
+    HistStage -->>- Pipeline: frame final
+
+    Pipeline -->>- Agent: { systemPrompt, messages } prontos para ReactLoop
+
+    Note over Agent, LLM: Mensagens pinned NUNCA são sumarizadas
+    Note over Pipeline: Máximo 20 pinned por thread (mais antigas perdem pin)

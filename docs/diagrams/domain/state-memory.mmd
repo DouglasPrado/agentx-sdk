@@ -1,0 +1,41 @@
+%% Máquina de Estados: Memory Lifecycle
+%% Referência: docs/blueprint/09-state-models.md
+
+stateDiagram-v2
+    direction TB
+
+    [*] --> active : save() — confidence 0.8 (extraída) ou 1.0 (explícita)
+
+    active : Disponível para recall
+    reinforced : Acessada recentemente (confidence +0.05)
+    decaying : Não acessada, confidence em decay
+    consolidated : Mergeada com similar (dedup)
+    expired : confidence < minConfidence
+    removed : Deletada do store
+
+    active --> reinforced : search() retorna esta memória
+    reinforced --> active : Próximo ciclo sem acesso
+    active --> decaying : decayInterval turnos sem acesso
+    decaying --> active : search() retorna (reforço +0.05)
+    decaying --> expired : confidence < minConfidence
+    active --> consolidated : Dedup semântica detecta duplicata
+    reinforced --> consolidated : Dedup semântica detecta duplicata
+    expired --> removed : Limpeza automática
+    consolidated --> removed : Original removida após merge
+
+    removed --> [*]
+
+    note right of active
+        confidence: 0.1 — 1.0
+        Busca: FTS5 + embeddings + RRF
+    end note
+
+    note right of decaying
+        A cada N turnos:
+        confidence *= decayFactor (0.95)
+    end note
+
+    note left of expired
+        Memória marcada para remoção
+        Não participa mais de recall
+    end note

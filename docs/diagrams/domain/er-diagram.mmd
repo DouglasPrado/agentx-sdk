@@ -1,0 +1,43 @@
+%% Modelo de Dados (ER) — Pure Agent
+%% Referência: docs/blueprint/05-data-model.md
+
+erDiagram
+    memories {
+        text id PK "UUID único"
+        text content "Conteúdo textual da memória"
+        text scope "thread | persistent | learned"
+        text category "fact | preference | procedure | insight | context"
+        real confidence "0.0-1.0 com decay temporal"
+        integer access_count "Vezes recuperada em buscas"
+        text source "extracted | explicit | feedback"
+        text thread_id "Thread de origem (nullable)"
+        blob embedding "Float32Array serializado"
+        integer created_at "Timestamp de criação"
+        integer last_accessed_at "Timestamp do último acesso"
+    }
+
+    memories_fts {
+        text content "FTS5 virtual table para busca full-text"
+    }
+
+    vectors {
+        text id PK "UUID único"
+        text content "Conteúdo textual do chunk"
+        blob embedding "Float32Array serializado"
+        text metadata "JSON com metadados do documento"
+        integer created_at "Timestamp de criação"
+    }
+
+    conversations {
+        integer id PK "Autoincrement"
+        text thread_id "Identificador da thread"
+        text role "user | assistant | system | tool"
+        text content "Conteúdo da mensagem"
+        text tool_calls "JSON com tool calls (nullable)"
+        text tool_call_id "ID da tool call respondida (nullable)"
+        integer pinned "1 = não compactável"
+        integer created_at "Timestamp de criação"
+    }
+
+    %% --- Relacionamentos ---
+    memories ||--o| memories_fts : "indexa conteúdo"

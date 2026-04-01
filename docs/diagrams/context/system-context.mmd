@@ -1,0 +1,41 @@
+%% C4 Nivel 1: Contexto do Sistema
+%% Mostra o sistema, seus atores e sistemas externos
+%% Referencia: docs/blueprint/00-context.md
+
+graph TB
+    %% -------------------------------------------------------
+    %% Atores (Personas)
+    %% -------------------------------------------------------
+    Dev["👤 Desenvolvedor<br/>Integra o pacote Agent em sua app Node.js"]
+    HostApp["🖥️ Aplicação Host<br/>Processo Node.js que instancia e opera o Agent"]
+
+    %% -------------------------------------------------------
+    %% Sistema Central
+    %% -------------------------------------------------------
+    System["🏢 Pure Agent<br/>Pacote standalone de agente conversacional<br/>com tools, memory, knowledge, skills e MCP"]
+
+    %% -------------------------------------------------------
+    %% Sistemas Externos
+    %% -------------------------------------------------------
+    OpenRouter["📦 OpenRouter API<br/>Gateway unificado para LLMs"]
+    MCP["📦 Servidores MCP<br/>Tools dinâmicas via MCP Protocol"]
+    SQLite["📦 SQLite (local)<br/>Persistência de memórias, vetores e conversas"]
+
+    %% -------------------------------------------------------
+    %% Relacionamentos
+    %% -------------------------------------------------------
+    Dev -->|"Configura e registra tools/skills"| System
+    HostApp -->|"Invoca chat()/stream()"| System
+    System -->|"HTTPS + SSE streaming"| OpenRouter
+    System -->|"stdio / SSE (MCP SDK)"| MCP
+    System -->|"better-sqlite3 (embutido)"| SQLite
+
+    %% -------------------------------------------------------
+    %% Estilos C4
+    %% -------------------------------------------------------
+    style System fill:#1168bd,stroke:#0b4884,color:#fff
+    style Dev fill:#08427b,stroke:#052e56,color:#fff
+    style HostApp fill:#08427b,stroke:#052e56,color:#fff
+    style OpenRouter fill:#999999,stroke:#6b6b6b,color:#fff
+    style MCP fill:#999999,stroke:#6b6b6b,color:#fff
+    style SQLite fill:#999999,stroke:#6b6b6b,color:#fff

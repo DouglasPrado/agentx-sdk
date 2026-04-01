@@ -1,0 +1,68 @@
+%% Deployment Diagram — Pure Agent
+%% O Pure Agent é uma biblioteca in-process, não um serviço independente.
+%% Este diagrama mostra como ele se integra ao ambiente de execução.
+%% Referência: docs/blueprint/06-system-architecture.md
+
+graph TB
+
+    subgraph HostProcess["🖥️ Processo Node.js 18+ (Aplicação Host)"]
+        direction TB
+
+        App["Aplicação Host<br/>(API HTTP, CLI, Bot, etc.)"]
+
+        subgraph PureAgent["📦 Pure Agent (in-process)"]
+            Agent["Agent<br/>chat() / stream()"]
+            ReactLoop["ReactLoop"]
+            ToolExec["ToolExecutor"]
+            MemMgr["MemoryManager"]
+            KnowMgr["KnowledgeManager"]
+            MCPAdapt["MCPAdapter"]
+            CtxPipeline["ContextPipeline"]
+        end
+
+        SQLiteConn["better-sqlite3<br/>(driver embutido)"]
+    end
+
+    subgraph LocalFS["📂 Filesystem Local"]
+        DBFile["~/.agent/data.db<br/>SQLite WAL mode<br/>──────────<br/>Tabelas: memories, vectors, conversations<br/>FTS5: memories_fts"]
+    end
+
+    subgraph External["🌐 Serviços Externos"]
+        OpenRouter["OpenRouter API<br/>https://openrouter.ai/api/v1<br/>──────────<br/>Chat completions (SSE streaming)<br/>Embeddings"]
+        MCPServers["MCP Servers<br/>──────────<br/>Transport: stdio / SSE<br/>Reconnect: backoff exponencial"]
+    end
+
+    %% Conexões internas
+    App -->|"import + instância"| Agent
+    Agent --> ReactLoop
+    Agent --> CtxPipeline
+    Agent --> ToolExec
+    Agent --> MemMgr
+    Agent --> KnowMgr
+    ToolExec --> MCPAdapt
+    PureAgent --> SQLiteConn
+    SQLiteConn -->|"read/write"| DBFile
+
+    %% Conexões externas
+    ReactLoop -->|"HTTPS + SSE"| OpenRouter
+    KnowMgr -->|"HTTPS (embeddings)"| OpenRouter
+    MemMgr -->|"HTTPS (embeddings)"| OpenRouter
+    MCPAdapt -->|"stdio / SSE"| MCPServers
+
+    %% Estilos
+    style HostProcess fill:#E3F2FD,stroke:#438DD5,stroke-width:2px,color:#333
+    style PureAgent fill:#438DD5,stroke:#2B6CB0,color:#fff
+    style Agent fill:#1168bd,stroke:#0b4884,color:#fff
+    style ReactLoop fill:#1168bd,stroke:#0b4884,color:#fff
+    style ToolExec fill:#1168bd,stroke:#0b4884,color:#fff
+    style MemMgr fill:#1168bd,stroke:#0b4884,color:#fff
+    style KnowMgr fill:#1168bd,stroke:#0b4884,color:#fff
+    style MCPAdapt fill:#1168bd,stroke:#0b4884,color:#fff
+    style CtxPipeline fill:#1168bd,stroke:#0b4884,color:#fff
+    style App fill:#438DD5,stroke:#2B6CB0,color:#fff
+    style SQLiteConn fill:#438DD5,stroke:#2B6CB0,color:#fff
+    style LocalFS fill:#E8F5E9,stroke:#67BE4B,stroke-width:2px,color:#333
+    style DBFile fill:#67BE4B,stroke:#4A9A35,color:#fff
+    style External fill:#FFF3E0,stroke:#F5A623,stroke-width:2px,color:#333
+    style OpenRouter fill:#F5A623,stroke:#E09100,color:#fff
+    style MCPServers fill:#F5A623,stroke:#E09100,color:#fff
