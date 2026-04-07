@@ -38,11 +38,11 @@ export function buildContext(options: {
   const systemTokens = estimateTokens(systemContent);
   used += systemTokens;
 
-  // 2. Injections sorted by priority (higher = more important)
+  // 2. Injections sorted by priority (higher = more important), wrapped in <system-reminder>
   const sortedInjections = [...injections].sort((a, b) => b.priority - a.priority);
   for (const injection of sortedInjections) {
     if (used + injection.tokens <= budget) {
-      systemContent += `\n\n${injection.content}`;
+      systemContent += `\n\n<system-reminder>\n${injection.content}\n</system-reminder>`;
       used += injection.tokens;
       appliedInjections.push(injection);
     }
@@ -79,7 +79,41 @@ export function buildContext(options: {
   }
   messages.push(...unpinnedToInclude);
 
-  return { messages, totalTokens: used, injections: appliedInjections };
+  // 4. Merge consecutive same-role messages (API constraint: no consecutive user/user)
+  const merged = mergeConsecutiveMessages(messages);
+
+  return { messages: merged, totalTokens: used, injections: appliedInjections };
+}
+
+/**
+ * Merge consecutive messages with the same role.
+ * Prevents API errors from consecutive user or assistant messages.
+ */
+function mergeConsecutiveMessages(messages: OpenRouterMessage[]): OpenRouterMessage[] {
+  if (messages.length <= 1) return messages;
+
+  const result: OpenRouterMessage[] = [messages[0]!];
+
+  for (let i = 1; i < messages.length; i++) {
+    const current = messages[i]!;
+    const prev = result[result.length - 1]!;
+
+    // Only merge user+user or assistant+assistant (not system, not tool)
+    if (
+      current.role === prev.role &&
+      (current.role === 'user' || current.role === 'assistant') &&
+      typeof prev.content === 'string' &&
+      typeof current.content === 'string' &&
+      !current.tool_call_id &&
+      !prev.tool_calls
+    ) {
+      result[result.length - 1] = { ...prev, content: `${prev.content}\n\n${current.content}` };
+    } else {
+      result.push(current);
+    }
+  }
+
+  return result;
 }
 
 function chatMessageToOpenRouter(msg: ChatMessage): OpenRouterMessage {

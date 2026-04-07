@@ -2,13 +2,13 @@
 
 > **Status: N/A para este projeto.**
 
-O Pure Agent é uma biblioteca TypeScript standalone. Não envia comunicações diretas a usuários finais (email, SMS, WhatsApp). A responsabilidade de comunicação com usuários finais é da aplicação host que consome o pacote.
+O AgentX SDK é uma biblioteca TypeScript standalone. Não envia comunicações diretas a usuários finais (email, SMS, WhatsApp). A responsabilidade de comunicação com usuários finais é da aplicação host que consome o pacote.
 
 ---
 
 ## Comunicação do Agent (Eventos)
 
-A única forma de "comunicação" do Pure Agent é via **AgentEvents** entregues ao consumidor:
+A única forma de "comunicação" do AgentX SDK é via **AgentEvents** entregues ao consumidor:
 
 | Canal | Mecanismo | Consumidor | Formato |
 | ----- | --------- | ---------- | ------- |
@@ -26,4 +26,4 @@ Se a aplicação host precisa enviar comunicações a usuários finais com base 
 - **Notificações push:** Idem — consumidor decide quando e como notificar
 - **Webhooks:** Consumidor expõe endpoints próprios se necessário
 
-O Pure Agent não opina sobre canais de comunicação externa.
+O AgentX SDK não opina sobre canais de comunicação externa.

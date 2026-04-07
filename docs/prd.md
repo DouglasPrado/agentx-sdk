@@ -1,4 +1,4 @@
-# Plano: Implementar Pure Agent — Pacote Standalone
+# Plano: Implementar AgentX SDK — Pacote Standalone
 
 ## Contexto
 

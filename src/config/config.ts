@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import type { MemoryStore, VectorStore, ConversationStore } from '../contracts/entities/stores.js';
+import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
 
 /** MCP server connection configuration */
 const MCPConnectionConfigSchema = z.object({
   name: z.string().min(1),
-  transport: z.enum(['stdio', 'sse']),
+  transport: z.enum(['stdio', 'sse', 'http']),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
   url: z.string().url().optional(),
@@ -23,14 +23,15 @@ const CostPolicySchema = z.object({
   onLimitReached: z.enum(['stop', 'warn']).default('stop'),
 });
 
-/** Memory subsystem configuration */
+/** Memory subsystem configuration (file-based) */
 const MemoryConfigSchema = z.object({
   enabled: z.boolean().default(true),
-  store: z.custom<MemoryStore>().optional(),
-  decayFactor: z.number().min(0).max(1).default(0.95),
-  decayInterval: z.number().int().positive().default(10),
-  minConfidence: z.number().min(0).max(1).default(0.1),
+  memoryDir: z.string().default('~/.agent/memory/'),
+  relevanceModel: z.string().optional(),
+  maxMemoryFiles: z.number().int().positive().default(200),
+  extractionEnabled: z.boolean().default(true),
   samplingRate: z.number().min(0).max(1).default(0.3),
+  extractionInterval: z.number().int().positive().default(10),
 });
 
 /** Knowledge/RAG subsystem configuration */
@@ -43,6 +44,13 @@ const KnowledgeConfigSchema = z.object({
   minScore: z.number().min(0).max(1).default(0.3),
 });
 
+/** Skills subsystem configuration */
+const SkillsConfigSchema = z.object({
+  skillsDir: z.string().optional(),
+  maxActiveSkills: z.number().int().positive().default(3),
+  modelDiscovery: z.boolean().default(true),
+});
+
 /** Full Agent configuration — validated with Zod */
 export const AgentConfigSchema = z.object({
   apiKey: z.string().min(1, 'apiKey is required'),
@@ -53,6 +61,7 @@ export const AgentConfigSchema = z.object({
   // Subsystem configs
   memory: MemoryConfigSchema.optional(),
   knowledge: KnowledgeConfigSchema.optional(),
+  skills: SkillsConfigSchema.optional(),
   costPolicy: CostPolicySchema.optional(),
 
   // Pluggable stores
@@ -73,6 +82,20 @@ export const AgentConfigSchema = z.object({
   maxPinnedMessages: z.number().int().positive().default(20),
   reserveTokens: z.number().int().min(0).default(4_096),
 
+  // Compaction
+  compactionThreshold: z.number().min(0).max(1).default(0.8),
+
+  // Recovery
+  fallbackModel: z.string().optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
+  escalatedMaxOutputTokens: z.number().int().positive().optional(),
+
+  // Token budget continuation
+  tokenBudget: z.object({
+    total: z.number().int().positive(),
+    outputThreshold: z.number().min(0).max(1).default(0.5),
+  }).optional(),
+
   // Observability
   logLevel: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
 
@@ -80,7 +103,7 @@ export const AgentConfigSchema = z.object({
   deterministic: z.boolean().default(false),
   seed: z.number().int().optional(),
 
-  // Embedding model (for memory + knowledge)
+  // Embedding model (for knowledge/RAG)
   embeddingModel: z.string().default('openai/text-embedding-3-small'),
 
   // Database path

@@ -1,5 +1,5 @@
-%% Deployment Diagram — Pure Agent
-%% O Pure Agent é uma biblioteca in-process, não um serviço independente.
+%% Deployment Diagram — AgentX SDK
+%% O AgentX SDK é uma biblioteca in-process, não um serviço independente.
 %% Este diagrama mostra como ele se integra ao ambiente de execução.
 %% Referência: docs/blueprint/06-system-architecture.md
 
@@ -10,7 +10,7 @@ graph TB
 
         App["Aplicação Host<br/>(API HTTP, CLI, Bot, etc.)"]
 
-        subgraph PureAgent["📦 Pure Agent (in-process)"]
+        subgraph PureAgent["📦 AgentX SDK (in-process)"]
             Agent["Agent<br/>chat() / stream()"]
             ReactLoop["ReactLoop"]
             ToolExec["ToolExecutor"]

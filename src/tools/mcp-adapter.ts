@@ -2,7 +2,7 @@ import type { AgentTool } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { MCPConnectionConfig } from '../config/config.js';
 import type { ToolExecutor } from './tool-executor.js';
-import { z } from 'zod';
+import { jsonSchemaToZod } from './json-schema-to-zod.js';
 
 export interface MCPHealthStatus {
   servers: Array<{
@@ -24,6 +24,7 @@ interface MCPConnection {
   lastError?: string;
   status: 'connected' | 'disconnected' | 'error' | 'reconnecting';
   healthTimer?: ReturnType<typeof setInterval>;
+  instructions?: string;
 }
 
 // Minimal MCP SDK types (resolved via dynamic import)
@@ -37,10 +38,12 @@ interface MCPClient {
 interface MCPToolDef {
   name: string;
   description?: string;
-  inputSchema?: {
-    type: string;
-    properties?: Record<string, { type: string; description?: string }>;
-    required?: string[];
+  inputSchema?: Record<string, unknown>;
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    openWorldHint?: boolean;
+    title?: string;
   };
 }
 
@@ -53,9 +56,32 @@ interface MCPToolResult {
  * Bridges MCP servers to AgentTool instances.
  * Uses dynamic import for @modelcontextprotocol/sdk.
  */
+export interface MCPResource {
+  uri: string;
+  name: string;
+  mimeType?: string;
+  description?: string;
+  serverName: string;
+}
+
+export interface MCPPromptInfo {
+  serverName: string;
+  promptName: string;
+  description?: string;
+}
+
+export interface MCPConnectionInfo {
+  name: string;
+  status: string;
+  instructions?: string;
+  toolCount: number;
+}
+
 export class MCPAdapter {
   private readonly executor: ToolExecutor;
   private readonly connections = new Map<string, MCPConnection>();
+  /** MCP prompts discovered from servers */
+  private readonly mcpPrompts = new Map<string, MCPPromptInfo>();
 
   constructor(executor: ToolExecutor) {
     this.executor = executor;
@@ -71,7 +97,7 @@ export class MCPAdapter {
 
     const { Client } = await loadSDK();
 
-    const client = new Client({ name: `pure-agent-${config.name}`, version: '0.1.0' }) as MCPClient;
+    const client = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
     const transport = await createTransport(config);
 
     await client.connect(transport);
@@ -166,28 +192,107 @@ export class MCPAdapter {
     return this.connections.get(name)?.status === 'connected';
   }
 
+  /** Get connection info for all servers (for context injection). */
+  getConnections(): MCPConnectionInfo[] {
+    return [...this.connections.values()].map(conn => ({
+      name: conn.name,
+      status: conn.status,
+      instructions: conn.instructions,
+      toolCount: conn.toolNames.length,
+    }));
+  }
+
+  /** Get all discovered MCP prompts. */
+  getPrompts(): Map<string, MCPPromptInfo> {
+    return this.mcpPrompts;
+  }
+
+  /** List resources from a connected server. */
+  async listResources(serverName: string): Promise<MCPResource[]> {
+    const conn = this.connections.get(serverName);
+    if (!conn || conn.status !== 'connected') return [];
+
+    try {
+      const result = await (conn.client as unknown as {
+        listResources?: () => Promise<{ resources: Array<{ uri: string; name: string; mimeType?: string; description?: string }> }>;
+      }).listResources?.();
+      if (!result) return [];
+      return result.resources.map(r => ({ ...r, serverName }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Read a specific resource from a server. */
+  async readResource(serverName: string, uri: string): Promise<string> {
+    const conn = this.connections.get(serverName);
+    if (!conn || conn.status !== 'connected') {
+      throw new Error(`MCP server "${serverName}" not connected`);
+    }
+
+    const result = await (conn.client as unknown as {
+      readResource?: (params: { uri: string }) => Promise<{ contents: Array<{ text?: string; uri: string }> }>;
+    }).readResource?.({ uri });
+    if (!result) throw new Error('Server does not support resources');
+
+    return result.contents.map(c => c.text ?? `[Binary: ${c.uri}]`).join('\n');
+  }
+
+  /** Fetch and return a prompt from a server (for skill getPrompt). */
+  async getPrompt(serverName: string, promptName: string, args?: string): Promise<string> {
+    const conn = this.connections.get(serverName);
+    if (!conn || conn.status !== 'connected') {
+      throw new Error(`MCP server "${serverName}" not connected`);
+    }
+
+    const parsedArgs: Record<string, string> = {};
+    if (args) {
+      // Simple key=value parsing from args string
+      for (const part of args.split(/\s+/)) {
+        const [k, ...v] = part.split('=');
+        if (k && v.length > 0) parsedArgs[k] = v.join('=');
+      }
+    }
+
+    const result = await (conn.client as unknown as {
+      getPrompt?: (params: { name: string; arguments?: Record<string, string> }) => Promise<{
+        messages: Array<{ role: string; content: { type: string; text?: string } | string }>;
+      }>;
+    }).getPrompt?.({ name: promptName, arguments: parsedArgs });
+
+    if (!result) throw new Error('Server does not support prompts');
+
+    return result.messages.map(m => {
+      const content = typeof m.content === 'string' ? m.content : m.content.text ?? '';
+      return content;
+    }).join('\n');
+  }
+
   private convertTool(serverName: string, mcpTool: MCPToolDef, client: MCPClient, config: MCPConnectionConfig): AgentTool {
     const namespacedName = `mcp__${serverName}__${mcpTool.name}`;
-
-    // Build a Zod schema from JSON Schema (best-effort)
-    const parameters = jsonSchemaToZod(mcpTool.inputSchema);
-
+    const parameters = jsonSchemaToZod(mcpTool.inputSchema as Record<string, unknown> | undefined);
     const isolateErrors = config.isolateErrors ?? true;
     const timeout = config.timeout ?? 30_000;
 
+    // Map MCP annotations to AgentTool flags
+    const annotations = mcpTool.annotations ?? {};
+    const isReadOnly = annotations.readOnlyHint ?? false;
+    const isDestructive = annotations.destructiveHint ?? false;
+
     return {
       name: namespacedName,
-      description: mcpTool.description ?? `MCP tool: ${mcpTool.name}`,
+      description: mcpTool.description?.slice(0, 2048) ?? `MCP tool: ${mcpTool.name}`,
       parameters,
+      isReadOnly,
+      isDestructive,
+      isConcurrencySafe: isReadOnly, // read-only tools are safe for parallel execution
       execute: async (args: unknown, signal: AbortSignal): Promise<string | AgentToolResult> => {
         try {
-          // Create a timeout-aware signal
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeout);
           signal.addEventListener('abort', () => controller.abort(), { once: true });
 
           try {
-            // Race the tool call against the timeout to guarantee we don't hang
             const timeoutPromise = new Promise<never>((_, reject) => {
               controller.signal.addEventListener('abort', () => reject(new Error(`MCP tool "${mcpTool.name}" timed out after ${timeout}ms`)), { once: true });
             });
@@ -201,10 +306,19 @@ export class MCPAdapter {
               timeoutPromise,
             ]);
 
-            const textContent = result.content
-              .filter(c => c.type === 'text' && c.text)
-              .map(c => c.text!)
-              .join('\n');
+            // Handle mixed content types (text, image, resource)
+            const parts = result.content.map((c: Record<string, unknown>) => {
+              if (c.type === 'text' && c.text) return c.text as string;
+              if (c.type === 'image') {
+                const mime = (c.mimeType as string) ?? 'unknown';
+                const dataLen = typeof c.data === 'string' ? c.data.length : 0;
+                const sizeKB = Math.round(dataLen * 0.75 / 1024);
+                return `[Image: ${mime}, ~${sizeKB}KB]`;
+              }
+              if (c.type === 'resource') return (c.text as string) ?? `[Resource: ${c.uri}]`;
+              return `[${c.type}]`;
+            });
+            const textContent = parts.join('\n');
 
             if (result.isError) {
               return { content: textContent || 'MCP tool returned an error', isError: true };
@@ -290,6 +404,10 @@ async function loadSDK(): Promise<{ Client: new (opts: { name: string; version: 
 }
 
 async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
+  const requestInit: RequestInit | undefined = config.headers
+    ? { headers: config.headers }
+    : undefined;
+
   if (config.transport === 'stdio') {
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
     return new StdioClientTransport({ command: config.command!, args: config.args ?? [] });
@@ -297,36 +415,13 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
 
   if (config.transport === 'sse') {
     const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
-    const url = new URL(config.url!);
-    const requestInit: RequestInit | undefined = config.headers
-      ? { headers: config.headers }
-      : undefined;
-    return new SSEClientTransport(url, { requestInit });
+    return new SSEClientTransport(new URL(config.url!), { requestInit });
+  }
+
+  if (config.transport === 'http') {
+    const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    return new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
   }
 
   throw new Error(`Unsupported MCP transport: ${config.transport}`);
-}
-
-// --- JSON Schema → Zod (best-effort) ---
-
-function jsonSchemaToZod(schema?: MCPToolDef['inputSchema']): z.ZodSchema {
-  if (!schema || !schema.properties) return z.object({});
-
-  const shape: Record<string, z.ZodTypeAny> = {};
-  const required = new Set(schema.required ?? []);
-
-  for (const [key, prop] of Object.entries(schema.properties)) {
-    let field: z.ZodTypeAny;
-    switch (prop.type) {
-      case 'string': field = z.string(); break;
-      case 'number': case 'integer': field = z.number(); break;
-      case 'boolean': field = z.boolean(); break;
-      default: field = z.unknown(); break;
-    }
-    if (prop.description) field = field.describe(prop.description);
-    if (!required.has(key)) field = field.optional();
-    shape[key] = field;
-  }
-
-  return z.object(shape);
 }

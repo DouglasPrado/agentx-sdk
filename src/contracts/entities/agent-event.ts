@@ -9,6 +9,7 @@ export type AgentEvent =
   | ToolCallStartEvent
   | ToolCallDeltaEvent
   | ToolCallEndEvent
+  | ToolProgressEvent
   | MemoryExtractedEvent
   | KnowledgeRetrievedEvent
   | SkillActivatedEvent
@@ -16,6 +17,9 @@ export type AgentEvent =
   | TurnEndEvent
   | ErrorEvent
   | WarningEvent
+  | CompactionEvent
+  | RecoveryEvent
+  | ModelFallbackEvent
   | AgentEndEvent;
 
 export interface AgentStartEvent {
@@ -53,9 +57,16 @@ export interface ToolCallEndEvent {
   duration: number;
 }
 
+export interface ToolProgressEvent {
+  type: 'tool_progress';
+  toolCallId: string;
+  toolName: string;
+  data: Record<string, unknown>;
+}
+
 export interface MemoryExtractedEvent {
   type: 'memory_extracted';
-  memoryId: string;
+  filename: string;
   content: string;
 }
 
@@ -93,10 +104,37 @@ export interface WarningEvent {
   code: string;
 }
 
+export interface CompactionEvent {
+  type: 'compaction';
+  strategy: 'microcompact' | 'autocompact';
+  tokensFreed: number;
+}
+
+/** Recovery reason — matches ContinueReason values that represent recovery */
+export type RecoveryReason =
+  | 'max_output_tokens_escalate'
+  | 'max_output_tokens_recovery'
+  | 'reactive_compact_retry'
+  | 'stop_hook_blocking'
+  | 'token_budget_continuation'
+  | 'tool_retry';
+
+export interface RecoveryEvent {
+  type: 'recovery';
+  reason: RecoveryReason;
+  attempt: number;
+}
+
+export interface ModelFallbackEvent {
+  type: 'model_fallback';
+  from: string;
+  to: string;
+}
+
 export interface AgentEndEvent {
   type: 'agent_end';
   traceId: string;
   usage: TokenUsage;
-  reason: 'stop' | 'cost_limit' | 'max_iterations' | 'error' | 'abort';
+  reason: 'stop' | 'cost_limit' | 'max_iterations' | 'error' | 'abort' | 'stop_hook' | 'prompt_too_long' | 'max_output_tokens';
   duration: number;
 }

@@ -1,18 +1,33 @@
-import type { AgentSkill } from '../contracts/entities/agent-skill.js';
+import type { AgentSkill, SkillPromptContext } from '../contracts/entities/agent-skill.js';
 import type { EmbeddingService } from '../knowledge/embedding-service.js';
+import { scanSkillFiles } from './skill-loader.js';
+import { substituteArgs } from './skill-args.js';
+import { matchAnyGlob } from './skill-glob.js';
 
 export interface SkillMatchResult {
   skill: AgentSkill;
-  matchType: 'prefix' | 'custom' | 'semantic';
+  matchType: 'prefix' | 'alias' | 'custom' | 'semantic';
   score: number;
 }
 
+const MAX_LISTING_DESC_CHARS = 250;
+
 /**
- * Registers skills and matches them against user input.
- * Matching hierarchy: prefix (exact) > custom match() > semantic similarity.
+ * Registers skills, matches them against user input, manages conditional
+ * activation, and provides budget-aware skill listings for model discovery.
+ *
+ * Matching hierarchy: prefix > alias > custom match() > semantic similarity.
  */
 export class SkillManager {
+  /** All registered skills (unconditional — always eligible for matching) */
   private readonly skills = new Map<string, AgentSkill>();
+  /** Skills with `paths` — waiting for file touch to activate */
+  private readonly conditionalSkills = new Map<string, AgentSkill>();
+  /** Skills activated via path matching (moved from conditionalSkills) */
+  private readonly activatedSkills = new Map<string, AgentSkill>();
+  /** Tracks which skills have been invoked in this session */
+  private readonly invokedSkills = new Set<string>();
+
   private readonly embeddingService?: EmbeddingService;
   private readonly maxActiveSkills: number;
 
@@ -21,59 +36,131 @@ export class SkillManager {
     this.maxActiveSkills = options?.maxActiveSkills ?? 3;
   }
 
+  // ---------------------------------------------------------------------------
+  // Registration
+  // ---------------------------------------------------------------------------
+
   register(skill: AgentSkill): void {
-    this.skills.set(skill.name, skill);
+    if (skill.paths && skill.paths.length > 0) {
+      this.conditionalSkills.set(skill.name, skill);
+    } else {
+      this.skills.set(skill.name, skill);
+    }
   }
 
   unregister(name: string): boolean {
-    return this.skills.delete(name);
+    return this.skills.delete(name)
+      || this.conditionalSkills.delete(name)
+      || this.activatedSkills.delete(name);
   }
 
+  /** All skills (unconditional + activated conditional) */
   listSkills(): AgentSkill[] {
-    return [...this.skills.values()];
+    return [...this.skills.values(), ...this.activatedSkills.values()];
   }
+
+  /** All skills including pending conditional ones */
+  listAllSkills(): AgentSkill[] {
+    return [
+      ...this.skills.values(),
+      ...this.activatedSkills.values(),
+      ...this.conditionalSkills.values(),
+    ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // File-based loading
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Load skills from a directory containing SKILL.md files.
+   * Returns the number of skills loaded.
+   */
+  async loadFromDirectory(dir: string): Promise<number> {
+    const skills = await scanSkillFiles(dir);
+    for (const skill of skills) {
+      this.register(skill);
+    }
+    return skills.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conditional path activation
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Activate conditional skills whose `paths` match any of the given file paths.
+   * Returns the names of newly activated skills.
+   */
+  activateForPaths(filePaths: string[]): string[] {
+    const activated: string[] = [];
+
+    for (const [name, skill] of this.conditionalSkills) {
+      if (!skill.paths) continue;
+      const matched = filePaths.some(fp => matchAnyGlob(skill.paths!, fp));
+      if (matched) {
+        this.activatedSkills.set(name, skill);
+        this.conditionalSkills.delete(name);
+        activated.push(name);
+      }
+    }
+
+    return activated;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Matching
+  // ---------------------------------------------------------------------------
 
   /**
    * Matches skills against input. Returns top skills sorted by priority.
    */
   async match(input: string, context: { threadId: string }): Promise<AgentSkill[]> {
     const matches: SkillMatchResult[] = [];
+    const eligible = this.getEligibleSkills();
 
-    for (const skill of this.skills.values()) {
+    for (const skill of eligible) {
       // 1. Prefix match (highest priority)
       if (skill.triggerPrefix && input.startsWith(skill.triggerPrefix)) {
         matches.push({ skill, matchType: 'prefix', score: 1.0 });
         continue;
       }
 
-      // 2. Custom match function
+      // 2. Alias match
+      if (skill.aliases) {
+        const matched = skill.aliases.some(alias => {
+          const prefix = alias.startsWith('/') ? alias : `/${alias}`;
+          return input.startsWith(prefix);
+        });
+        if (matched) {
+          matches.push({ skill, matchType: 'alias', score: 0.95 });
+          continue;
+        }
+      }
+
+      // 3. Custom match function
       if (skill.match && skill.match(input, { threadId: context.threadId, recentMessages: 0 })) {
         matches.push({ skill, matchType: 'custom', score: 0.8 });
         continue;
       }
     }
 
-    // 3. Semantic match — only if:
-    //    - embedding service is available
-    //    - no prefix/custom matches found
-    //    - there are skills registered that lack explicit matchers (need semantic)
-    if (this.embeddingService && matches.length === 0 && this.hasSkillsNeedingSemantic()) {
-      const semanticMatches = await this.semanticMatch(input);
+    // 4. Semantic match — only if no prefix/alias/custom matches found
+    //    and there are skills that lack explicit matchers
+    if (this.embeddingService && matches.length === 0 && this.hasSkillsNeedingSemantic(eligible)) {
+      const semanticMatches = await this.semanticMatch(input, eligible);
       matches.push(...semanticMatches);
     }
 
     // Sort: exclusive first, then by match type priority, then by skill.priority
     const sorted = matches.sort((a, b) => {
-      // Exclusive skills first
       if (a.skill.exclusive && !b.skill.exclusive) return -1;
       if (!a.skill.exclusive && b.skill.exclusive) return 1;
 
-      // By match type specificity
-      const typeOrder = { prefix: 3, custom: 2, semantic: 1 };
-      const typeDiff = typeOrder[b.matchType] - typeOrder[a.matchType];
+      const typeOrder: Record<string, number> = { prefix: 4, alias: 3, custom: 2, semantic: 1 };
+      const typeDiff = (typeOrder[b.matchType] ?? 0) - (typeOrder[a.matchType] ?? 0);
       if (typeDiff !== 0) return typeDiff;
 
-      // By priority (higher is better)
       return (b.skill.priority ?? 0) - (a.skill.priority ?? 0);
     });
 
@@ -85,25 +172,131 @@ export class SkillManager {
     return sorted.slice(0, this.maxActiveSkills).map(m => m.skill);
   }
 
+  // ---------------------------------------------------------------------------
+  // Dynamic prompt resolution
+  // ---------------------------------------------------------------------------
+
   /**
-   * Returns true if any registered skill lacks both triggerPrefix and match(),
-   * meaning it can only be activated via semantic matching.
+   * Resolve the final instructions for a matched skill.
+   * If `getPrompt` exists, calls it with args and context.
+   * Otherwise uses static `instructions` with argument substitution.
    */
-  private hasSkillsNeedingSemantic(): boolean {
-    for (const skill of this.skills.values()) {
-      if (!skill.triggerPrefix && !skill.match) return true;
+  async resolveInstructions(
+    skill: AgentSkill,
+    args: string,
+    context: SkillPromptContext,
+  ): Promise<string> {
+    if (skill.getPrompt) {
+      return skill.getPrompt(args, context);
     }
-    return false;
+
+    // Static instructions with optional substitution
+    if (skill.argNames && skill.argNames.length > 0) {
+      return substituteArgs(skill.instructions, args, skill.argNames, {
+        SKILL_DIR: context.skillDir ?? skill.skillDir ?? '',
+        THREAD_ID: context.threadId,
+        TRACE_ID: context.traceId,
+      });
+    }
+
+    return skill.instructions;
   }
 
-  private async semanticMatch(input: string): Promise<SkillMatchResult[]> {
+  // ---------------------------------------------------------------------------
+  // Budget-aware listing for model discovery
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Build a formatted listing of available skills for model context.
+   * Truncates to fit within the given character budget.
+   */
+  buildSkillListing(budgetChars: number): string {
+    const eligible = this.getEligibleSkills()
+      .filter(s => s.modelInvocable !== false);
+
+    if (eligible.length === 0) return '';
+
+    const lines: string[] = [];
+    let usedChars = 0;
+
+    for (const skill of eligible) {
+      const prefix = skill.triggerPrefix
+        ? skill.triggerPrefix
+        : `/${skill.name}`;
+
+      let line = `- ${prefix}: ${skill.description}`;
+      if (skill.whenToUse) {
+        line += ` — ${skill.whenToUse}`;
+      }
+
+      // Truncate individual entry
+      if (line.length > MAX_LISTING_DESC_CHARS) {
+        line = line.slice(0, MAX_LISTING_DESC_CHARS - 3) + '...';
+      }
+
+      if (usedChars + line.length > budgetChars) break;
+      lines.push(line);
+      usedChars += line.length + 1; // +1 for newline
+    }
+
+    return lines.join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Invocation tracking
+  // ---------------------------------------------------------------------------
+
+  markInvoked(name: string): void {
+    this.invokedSkills.add(name);
+  }
+
+  getInvokedSkills(): string[] {
+    return [...this.invokedSkills];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /** Get all skills eligible for matching (unconditional + activated) */
+  private getEligibleSkills(): AgentSkill[] {
+    const eligible: AgentSkill[] = [];
+    for (const skill of this.skills.values()) {
+      if (skill.isEnabled && !skill.isEnabled()) continue;
+      eligible.push(skill);
+    }
+    for (const skill of this.activatedSkills.values()) {
+      if (skill.isEnabled && !skill.isEnabled()) continue;
+      eligible.push(skill);
+    }
+    return eligible;
+  }
+
+  /**
+   * Returns true if any eligible skill lacks both triggerPrefix, aliases, and match(),
+   * meaning it can only be activated via semantic matching.
+   */
+  private hasSkillsNeedingSemantic(eligible: AgentSkill[]): boolean {
+    return eligible.some(s => !s.triggerPrefix && !s.aliases?.length && !s.match);
+  }
+
+  private async semanticMatch(
+    input: string,
+    eligible: AgentSkill[],
+  ): Promise<SkillMatchResult[]> {
     if (!this.embeddingService) return [];
 
     const inputEmbedding = await this.embeddingService.embedSingle(input);
     const results: SkillMatchResult[] = [];
 
-    for (const skill of this.skills.values()) {
-      const skillEmbedding = await this.embeddingService.embedSingle(skill.description);
+    for (const skill of eligible) {
+      // Only semantic-match skills that lack explicit matchers
+      if (skill.triggerPrefix || skill.aliases?.length || skill.match) continue;
+
+      const text = skill.whenToUse
+        ? `${skill.description}. ${skill.whenToUse}`
+        : skill.description;
+      const skillEmbedding = await this.embeddingService.embedSingle(text);
       const score = cosineSimilarity(inputEmbedding, skillEmbedding);
 
       if (score > 0.7) {

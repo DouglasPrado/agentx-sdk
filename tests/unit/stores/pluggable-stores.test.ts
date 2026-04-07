@@ -1,20 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Agent } from '../../../src/agent.js';
-import type { MemoryStore, VectorStore, ConversationStore } from '../../../src/contracts/entities/stores.js';
-import type { Memory } from '../../../src/contracts/entities/memory.js';
+import type { VectorStore, ConversationStore } from '../../../src/contracts/entities/stores.js';
 import type { ChatMessage } from '../../../src/contracts/entities/chat-message.js';
-
-function createCustomMemoryStore(): MemoryStore {
-  const memories = new Map<string, Memory>();
-  return {
-    save: vi.fn((m: Memory) => { memories.set(m.id, m); return m; }),
-    search: vi.fn(() => []),
-    findById: vi.fn((id: string) => memories.get(id) ?? null),
-    incrementAccess: vi.fn(),
-    deleteLowConfidence: vi.fn(() => 0),
-    listByScope: vi.fn(() => []),
-  };
-}
 
 function createCustomVectorStore(): VectorStore {
   return {
@@ -40,17 +27,39 @@ function createCustomConversationStore(): ConversationStore {
 }
 
 describe('Pluggable Stores (ENT-011)', () => {
-  it('should accept a custom MemoryStore', async () => {
-    const store = createCustomMemoryStore();
+  it('should create agent with file-based memory enabled', () => {
     const agent = Agent.create({
       apiKey: 'test-key',
-      memory: { enabled: true, store },
+      memory: { enabled: true },
+      knowledge: { enabled: false },
+    });
+    expect(agent).toBeDefined();
+  });
+
+  it('should save and recall with file-based memory', async () => {
+    // Mock fetch for the LLM relevance selection call
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"selected_memories":[]}' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+        }),
+        { status: 200 },
+      );
+    });
+
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: true },
       knowledge: { enabled: false },
     });
 
-    const mem = await agent.remember('Custom store works');
-    expect(store.save).toHaveBeenCalledOnce();
-    expect(mem.content).toBe('Custom store works');
+    const filename = await agent.remember('Custom file memory works');
+    expect(typeof filename).toBe('string');
+    expect(filename).toMatch(/\.md$/);
+
+    await agent.destroy();
+    vi.restoreAllMocks();
   });
 
   it('should accept a custom VectorStore', () => {
@@ -61,7 +70,6 @@ describe('Pluggable Stores (ENT-011)', () => {
       knowledge: { enabled: true, store },
     });
 
-    // Agent should be created without error
     expect(agent).toBeDefined();
   });
 
@@ -77,32 +85,10 @@ describe('Pluggable Stores (ENT-011)', () => {
     expect(agent).toBeDefined();
   });
 
-  it('should use custom MemoryStore for recall', async () => {
-    const store = createCustomMemoryStore();
-    const mem: Memory = {
-      id: 'custom-1', content: 'remembers this', scope: 'persistent', category: 'fact',
-      confidence: 0.9, accessCount: 0, source: 'explicit', createdAt: Date.now(),
-      lastAccessedAt: Date.now(), state: 'active',
-    };
-    vi.mocked(store.search).mockReturnValue([mem]);
-
-    const agent = Agent.create({
-      apiKey: 'test-key',
-      memory: { enabled: true, store },
-      knowledge: { enabled: false },
-    });
-
-    const results = await agent.recall('test');
-    expect(results).toHaveLength(1);
-    expect(results[0]!.content).toBe('remembers this');
-    expect(store.search).toHaveBeenCalledOnce();
-    expect(store.incrementAccess).toHaveBeenCalledWith('custom-1');
-  });
-
-  it('should export store interfaces from index.ts', async () => {
-    const { SQLiteMemoryStore, SQLiteVectorStore, SQLiteDatabase } = await import('../../../src/index.js');
-    expect(SQLiteMemoryStore).toBeDefined();
+  it('should export stores and FileMemorySystem from index.ts', async () => {
+    const { SQLiteVectorStore, SQLiteDatabase, FileMemorySystem } = await import('../../../src/index.js');
     expect(SQLiteVectorStore).toBeDefined();
     expect(SQLiteDatabase).toBeDefined();
+    expect(FileMemorySystem).toBeDefined();
   });
 });

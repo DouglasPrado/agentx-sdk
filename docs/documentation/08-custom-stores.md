@@ -1,6 +1,6 @@
 # Custom Stores
 
-Pure Agent uses SQLite by default for all persistence. You can replace any store with your own implementation by providing a class that implements the corresponding interface.
+AgentX SDK uses SQLite by default for all persistence. You can replace any store with your own implementation by providing a class that implements the corresponding interface.
 
 ---
 
@@ -19,7 +19,7 @@ There are three pluggable interfaces:
 ## MemoryStore
 
 ```typescript
-import type { MemoryStore, Memory, MemorySearchOptions } from 'pure-agent';
+import type { MemoryStore, Memory, MemorySearchOptions } from 'agentx-sdk';
 
 class PostgresMemoryStore implements MemoryStore {
   save(memory: Memory): Memory {
@@ -71,7 +71,7 @@ const agent = Agent.create({
 ## VectorStore
 
 ```typescript
-import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from 'pure-agent';
+import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from 'agentx-sdk';
 
 class PineconeVectorStore implements VectorStore {
   upsert(chunk: KnowledgeChunk): void {
@@ -115,7 +115,7 @@ const agent = Agent.create({
 ## ConversationStore
 
 ```typescript
-import type { ConversationStore, ChatMessage } from 'pure-agent';
+import type { ConversationStore, ChatMessage } from 'agentx-sdk';
 
 class RedisConversationStore implements ConversationStore {
   appendMessage(message: ChatMessage, threadId: string): void {
@@ -156,7 +156,7 @@ const agent = Agent.create({
 You can also use the SQLite implementations directly (e.g., for testing or custom setups):
 
 ```typescript
-import { SQLiteDatabase, SQLiteMemoryStore, SQLiteVectorStore, SQLiteConversationStore } from 'pure-agent';
+import { SQLiteDatabase, SQLiteMemoryStore, SQLiteVectorStore, SQLiteConversationStore } from 'agentx-sdk';
 
 const db = new SQLiteDatabase('./my-data.db');
 db.initialize();
@@ -182,7 +182,7 @@ Custom stores make testing easy — use mocks:
 
 ```typescript
 import { vi } from 'vitest';
-import type { MemoryStore } from 'pure-agent';
+import type { MemoryStore } from 'agentx-sdk';
 
 const mockStore: MemoryStore = {
   save: vi.fn((m) => m),

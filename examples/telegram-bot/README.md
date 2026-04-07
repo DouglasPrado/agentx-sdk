@@ -1,6 +1,6 @@
-# Pure Agent — Telegram Bot
+# AgentX SDK — Telegram Bot
 
-A Telegram bot powered by [Pure Agent](../../) with streaming responses, web search, and persistent memory.
+A Telegram bot powered by [AgentX SDK](../../) with streaming responses, web search, and persistent memory.
 
 ## Features
 

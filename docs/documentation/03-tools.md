@@ -10,7 +10,7 @@ Every tool has a name, description, Zod schema for parameters, and an `execute` 
 
 ```typescript
 import { z } from 'zod';
-import type { AgentTool } from 'pure-agent';
+import type { AgentTool } from 'agentx-sdk';
 
 const tavilySearch: AgentTool = {
   name: 'web_search',
@@ -67,7 +67,7 @@ const tavilySearch: AgentTool = {
 ### Using with the Agent
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -180,7 +180,7 @@ The validation chain is:
 Hooks let you intercept tool calls for logging, rate limiting, or authorization.
 
 ```typescript
-import { ToolExecutor } from 'pure-agent';
+import { ToolExecutor } from 'agentx-sdk';
 
 const executor = new ToolExecutor({
   beforeToolCall: async (name, args) => {
@@ -270,7 +270,7 @@ for await (const event of agent.stream('...')) {
 A fully functional research agent that searches the web and synthesizes answers:
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 import { z } from 'zod';
 
 const agent = Agent.create({
@@ -354,7 +354,7 @@ await agent.destroy();
 ### Multiple Tools Working Together
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 import { z } from 'zod';
 
 const agent = Agent.create({

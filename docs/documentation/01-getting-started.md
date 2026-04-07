@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-npm install pure-agent
+npm install agentx-sdk
 ```
 
 ### Requirements
@@ -25,7 +25,7 @@ npm install @modelcontextprotocol/sdk
 ### Simple Chat
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -41,7 +41,7 @@ await agent.destroy();
 ### Streaming
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -64,7 +64,7 @@ await agent.destroy();
 ### With Tools
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 import { z } from 'zod';
 
 const agent = Agent.create({

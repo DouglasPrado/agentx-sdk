@@ -1,6 +1,6 @@
-# Pure Agent Documentation
+# AgentX SDK Documentation
 
-**Pure Agent** is a standalone TypeScript library for building conversational AI agents with streaming, tool calling, persistent memory, knowledge/RAG, skills, and MCP support — all with minimal dependencies.
+**AgentX SDK** is a standalone TypeScript library for building conversational AI agents with streaming, tool calling, persistent memory, knowledge/RAG, skills, and MCP support — all with minimal dependencies.
 
 ---
 

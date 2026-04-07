@@ -2,7 +2,7 @@
 
 ## Introdução
 
-Esta seção descreve a arquitetura de alto nível do **Pure Agent**, incluindo seus componentes principais, como eles se comunicam e onde são implantados. O Pure Agent é um pacote TypeScript standalone — não é um serviço deployável, mas sim uma biblioteca que roda dentro do processo Node.js da aplicação host.
+Esta seção descreve a arquitetura de alto nível do **AgentX SDK**, incluindo seus componentes principais, como eles se comunicam e onde são implantados. O AgentX SDK é um pacote TypeScript standalone — não é um serviço deployável, mas sim uma biblioteca que roda dentro do processo Node.js da aplicação host.
 
 ---
 
@@ -130,7 +130,7 @@ Esta seção descreve a arquitetura de alto nível do **Pure Agent**, incluindo 
 
 ## Infraestrutura e Deploy
 
-> O Pure Agent é uma biblioteca, não um serviço. Não há deploy próprio — ele roda dentro do processo da aplicação host.
+> O AgentX SDK é uma biblioteca, não um serviço. Não há deploy próprio — ele roda dentro do processo da aplicação host.
 
 ### Ambientes
 

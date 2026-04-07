@@ -143,7 +143,16 @@ export class OpenRouterClient {
 
     if (!response.ok) {
       if (isRetryableStatus(response.status)) {
-        throw new RetryableError(`OpenRouter API error: ${response.status}`);
+        // Parse Retry-After header (seconds or HTTP-date)
+        let retryAfterMs: number | undefined;
+        const retryAfter = response.headers.get('retry-after');
+        if (retryAfter) {
+          const seconds = Number(retryAfter);
+          retryAfterMs = Number.isNaN(seconds)
+            ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
+            : seconds * 1000;
+        }
+        throw new RetryableError(`OpenRouter API error: ${response.status}`, retryAfterMs);
       }
       const text = await response.text().catch(() => '');
       throw new Error(`OpenRouter API error ${response.status}: ${text}`);
@@ -251,9 +260,12 @@ export class OpenRouterClient {
 }
 
 class RetryableError extends Error {
-  constructor(message: string) {
+  retryAfterMs?: number;
+
+  constructor(message: string, retryAfterMs?: number) {
     super(message);
     this.name = 'RetryableError';
+    this.retryAfterMs = retryAfterMs;
   }
 }
 

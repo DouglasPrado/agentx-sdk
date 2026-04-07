@@ -10,7 +10,7 @@ Desenvolvedores que precisam construir agentes conversacionais com LLMs enfrenta
 
 ## Elevator Pitch
 
-Para **desenvolvedores Node.js** que **precisam de agentes conversacionais com tools, memória e RAG sem depender de frameworks pesados**, o **Pure Agent** é um **pacote TypeScript standalone** que **oferece um agente completo via OOP com streaming, tool calling, memory com aprendizado, knowledge/RAG, skills e MCP — tudo com dependências mínimas e interfaces plugáveis**. Diferente de **frameworks como LangChain, Vercel AI SDK ou pi-agent-core**, nosso sistema **usa apenas `fetch()` nativo para LLM, Zod para validação e SQLite embutido para persistência, resultando em zero lock-in e controle total sobre cada componente**.
+Para **desenvolvedores Node.js** que **precisam de agentes conversacionais com tools, memória e RAG sem depender de frameworks pesados**, o **AgentX SDK** é um **pacote TypeScript standalone** que **oferece um agente completo via OOP com streaming, tool calling, memory com aprendizado, knowledge/RAG, skills e MCP — tudo com dependências mínimas e interfaces plugáveis**. Diferente de **frameworks como LangChain, Vercel AI SDK ou pi-agent-core**, nosso sistema **usa apenas `fetch()` nativo para LLM, Zod para validação e SQLite embutido para persistência, resultando em zero lock-in e controle total sobre cada componente**.
 
 ---
 

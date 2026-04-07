@@ -1,4 +1,4 @@
-# Pure Agent — Guia de Uso e Arquitetura
+# AgentX SDK — Guia de Uso e Arquitetura
 
 ## Como usar o framework
 

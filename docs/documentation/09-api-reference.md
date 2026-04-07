@@ -1,6 +1,6 @@
 # API Reference
 
-Complete type reference for the Pure Agent library.
+Complete type reference for the AgentX SDK library.
 
 ---
 

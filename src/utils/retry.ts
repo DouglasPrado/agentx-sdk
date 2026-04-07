@@ -54,7 +54,10 @@ export async function retry<T>(
         throw error;
       }
 
-      const delay = Math.min(initialDelay * backoffMultiplier ** attempt, maxDelay);
+      // Respect retryAfterMs from rate-limited errors (e.g. 429 with Retry-After header)
+      const retryAfterMs = (error as { retryAfterMs?: number })?.retryAfterMs;
+      const backoffDelay = Math.min(initialDelay * backoffMultiplier ** attempt, maxDelay);
+      const delay = retryAfterMs ? Math.max(retryAfterMs, backoffDelay) : backoffDelay;
       await sleep(delay, signal);
     }
   }

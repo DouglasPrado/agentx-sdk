@@ -1,4 +1,4 @@
-%% Deployment Escalado — Pure Agent
+%% Deployment Escalado — AgentX SDK
 %% Cenário: múltiplas instâncias da aplicação host com stores plugáveis
 %% Referência: docs/blueprint/14-scalability.md
 
@@ -6,19 +6,19 @@ graph TB
 
     subgraph Instance1["🖥️ Node.js Instance 1"]
         App1["Aplicação Host 1"]
-        Agent1["Pure Agent<br/>(in-process)"]
+        Agent1["AgentX SDK<br/>(in-process)"]
         App1 --> Agent1
     end
 
     subgraph Instance2["🖥️ Node.js Instance 2"]
         App2["Aplicação Host 2"]
-        Agent2["Pure Agent<br/>(in-process)"]
+        Agent2["AgentX SDK<br/>(in-process)"]
         App2 --> Agent2
     end
 
     subgraph Instance3["🖥️ Node.js Instance N"]
         App3["Aplicação Host N"]
-        Agent3["Pure Agent<br/>(in-process)"]
+        Agent3["AgentX SDK<br/>(in-process)"]
         App3 --> Agent3
     end
 

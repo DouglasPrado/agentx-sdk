@@ -2,7 +2,7 @@
 
 > Como o sistema crescerá para atender mais dados e mais carga?
 
-> **Nota:** O Pure Agent é uma biblioteca in-process. "Escala" significa: como o Agent se comporta quando o consumidor aumenta o volume de dados, threads concorrentes ou documentos de knowledge.
+> **Nota:** O AgentX SDK é uma biblioteca in-process. "Escala" significa: como o Agent se comporta quando o consumidor aumenta o volume de dados, threads concorrentes ou documentos de knowledge.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## APIs Expostas
 
-> O Pure Agent é uma biblioteca TypeScript. Suas "APIs" são interfaces programáticas, não endpoints HTTP.
+> O AgentX SDK é uma biblioteca TypeScript. Suas "APIs" são interfaces programáticas, não endpoints HTTP.
 
 | Interface | Consumidor | Método | Objetivo | Contrato |
 | --------- | ---------- | ------ | -------- | -------- |

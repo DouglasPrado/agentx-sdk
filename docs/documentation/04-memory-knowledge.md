@@ -1,6 +1,6 @@
 # Memory & Knowledge (RAG)
 
-Pure Agent has two persistence subsystems:
+AgentX SDK has two persistence subsystems:
 
 - **Memory** — facts extracted from conversations that persist across sessions (e.g., "user prefers TypeScript")
 - **Knowledge** — documents ingested for RAG retrieval (e.g., API docs, codebase context)
@@ -137,7 +137,7 @@ This happens transparently — no manual search needed.
 If you need to search knowledge programmatically:
 
 ```typescript
-import { KnowledgeManager } from 'pure-agent';
+import { KnowledgeManager } from 'agentx-sdk';
 // KnowledgeManager is used internally, but you can access
 // the VectorStore directly via custom stores
 ```

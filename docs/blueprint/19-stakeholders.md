@@ -6,7 +6,7 @@
 
 | Stakeholder | Área | Interesse | Poder de Decisão | Necessidade de Alinhamento |
 | ----------- | ---- | --------- | ---------------- | -------------------------- |
-| Desenvolvedor(es) do pacote | Engenharia | Implementar o Pure Agent conforme PRD, garantir qualidade e performance | Alto | Contínuo (daily) |
+| Desenvolvedor(es) do pacote | Engenharia | Implementar o AgentX SDK conforme PRD, garantir qualidade e performance | Alto | Contínuo (daily) |
 | Consumidores da lib (devs) | Engenharia (externa) | Usar o Agent em suas aplicações com API simples e estável | Médio — feedback influencia API | Ad hoc (issues, feedback) |
 | Tech Lead | Arquitetura | Garantir que decisões técnicas (zero deps, SQLite, OOP) são sustentáveis | Alto | Semanal |
 

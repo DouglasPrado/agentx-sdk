@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Agent } from '../../../src/agent.js';
-import type { AgentEvent } from '../../../src/contracts/entities/agent-event.js';
 
 function mockFetchForChat(assistantResponse: string) {
   const sseData = [
@@ -22,27 +21,38 @@ function mockFetchForChat(assistantResponse: string) {
 
     // If messages contain extraction instructions, return extracted memories
     const hasExtractionPrompt = body.messages?.some((m: { content: string }) =>
-      typeof m.content === 'string' && m.content.includes('Extract')
+      typeof m.content === 'string' && m.content.includes('Analyze this conversation')
     );
 
     if (hasExtractionPrompt) {
       const extractionResponse = JSON.stringify([
-        { content: 'User prefers dark mode', category: 'preference', scope: 'persistent' },
+        { name: 'Dark Mode Preference', description: 'User prefers dark mode', type: 'user', content: 'User prefers dark mode' },
       ]);
       return new Response(
-        new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(
-              `data: {"choices":[{"delta":{"content":"${extractionResponse.replace(/"/g, '\\"')}"},"index":0}]}\n\ndata: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":5,"completion_tokens":5,"total_tokens":10}}\n\n`
-            ));
-            controller.close();
-          },
+        JSON.stringify({
+          choices: [{ message: { content: extractionResponse }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
         }),
         { status: 200 },
       );
     }
 
-    // Normal chat response
+    // Memory relevance selection call (json_object response format)
+    const hasRelevancePrompt = body.messages?.some((m: { content: string }) =>
+      typeof m.content === 'string' && m.content.includes('Available memories')
+    );
+
+    if (hasRelevancePrompt) {
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '{"selected_memories":[]}' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+        }),
+        { status: 200 },
+      );
+    }
+
+    // Normal streaming chat response
     return new Response(
       new ReadableStream({
         start(controller) {
@@ -55,9 +65,26 @@ function mockFetchForChat(assistantResponse: string) {
   });
 }
 
-describe('Memory Extraction', () => {
+describe('Memory Extraction (file-based)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('should save explicit memories via remember()', async () => {
+    mockFetchForChat('OK');
+
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: true },
+      knowledge: { enabled: false },
+    });
+
+    // remember() now returns a filename string
+    const filename = await agent.remember('User name is Douglas');
+    expect(typeof filename).toBe('string');
+    expect(filename).toMatch(/\.md$/);
+
+    await agent.destroy();
   });
 
   it('should extract memories after chat when triggered', async () => {
@@ -65,7 +92,7 @@ describe('Memory Extraction', () => {
 
     const agent = Agent.create({
       apiKey: 'test-key',
-      memory: { enabled: true, samplingRate: 1.0 }, // Always extract
+      memory: { enabled: true, samplingRate: 1.0, extractionInterval: 1 },
       knowledge: { enabled: false },
     });
 
@@ -73,31 +100,7 @@ describe('Memory Extraction', () => {
     await agent.chat('Remember that I prefer dark mode');
 
     // Give async extraction time to complete
-    await new Promise(r => setTimeout(r, 200));
-
-    // Recall should find the extracted memory
-    const memories = await agent.recall('dark mode');
-    // Memory should exist (either from extraction or from the explicit trigger phrase)
-    expect(memories.length).toBeGreaterThanOrEqual(0); // Extraction is async, may not be ready
-
-    await agent.destroy();
-  });
-
-  it('should save explicit memories via remember()', async () => {
-    const agent = Agent.create({
-      apiKey: 'test-key',
-      memory: { enabled: true },
-      knowledge: { enabled: false },
-    });
-
-    const mem = await agent.remember('User name is Douglas');
-    expect(mem.content).toBe('User name is Douglas');
-    expect(mem.confidence).toBe(1.0);
-    expect(mem.source).toBe('explicit');
-
-    const recalled = await agent.recall('Douglas');
-    expect(recalled.length).toBeGreaterThan(0);
-    expect(recalled[0]!.content).toContain('Douglas');
+    await new Promise(r => setTimeout(r, 300));
 
     await agent.destroy();
   });

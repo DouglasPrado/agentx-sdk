@@ -1,4 +1,4 @@
-# Blueprint de Software — Pure Agent
+# Blueprint de Software — AgentX SDK
 
 > Status: Draft
 > Versão: v0.1.0
@@ -45,7 +45,7 @@ Para equipes que preferem documentação modular, as mesmas seções estão disp
 
 > **Escolha um formato:** Use o README.MD completo OU os arquivos individuais. Não é necessário manter ambos sincronizados — escolha o que funciona melhor para sua equipe.
 >
-> **Nota:** O arquivo `17-communication.md` contém templates genéricos de email/SMS/WhatsApp que **não se aplicam** ao Pure Agent (que é uma biblioteca, não uma aplicação com usuários finais). Mantido como referência caso o projeto evolua para incluir comunicação.
+> **Nota:** O arquivo `17-communication.md` contém templates genéricos de email/SMS/WhatsApp que **não se aplicam** ao AgentX SDK (que é uma biblioteca, não uma aplicação com usuários finais). Mantido como referência caso o projeto evolua para incluir comunicação.
 
 Para diagramas arquiteturais, veja: [docs/diagrams/](../diagrams/)
 

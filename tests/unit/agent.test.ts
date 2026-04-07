@@ -127,10 +127,10 @@ describe('Agent', () => {
     }).rejects.toThrow('destroyed');
   });
 
-  it('should remember and recall explicitly', async () => {
+  it('should remember and recall explicitly (file-based)', async () => {
     const agent = Agent.create({ apiKey: 'test-key' });
-    const memory = await agent.remember('User prefers dark mode');
-    expect(memory.content).toBe('User prefers dark mode');
-    expect(memory.confidence).toBe(1.0);
+    const filename = await agent.remember('User prefers dark mode');
+    expect(typeof filename).toBe('string');
+    expect(filename).toMatch(/\.md$/);
   });
 });

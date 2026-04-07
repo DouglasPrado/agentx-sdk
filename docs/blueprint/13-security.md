@@ -2,7 +2,7 @@
 
 > Seguranca nao e uma feature — e uma propriedade do sistema. Documente como o sistema se protege.
 
-> **Nota:** O Pure Agent é uma biblioteca, não um serviço. A segurança da aplicação final (autenticação de usuários, HTTPS, etc.) é responsabilidade da aplicação host. Este documento foca nas responsabilidades de segurança do pacote.
+> **Nota:** O AgentX SDK é uma biblioteca, não um serviço. A segurança da aplicação final (autenticação de usuários, HTTPS, etc.) é responsabilidade da aplicação host. Este documento foca nas responsabilidades de segurança do pacote.
 
 ---
 
@@ -26,7 +26,7 @@
 
 ## 13.2 Autenticacao
 
-O Pure Agent é uma biblioteca — não gerencia autenticação de usuários finais.
+O AgentX SDK é uma biblioteca — não gerencia autenticação de usuários finais.
 
 - **Método:** API Key (OpenRouter)
 - **Provedor:** OpenRouter (terceiro)

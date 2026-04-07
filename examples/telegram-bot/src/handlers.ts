@@ -1,6 +1,6 @@
-import type { Context } from 'grammy';
-import { getAgent } from './agent-factory.js';
-import { config } from './config.js';
+import type { Context } from "grammy";
+import { getAgent } from "./agent-factory.js";
+import { config } from "./config.js";
 
 const TELEGRAM_MAX_LENGTH = 4096;
 const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
@@ -10,15 +10,15 @@ const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
  */
 export async function handleStart(ctx: Context): Promise<void> {
   await ctx.reply(
-    `*Pure Agent Bot* 🤖\n\n` +
-    `I'm an AI assistant powered by Pure Agent.\n\n` +
-    `*Commands:*\n` +
-    `/start — This message\n` +
-    `/reset — Clear conversation history\n` +
-    `/usage — Show token usage\n` +
-    `/memory — Save a memory\n\n` +
-    `Just send me a message to chat!`,
-    { parse_mode: 'Markdown' },
+    `*AgentX SDK Bot* \n\n` +
+      `I'm an AI assistant powered by AgentX SDK.\n\n` +
+      `*Commands:*\n` +
+      `/start — This message\n` +
+      `/reset — Clear conversation history\n` +
+      `/usage — Show token usage\n` +
+      `/memory — Save a memory\n\n` +
+      `Just send me a message to chat!`,
+    { parse_mode: "Markdown" },
   );
 }
 
@@ -34,12 +34,15 @@ export async function handleReset(ctx: Context): Promise<void> {
   // Store reset timestamp in memory so the agent knows
   const agent = await getAgent();
   try {
-    await agent.remember(`Conversation was reset by the user at ${new Date().toISOString()}`, 'thread');
+    await agent.remember(
+      `Conversation was reset by the user at ${new Date().toISOString()}`,
+      "project",
+    );
   } catch {
     // Memory might not be enabled
   }
 
-  await ctx.reply('Conversation cleared. Starting fresh.');
+  await ctx.reply("Conversation cleared. Starting fresh.");
 }
 
 /**
@@ -51,10 +54,10 @@ export async function handleUsage(ctx: Context): Promise<void> {
 
   await ctx.reply(
     `*Token Usage*\n\n` +
-    `Input: ${usage.inputTokens.toLocaleString()}\n` +
-    `Output: ${usage.outputTokens.toLocaleString()}\n` +
-    `Total: ${usage.totalTokens.toLocaleString()}`,
-    { parse_mode: 'Markdown' },
+      `Input: ${usage.inputTokens.toLocaleString()}\n` +
+      `Output: ${usage.outputTokens.toLocaleString()}\n` +
+      `Total: ${usage.totalTokens.toLocaleString()}`,
+    { parse_mode: "Markdown" },
   );
 }
 
@@ -62,19 +65,21 @@ export async function handleUsage(ctx: Context): Promise<void> {
  * /memory command — explicitly save a memory
  */
 export async function handleMemory(ctx: Context): Promise<void> {
-  const text = ctx.message?.text?.replace(/^\/memory\s*/, '').trim();
+  const text = ctx.message?.text?.replace(/^\/memory\s*/, "").trim();
 
   if (!text) {
-    await ctx.reply('Usage: `/memory The user prefers dark mode`', { parse_mode: 'Markdown' });
+    await ctx.reply("Usage: `/memory The user prefers dark mode`", {
+      parse_mode: "Markdown",
+    });
     return;
   }
 
   const agent = await getAgent();
   try {
-    const mem = await agent.remember(text);
-    await ctx.reply(`Saved: "${mem.content}" (confidence: ${mem.confidence})`);
+    const filename = await agent.remember(text);
+    await ctx.reply(`Memory saved: ${filename}`);
   } catch (error) {
-    await ctx.reply('Failed to save memory. Memory subsystem may be disabled.');
+    await ctx.reply("Failed to save memory. Memory subsystem may be disabled.");
   }
 }
 
@@ -89,63 +94,68 @@ export async function handleMessage(ctx: Context): Promise<void> {
   const agent = await getAgent();
 
   // Show "typing" indicator
-  await ctx.replyWithChatAction('typing');
+  await ctx.replyWithChatAction("typing");
 
   try {
-    let fullText = '';
+    let fullText = "";
     let sentMessage: { message_id: number } | null = null;
     let lastUpdate = 0;
     let isSearching = false;
 
     for await (const event of agent.stream(text, { threadId: chatId })) {
       switch (event.type) {
-        case 'tool_call_start': {
+        case "tool_call_start": {
           isSearching = true;
           const toolName = event.toolCall.function.name;
           // Clean up MCP namespace for display: mcp__albert__list_companies → list_companies
-          const displayName = toolName.replace(/^mcp__[^_]+__/, '');
+          const displayName = toolName.replace(/^mcp__[^_]+__/, "");
           const statusMsg = `⚙️ ${displayName}...`;
 
           if (!sentMessage) {
             sentMessage = await ctx.reply(statusMsg);
           } else {
-            await safeEdit(ctx, chatId, sentMessage.message_id, fullText + `\n\n_${statusMsg}_`);
+            await safeEdit(
+              ctx,
+              chatId,
+              sentMessage.message_id,
+              fullText + `\n\n_${statusMsg}_`,
+            );
           }
           // Keep typing indicator alive during tool execution
-          await ctx.replyWithChatAction('typing').catch(() => {});
+          await ctx.replyWithChatAction("typing").catch(() => {});
           break;
         }
 
-        case 'tool_call_end': {
+        case "tool_call_end": {
           isSearching = false;
           // Refresh typing indicator
-          await ctx.replyWithChatAction('typing').catch(() => {});
+          await ctx.replyWithChatAction("typing").catch(() => {});
           break;
         }
 
-        case 'turn_start': {
+        case "turn_start": {
           // Refresh typing on each loop iteration so Telegram doesn't stop showing "typing"
-          await ctx.replyWithChatAction('typing').catch(() => {});
+          await ctx.replyWithChatAction("typing").catch(() => {});
           break;
         }
 
-        case 'warning': {
-          if (event.code === 'max_iterations') {
-            console.warn('Max iterations reached for chat', chatId);
+        case "warning": {
+          if (event.code === "max_iterations") {
+            console.warn("Max iterations reached for chat", chatId);
           }
-          if (event.code === 'cost_warning') {
-            console.warn('Cost warning:', event.message);
+          if (event.code === "cost_warning") {
+            console.warn("Cost warning:", event.message);
           }
           break;
         }
 
-        case 'text_delta': {
+        case "text_delta": {
           fullText += event.content;
 
           // Progressive update every STREAM_UPDATE_INTERVAL ms
           const now = Date.now();
           if (now - lastUpdate > STREAM_UPDATE_INTERVAL) {
-            const displayText = truncate(fullText + ' ▌', TELEGRAM_MAX_LENGTH);
+            const displayText = truncate(fullText + " ▌", TELEGRAM_MAX_LENGTH);
 
             if (!sentMessage) {
               sentMessage = await ctx.reply(displayText);
@@ -157,12 +167,12 @@ export async function handleMessage(ctx: Context): Promise<void> {
           break;
         }
 
-        case 'error': {
+        case "error": {
           if (!event.recoverable) {
-            console.error('Agent error:', event.error);
+            console.error("Agent error:", event.error);
             const errorMsg = sentMessage
-              ? fullText + '\n\n⚠️ An error occurred.'
-              : '⚠️ Sorry, an error occurred. Please try again.';
+              ? fullText + "\n\nAn error occurred."
+              : "Sorry, an error occurred. Please try again.";
 
             if (sentMessage) {
               await safeEdit(ctx, chatId, sentMessage.message_id, errorMsg);
@@ -173,7 +183,6 @@ export async function handleMessage(ctx: Context): Promise<void> {
           }
           break;
         }
-
       }
     }
 
@@ -197,14 +206,21 @@ export async function handleMessage(ctx: Context): Promise<void> {
       await ctx.reply("I couldn't generate a response. Please try again.");
     }
   } catch (error) {
-    console.error('Handler error:', error);
-    await ctx.reply('⚠️ Something went wrong. Please try again.').catch(() => {});
+    console.error("Handler error:", error);
+    await ctx
+      .reply("Something went wrong. Please try again.")
+      .catch(() => {});
   }
 }
 
 // --- Helpers ---
 
-async function safeEdit(ctx: Context, chatId: string, messageId: number, text: string): Promise<void> {
+async function safeEdit(
+  ctx: Context,
+  chatId: string,
+  messageId: number,
+  text: string,
+): Promise<void> {
   try {
     await ctx.api.editMessageText(chatId, messageId, text);
   } catch {
@@ -214,7 +230,7 @@ async function safeEdit(ctx: Context, chatId: string, messageId: number, text: s
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + '...';
+  return text.slice(0, maxLength - 3) + "...";
 }
 
 function splitMessage(text: string, maxLength: number): string[] {
@@ -230,10 +246,10 @@ function splitMessage(text: string, maxLength: number): string[] {
     }
 
     // Try to split at a newline
-    let splitAt = remaining.lastIndexOf('\n', maxLength);
+    let splitAt = remaining.lastIndexOf("\n", maxLength);
     if (splitAt < maxLength * 0.3) {
       // No good newline — split at space
-      splitAt = remaining.lastIndexOf(' ', maxLength);
+      splitAt = remaining.lastIndexOf(" ", maxLength);
     }
     if (splitAt < maxLength * 0.3) {
       // No good space — hard split

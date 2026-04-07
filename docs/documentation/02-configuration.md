@@ -3,7 +3,7 @@
 All configuration is passed to `Agent.create()` and validated with Zod at creation time. Invalid config throws a `ZodError`.
 
 ```typescript
-import { Agent, type AgentConfigInput } from 'pure-agent';
+import { Agent, type AgentConfigInput } from 'agentx-sdk';
 
 const config: AgentConfigInput = {
   apiKey: 'sk-or-v1-...',
@@ -198,7 +198,7 @@ See [MCP Integration](./06-mcp.md) for details.
 ## Full Example
 
 ```typescript
-import { Agent } from 'pure-agent';
+import { Agent } from 'agentx-sdk';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,

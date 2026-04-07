@@ -1,30 +1,36 @@
 import type { AgentConfig, AgentConfigInput, MCPConnectionConfigInput } from './config/config.js';
 import { AgentConfigSchema } from './config/config.js';
-import type { AgentEvent } from './contracts/entities/agent-event.js';
+import type { AgentEvent, AgentEndEvent } from './contracts/entities/agent-event.js';
 import type { AgentTool } from './contracts/entities/agent-tool.js';
 import type { AgentSkill } from './contracts/entities/agent-skill.js';
-import type { Memory } from './contracts/entities/memory.js';
 import type { KnowledgeDocument } from './contracts/entities/knowledge.js';
 import type { TokenUsage } from './contracts/entities/token-usage.js';
 import type { ContentPart } from './contracts/entities/content-part.js';
+import type { MessageRole } from './contracts/enums/index.js';
 import type { ContextInjection } from './core/context-builder.js';
+import type { Terminal } from './core/loop-types.js';
 import { OpenRouterClient } from './llm/openrouter-client.js';
 import { ToolExecutor } from './tools/tool-executor.js';
 import { MCPAdapter, type MCPHealthStatus } from './tools/mcp-adapter.js';
 import { SkillManager } from './skills/skill-manager.js';
-import { MemoryManager } from './memory/memory-manager.js';
+import { createSkillTool, SKILL_TOOL_NAME, buildSkillToolPrompt } from './tools/skill-tool.js';
+import { FileMemorySystem } from './memory/file-memory-system.js';
+import { extractMemories, shouldExtract } from './memory/memory-extractor.js';
+import { memoryFreshnessNote } from './memory/memory-age.js';
 import { KnowledgeManager } from './knowledge/knowledge-manager.js';
 import { EmbeddingService } from './knowledge/embedding-service.js';
 import { SQLiteDatabase } from './storage/sqlite-database.js';
-import { SQLiteMemoryStore } from './memory/sqlite-memory-store.js';
 import { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
+import { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
 import { ConversationManager } from './core/conversation-manager.js';
-import { StreamEmitter } from './core/stream-emitter.js';
 import { createExecutionContext } from './core/execution-context.js';
 import { buildContext } from './core/context-builder.js';
 import { executeReactLoop } from './core/react-loop.js';
 import { createLogger, type Logger } from './utils/logger.js';
+import { runTurnEndHooks, type TurnEndHook } from './core/turn-end-hooks.js';
 import { estimateTokens } from './utils/token-counter.js';
+import { getModelContextWindow } from './utils/model-context.js';
+import { buildToolUsagePrompt, buildEnvironmentPrompt } from './core/prompt-builders.js';
 
 export interface ChatOptions {
   threadId?: string;
@@ -43,13 +49,20 @@ export class Agent {
   private readonly conversations: ConversationManager;
   private readonly logger: Logger;
   private readonly skillManager?: SkillManager;
-  private readonly memoryManager?: MemoryManager;
+  private readonly fileMemorySystem?: FileMemorySystem;
   private readonly knowledgeManager?: KnowledgeManager;
   private readonly embeddingService?: EmbeddingService;
   private readonly mcpAdapter: MCPAdapter;
   private database?: SQLiteDatabase;
   private costAccumulator: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  private turnsSinceExtraction = 0;
   private destroyed = false;
+  /** Filenames already injected in this session — avoids re-surfacing the same memory. */
+  private surfacedMemories = new Set<string>();
+  /** Last date emitted to model — for midnight change detection. */
+  private lastEmittedDate?: string;
+  /** Turn-end hooks — run after each completed assistant turn. */
+  private readonly turnEndHooks: TurnEndHook[] = [];
 
   private constructor(config: AgentConfig) {
     this.config = config;
@@ -64,9 +77,12 @@ export class Agent {
     this.toolExecutor = new ToolExecutor();
     this.mcpAdapter = new MCPAdapter(this.toolExecutor);
 
-    // Conversation store
+    // Conversation store — defaults to SQLite when database is available (persists across restarts)
     if (config.conversation?.store) {
       this.conversations = new ConversationManager(config.conversation.store);
+    } else if (config.knowledge?.enabled !== false) {
+      // Database will be initialized for knowledge, reuse it for conversations
+      this.conversations = new ConversationManager(this.getDefaultConversationStore());
     } else {
       this.conversations = new ConversationManager();
     }
@@ -74,15 +90,20 @@ export class Agent {
     // Embedding service (shared by memory + knowledge)
     this.embeddingService = new EmbeddingService(this.client, { model: config.embeddingModel });
 
-    // Memory subsystem
+    // Memory subsystem (file-based)
     if (config.memory?.enabled !== false) {
-      const memoryStore = config.memory?.store ?? this.getDefaultMemoryStore();
-      this.memoryManager = new MemoryManager({
-        store: memoryStore,
-        decayFactor: config.memory?.decayFactor,
-        decayInterval: config.memory?.decayInterval,
-        minConfidence: config.memory?.minConfidence,
-        samplingRate: config.memory?.samplingRate,
+      this.fileMemorySystem = new FileMemorySystem(
+        {
+          memoryDir: config.memory?.memoryDir,
+          relevanceModel: config.memory?.relevanceModel,
+          extractionEnabled: config.memory?.extractionEnabled,
+        },
+        this.client,
+        this.logger,
+      );
+      // Ensure memory directory exists (fire-and-forget)
+      void this.fileMemorySystem.ensureDir().catch(err => {
+        this.logger.debug('Failed to create memory dir', { error: String(err) });
       });
     }
 
@@ -100,7 +121,17 @@ export class Agent {
     }
 
     // Skills
-    this.skillManager = new SkillManager({ embeddingService: this.embeddingService });
+    this.skillManager = new SkillManager({
+      embeddingService: this.embeddingService,
+      maxActiveSkills: config.skills?.maxActiveSkills,
+    });
+
+    // Auto-load skills from directory (fire-and-forget)
+    if (config.skills?.skillsDir) {
+      void this.skillManager.loadFromDirectory(config.skills.skillsDir).catch(err => {
+        this.logger.debug('Failed to load skills dir', { error: String(err) });
+      });
+    }
 
     this.logger.info('Agent initialized', { model: config.model });
   }
@@ -115,6 +146,7 @@ export class Agent {
 
   /**
    * Streaming API — primary interface. Returns AsyncIterableIterator<AgentEvent>.
+   * Uses AsyncGenerator pattern: the react loop yields events directly.
    */
   async *stream(input: string | ContentPart[], options?: ChatOptions): AsyncIterableIterator<AgentEvent> {
     if (this.destroyed) throw new Error('Agent is destroyed');
@@ -123,98 +155,274 @@ export class Agent {
     const model = options?.model ?? this.config.model;
     const ctx = createExecutionContext(threadId, model);
 
-    yield* await this.conversations.withThread(threadId, async () => {
-      const emitter = new StreamEmitter();
-      const iter = emitter.iterator();
-
-      // Add user message
-      const userContent = typeof input === 'string' ? input : input.map(p => p.type === 'text' ? p.text : '[image]').join('');
+    // Add user message
+    const userContent = typeof input === 'string' ? input : input.map(p => p.type === 'text' ? p.text : '[image]').join('');
+    await this.conversations.withThread(threadId, async () => {
       this.conversations.appendMessage({
         role: 'user',
         content: input,
         createdAt: Date.now(),
       }, threadId);
+    });
 
-      // Build context
-      const injections = await this.buildInjections(userContent, threadId);
-      const history = this.conversations.getHistory(threadId);
-      const contextResult = buildContext({
-        systemPrompt: this.config.systemPrompt,
-        injections,
-        history,
-        maxTokens: this.config.maxContextTokens,
-        reserveTokens: this.config.reserveTokens,
-        maxPinnedMessages: this.config.maxPinnedMessages,
+    // Start memory relevance prefetch (non-blocking, thread-scoped)
+    const memoryPrefetch = this.fileMemorySystem
+      ? this.startMemoryPrefetch(userContent, threadId)
+      : undefined;
+
+    // Build context (memory prefetch resolves in parallel)
+    const { injections, skillToolNames } = await this.buildInjectionsWithSkills(userContent, threadId, memoryPrefetch);
+
+    // Register SkillTool so the model can invoke skills mid-loop
+    let skillToolRegistered = false;
+    if (this.skillManager && this.skillManager.listSkills().length > 0) {
+      const skillTool = createSkillTool(this.skillManager, this.toolExecutor, () => ({
+        threadId,
+        traceId: ctx.traceId,
+      }));
+      this.toolExecutor.register(skillTool);
+      skillToolRegistered = true;
+    }
+
+    const availableTools = this.toolExecutor.listTools();
+    if (availableTools.length > 0) {
+      const toolContent = buildToolUsagePrompt(availableTools);
+      injections.push({
+        source: 'tools',
+        priority: 10,
+        content: toolContent,
+        tokens: estimateTokens(toolContent),
       });
+    }
 
-      // Emit start
-      emitter.emit({ type: 'agent_start', traceId: ctx.traceId, threadId, model });
+    // Environment info — gives model awareness of execution context
+    const today = new Date().toISOString().split('T')[0]!;
+    const envContent = buildEnvironmentPrompt({
+      model,
+      date: today,
+      platform: process.platform,
+    });
+    injections.push({
+      source: 'environment',
+      priority: 1,
+      content: envContent,
+      tokens: estimateTokens(envContent),
+    });
 
-      // Collect assistant text to persist after loop
-      let assistantText = '';
-      const originalEmit = emitter.emit.bind(emitter);
-      emitter.emit = (event) => {
+    // Date change detection — notify model when day changes mid-session
+    if (this.lastEmittedDate && this.lastEmittedDate !== today) {
+      injections.push({
+        source: 'system:date_change',
+        priority: 10,
+        content: `The date has changed from ${this.lastEmittedDate} to ${today}.`,
+        tokens: 20,
+      });
+    }
+    this.lastEmittedDate = today;
+
+    const history = this.conversations.getHistory(threadId);
+    const contextResult = buildContext({
+      systemPrompt: this.config.systemPrompt,
+      injections,
+      history,
+      maxTokens: this.config.maxContextTokens,
+      reserveTokens: this.config.reserveTokens,
+      maxPinnedMessages: this.config.maxPinnedMessages,
+    });
+
+    // Snapshot memory dir time for mutual exclusion with extraction
+    const turnStartMs = Date.now();
+
+    // Emit start
+    yield { type: 'agent_start', traceId: ctx.traceId, threadId, model };
+
+    // Emit skill_activated events for matched skills
+    for (const inj of injections.filter(i => i.source.startsWith('skill:') && i.source !== 'skill:listing')) {
+      yield { type: 'skill_activated', skillName: inj.source.replace('skill:', '') };
+    }
+
+    // Intercept events from the generator for persistence tracking
+    let assistantText = '';
+    const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+    const pendingToolResults: Array<{ toolCallId: string; content: string }> = [];
+
+    const loopGen = executeReactLoop(contextResult.messages, {
+      client: this.client,
+      toolExecutor: this.toolExecutor,
+      model,
+      maxIterations: this.config.maxIterations,
+      maxConsecutiveErrors: this.config.maxConsecutiveErrors,
+      onToolError: this.config.onToolError,
+      costPolicy: this.config.costPolicy ? {
+        maxTokensPerExecution: this.config.costPolicy.maxTokensPerExecution,
+        onLimitReached: this.config.costPolicy.onLimitReached,
+      } : undefined,
+      signal: options?.signal,
+      // Compaction & Recovery
+      maxContextTokens: this.config.maxContextTokens,
+      compactionThreshold: this.config.compactionThreshold,
+      fallbackModel: this.config.fallbackModel,
+      maxOutputTokens: this.config.maxOutputTokens,
+      escalatedMaxOutputTokens: this.config.escalatedMaxOutputTokens,
+      // Token budget
+      tokenBudget: this.config.tokenBudget,
+      // Tool intelligence: conditional skill activation from file operations
+      onFilePathsTouched: this.skillManager
+        ? (paths) => this.skillManager!.activateForPaths(paths)
+        : undefined,
+    });
+
+    // Consume the generator, intercept events, re-yield to consumer
+    let terminal: Terminal;
+    try {
+      let result = await loopGen.next();
+      while (!result.done) {
+        const event = result.value;
+
+        // Track for persistence
         if (event.type === 'text_delta') assistantText += event.content;
-        originalEmit(event);
-      };
-
-      // Run react loop in background
-      const loopPromise = executeReactLoop(contextResult.messages, {
-        client: this.client,
-        toolExecutor: this.toolExecutor,
-        emitter,
-        model,
-        maxIterations: this.config.maxIterations,
-        maxConsecutiveErrors: this.config.maxConsecutiveErrors,
-        onToolError: this.config.onToolError,
-        costPolicy: this.config.costPolicy ? {
-          maxTokensPerExecution: this.config.costPolicy.maxTokensPerExecution,
-          onLimitReached: this.config.costPolicy.onLimitReached,
-        } : undefined,
-        signal: options?.signal,
-      }).then(result => {
-        // Persist assistant response in conversation history
-        if (assistantText) {
-          this.conversations.appendMessage({
-            role: 'assistant',
-            content: assistantText,
-            createdAt: Date.now(),
-          }, threadId);
-        }
-
-        // Accumulate cost
-        this.costAccumulator.inputTokens += result.usage.inputTokens;
-        this.costAccumulator.outputTokens += result.usage.outputTokens;
-        this.costAccumulator.totalTokens += result.usage.totalTokens;
-
-        // Emit end
-        emitter.emit({
-          type: 'agent_end',
-          traceId: ctx.traceId,
-          usage: result.usage,
-          reason: result.reason as 'stop' | 'cost_limit' | 'max_iterations' | 'error' | 'abort',
-          duration: Date.now() - ctx.startedAt,
-        });
-
-        emitter.close();
-        return result;
-      }).catch(error => {
-        emitter.emit({ type: 'error', error: error instanceof Error ? error : new Error(String(error)), recoverable: false });
-        emitter.close();
-      });
-
-      // Memory extraction (fire and forget after loop)
-      void loopPromise.then(() => {
-        if (this.memoryManager?.shouldExtract(userContent)) {
-          this.memoryManager.resetExtractionCounter();
-          void this.extractMemories(threadId).catch(err => {
-            this.logger.debug('Memory extraction failed', { error: String(err) });
+        if (event.type === 'tool_call_start') {
+          pendingToolCalls.push({
+            id: event.toolCall.id,
+            name: event.toolCall.function.name,
+            arguments: event.toolCall.function.arguments,
           });
         }
-      });
+        if (event.type === 'tool_call_end') {
+          pendingToolResults.push({
+            toolCallId: event.toolCallId,
+            content: event.result.content,
+          });
+        }
 
-      return iter;
-    });
+        yield event;
+        result = await loopGen.next();
+      }
+      terminal = result.value;
+    } catch (error) {
+      // Persist partial text on unexpected error
+      if (assistantText) {
+        this.conversations.appendMessage({
+          role: 'assistant',
+          content: assistantText,
+          createdAt: Date.now(),
+        }, threadId);
+      }
+      yield { type: 'error', error: error instanceof Error ? error : new Error(String(error)), recoverable: false };
+      yield {
+        type: 'agent_end',
+        traceId: ctx.traceId,
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        reason: 'error' as const,
+        duration: Date.now() - ctx.startedAt,
+      };
+      return;
+    }
+
+    // --- Post-loop: persist conversation history ---
+    const now = Date.now();
+
+    if (pendingToolCalls.length > 0) {
+      this.conversations.appendMessage({
+        role: 'assistant',
+        content: '',
+        toolCalls: pendingToolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: tc.arguments },
+        })),
+        createdAt: now - 2,
+      }, threadId);
+
+      for (const tr of pendingToolResults) {
+        this.conversations.appendMessage({
+          role: 'tool' as MessageRole,
+          content: tr.content,
+          toolCallId: tr.toolCallId,
+          createdAt: now - 1,
+        }, threadId);
+      }
+    }
+
+    if (assistantText) {
+      this.conversations.appendMessage({
+        role: 'assistant',
+        content: assistantText,
+        createdAt: now,
+      }, threadId);
+    }
+
+    // Accumulate cost
+    this.costAccumulator.inputTokens += terminal.usage.inputTokens;
+    this.costAccumulator.outputTokens += terminal.usage.outputTokens;
+    this.costAccumulator.totalTokens += terminal.usage.totalTokens;
+
+    // Cleanup skill-scoped tools and SkillTool
+    for (const name of skillToolNames) {
+      this.toolExecutor.unregister(name);
+    }
+    if (skillToolRegistered) {
+      this.toolExecutor.unregister(SKILL_TOOL_NAME);
+    }
+
+    // Emit end
+    yield {
+      type: 'agent_end',
+      traceId: ctx.traceId,
+      usage: terminal.usage,
+      reason: terminal.reason as AgentEndEvent['reason'],
+      duration: Date.now() - ctx.startedAt,
+    };
+
+    // Turn-end hooks pipeline (memory extraction + custom hooks)
+    const turnEndContext = {
+      assistantText,
+      turnCount: 1,
+      threadId,
+      usage: terminal.usage,
+    };
+
+    // Built-in: memory extraction hook
+    this.turnsSinceExtraction++;
+    if (
+      this.fileMemorySystem &&
+      this.config.memory?.extractionEnabled !== false &&
+      shouldExtract(userContent, this.turnsSinceExtraction, {
+        samplingRate: this.config.memory?.samplingRate,
+        extractionInterval: this.config.memory?.extractionInterval,
+      })
+    ) {
+      this.turnsSinceExtraction = 0;
+      const memSystem = this.fileMemorySystem;
+      const client = this.client;
+      const logger = this.logger;
+      const conversations = this.conversations;
+
+      void (async () => {
+        try {
+          if (await memSystem.hasWritesSince(turnStartMs, threadId)) {
+            logger.debug('Skipping extraction — agent already wrote memories this turn');
+            return;
+          }
+          const history = conversations.getHistory(threadId);
+          const recentMessages = history.slice(-10);
+          const conversationText = recentMessages.map(m => {
+            const text = typeof m.content === 'string' ? m.content : '[multimodal]';
+            return `${m.role}: ${text}`;
+          }).join('\n');
+          await extractMemories(conversationText, memSystem, client, { threadId });
+        } catch (err) {
+          logger.debug('Memory extraction failed', { error: String(err) });
+        }
+      })();
+    }
+
+    // Run registered turn-end hooks
+    if (this.turnEndHooks.length > 0) {
+      void runTurnEndHooks(this.turnEndHooks, turnEndContext).catch(err => {
+        this.logger.debug('Turn-end hooks failed', { error: String(err) });
+      });
+    }
   }
 
   /**
@@ -245,6 +453,96 @@ export class Agent {
     this.logger.debug('Skill registered', { name: skill.name });
   }
 
+  removeSkill(name: string): boolean {
+    const removed = this.skillManager?.unregister(name) ?? false;
+    if (removed) this.logger.debug('Skill removed', { name });
+    return removed;
+  }
+
+  /** Load skills from a directory containing SKILL.md files. Returns count loaded. */
+  async loadSkillsDir(dir: string): Promise<number> {
+    if (!this.skillManager) return 0;
+    const count = await this.skillManager.loadFromDirectory(dir);
+    this.logger.info('Skills loaded from directory', { dir, count });
+    return count;
+  }
+
+  /** Get all registered skills (unconditional + activated). */
+  listSkills(): AgentSkill[] {
+    return this.skillManager?.listSkills() ?? [];
+  }
+
+  /** Activate conditional skills whose paths match the given file paths. */
+  activateSkillsForPaths(filePaths: string[]): string[] {
+    return this.skillManager?.activateForPaths(filePaths) ?? [];
+  }
+
+  /** Register a hook that runs after each completed assistant turn. */
+  addTurnEndHook(hook: TurnEndHook): void {
+    this.turnEndHooks.push(hook);
+    this.logger.debug('Turn-end hook registered', { name: hook.name });
+  }
+
+  /**
+   * Fork a child agent that inherits parent config.
+   * Runs a single chat() call in isolation and returns the result.
+   * Ported from old_src/utils/forkedAgent.ts pattern.
+   */
+  async fork(
+    prompt: string,
+    options?: {
+      systemPrompt?: string;
+      model?: string;
+      /** Tools available to the forked agent. If omitted, fork has no tools. */
+      tools?: import('./contracts/entities/agent-tool.js').AgentTool[];
+      /** If true, runs in background and returns a Promise (fire-and-forget). Default: false (blocking). */
+      background?: boolean;
+    },
+  ): Promise<string> {
+    if (this.destroyed) throw new Error('Agent is destroyed');
+
+    const run = async () => {
+      const child = Agent.create({
+        apiKey: this.config.apiKey,
+        model: options?.model ?? this.config.model,
+        baseUrl: this.config.baseUrl,
+        systemPrompt: options?.systemPrompt ?? this.config.systemPrompt,
+        memory: { enabled: false },
+        knowledge: { enabled: false },
+        maxIterations: this.config.maxIterations,
+        maxConsecutiveErrors: this.config.maxConsecutiveErrors,
+        onToolError: this.config.onToolError,
+        logLevel: this.config.logLevel,
+      });
+
+      if (options?.tools) {
+        for (const tool of options.tools) {
+          child.addTool(tool);
+        }
+      }
+
+      try {
+        return await child.chat(prompt);
+      } finally {
+        await child.destroy();
+      }
+    };
+
+    if (options?.background) {
+      void run().catch(err => {
+        this.logger.debug('Background fork failed', { error: String(err) });
+      });
+      return ''; // fire-and-forget — returns immediately
+    }
+
+    return run();
+  }
+
+  /** Get effective context window for the current model. */
+  getEffectiveContextWindow(): number {
+    return getModelContextWindow(this.config.model, this.config.maxContextTokens);
+  }
+
   getHistory(threadId?: string): import('./contracts/entities/chat-message.js').ChatMessage[] {
     return this.conversations.getHistory(threadId ?? 'default');
   }
@@ -260,6 +558,20 @@ export class Agent {
     };
     const tools = await this.mcpAdapter.connect(parsed);
     this.logger.info('MCP connected', { name: config.name, tools: tools.length });
+
+    // Register MCP prompts as skills
+    if (this.skillManager) {
+      for (const [name, prompt] of this.mcpAdapter.getPrompts()) {
+        const adapter = this.mcpAdapter;
+        this.skillManager.register({
+          name,
+          description: prompt.description ?? prompt.promptName,
+          instructions: '',
+          source: 'mcp',
+          getPrompt: async (args) => adapter.getPrompt(prompt.serverName, prompt.promptName, args),
+        });
+      }
+    }
   }
 
   async disconnectMCP(name: string): Promise<void> {
@@ -271,14 +583,20 @@ export class Agent {
     return this.mcpAdapter.getHealth();
   }
 
-  async remember(content: string, scope?: 'thread' | 'persistent' | 'learned'): Promise<Memory> {
-    if (!this.memoryManager) throw new Error('Memory subsystem not enabled');
-    return this.memoryManager.saveExplicit(content, scope);
+  async remember(content: string, type: 'user' | 'feedback' | 'project' | 'reference' = 'user', threadId?: string): Promise<string> {
+    if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
+    const name = content.slice(0, 40).replace(/[^a-zA-Z0-9\s]/g, '').trim();
+    return this.fileMemorySystem.saveMemory({
+      name: name || 'memory',
+      description: content.slice(0, 100),
+      type,
+      content,
+    }, threadId);
   }
 
-  async recall(query: string): Promise<Memory[]> {
-    if (!this.memoryManager) throw new Error('Memory subsystem not enabled');
-    return this.memoryManager.recall(query);
+  async recall(query: string, threadId?: string): Promise<import('./memory/memory-types.js').MemoryFile[]> {
+    if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
+    return this.fileMemorySystem.findRelevant(query, undefined, undefined, threadId);
   }
 
   async ingestKnowledge(document: KnowledgeDocument): Promise<void> {
@@ -298,9 +616,9 @@ export class Agent {
     this.logger.info('Agent destroyed');
   }
 
-  private getDefaultMemoryStore() {
+  private getDefaultConversationStore() {
     this.ensureDatabase();
-    return new SQLiteMemoryStore(this.database!);
+    return new SQLiteConversationStore(this.database!);
   }
 
   private getDefaultVectorStore() {
@@ -321,73 +639,83 @@ export class Agent {
     }
   }
 
+  /** Timeout for memory relevance prefetch (ms). */
+  private static readonly MEMORY_PREFETCH_TIMEOUT = 5_000;
+
   /**
-   * Extracts memories from recent conversation history via LLM.
+   * Start memory relevance selection asynchronously.
+   * Returns a promise that resolves with relevant MemoryFiles.
+   * Races against a timeout so it never blocks the response indefinitely.
    */
-  private async extractMemories(threadId: string): Promise<void> {
-    if (!this.memoryManager) return;
+  private startMemoryPrefetch(
+    userInput: string,
+    threadId?: string,
+  ): Promise<import('./memory/memory-types.js').MemoryFile[]> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Agent.MEMORY_PREFETCH_TIMEOUT);
 
-    const history = this.conversations.getHistory(threadId);
-    const recentMessages = history.slice(-6); // Last 3 turns (user + assistant)
-    if (recentMessages.length < 2) return;
-
-    const conversationText = recentMessages.map(m => {
-      const text = typeof m.content === 'string' ? m.content : '[multimodal]';
-      return `${m.role}: ${text}`;
-    }).join('\n');
-
-    try {
-      const response = await this.client.chat({
-        messages: [
-          {
-            role: 'system',
-            content: `Extract important facts, preferences, or context from this conversation that would be useful to remember for future interactions. Return a JSON array of objects with "content" (the fact), "category" (one of: fact, preference, procedure, insight, context), and "scope" (one of: persistent, thread). If nothing worth remembering, return an empty array []. Only return the JSON array, nothing else.`,
-          },
-          {
-            role: 'user',
-            content: conversationText,
-          },
-        ],
-        temperature: 0,
-        maxTokens: 500,
-      });
-
-      let extracted: Array<{ content: string; category: string; scope: string }>;
-      try {
-        // Try to parse JSON from the response (may be wrapped in markdown code blocks)
-        const jsonStr = response.content.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
-        extracted = JSON.parse(jsonStr);
-      } catch {
-        return; // Failed to parse — skip
-      }
-
-      if (!Array.isArray(extracted)) return;
-
-      for (const item of extracted) {
-        if (item.content && item.category) {
-          const memory = this.memoryManager.saveExtracted(
-            item.content,
-            item.category as 'fact' | 'preference' | 'procedure' | 'insight' | 'context',
-            (item.scope === 'thread' ? 'thread' : 'persistent') as 'thread' | 'persistent',
-            item.scope === 'thread' ? threadId : undefined,
-          );
-          this.logger.debug('Memory extracted', { id: memory.id, content: memory.content });
-        }
-      }
-    } catch (error) {
-      this.logger.debug('Memory extraction LLM call failed', { error: String(error) });
-    }
+    return this.fileMemorySystem!
+      .findRelevant(userInput, controller.signal, this.surfacedMemories, threadId)
+      .catch(() => [] as import('./memory/memory-types.js').MemoryFile[])
+      .finally(() => clearTimeout(timeout));
   }
 
-  private async buildInjections(userInput: string, threadId: string): Promise<ContextInjection[]> {
+  private async buildInjectionsWithSkills(
+    userInput: string,
+    threadId: string,
+    memoryPrefetch?: Promise<import('./memory/memory-types.js').MemoryFile[]>,
+  ): Promise<{ injections: ContextInjection[]; skillToolNames: string[] }> {
     const injections: ContextInjection[] = [];
 
     // Skills injection
+    const skillToolNames: string[] = [];
     if (this.skillManager) {
       const matchedSkills = await this.skillManager.match(userInput, { threadId });
+
       for (const skill of matchedSkills) {
-        const tokens = estimateTokens(skill.instructions);
-        injections.push({ source: `skill:${skill.name}`, priority: 8, content: skill.instructions, tokens });
+        // Resolve instructions (dynamic getPrompt or static with arg substitution)
+        const rawArgs = skill.triggerPrefix && userInput.startsWith(skill.triggerPrefix)
+          ? userInput.slice(skill.triggerPrefix.length).trim()
+          : skill.aliases?.reduce((acc, alias) => {
+              const prefix = alias.startsWith('/') ? alias : `/${alias}`;
+              return userInput.startsWith(prefix) ? userInput.slice(prefix.length).trim() : acc;
+            }, '')
+          ?? '';
+
+        const resolved = await this.skillManager.resolveInstructions(skill, rawArgs, {
+          threadId,
+          traceId: 'pending', // traceId not yet available at injection time
+          skillDir: skill.skillDir,
+        });
+
+        const tokens = estimateTokens(resolved);
+        injections.push({ source: `skill:${skill.name}`, priority: 8, content: resolved, tokens });
+
+        // Register skill-scoped tools
+        if (skill.tools?.length) {
+          for (const tool of skill.tools) {
+            this.toolExecutor.register(tool);
+            skillToolNames.push(tool.name);
+          }
+        }
+
+        // Track invocation
+        this.skillManager.markInvoked(skill.name);
+      }
+
+      // Skill listing + usage instructions for model discovery
+      if (this.config.skills?.modelDiscovery !== false) {
+        const budgetChars = Math.floor(this.config.maxContextTokens * 4 * 0.01); // ~1% of context
+        const listing = this.skillManager.buildSkillListing(budgetChars);
+        if (listing) {
+          const listContent = buildSkillToolPrompt(listing);
+          injections.push({
+            source: 'skill:listing',
+            priority: 9,
+            content: listContent,
+            tokens: estimateTokens(listContent),
+          });
+        }
       }
     }
 
@@ -405,28 +733,55 @@ export class Agent {
       }
     }
 
-    // Memory injection — use embeddings for semantic recall
-    if (this.memoryManager) {
+    // MCP server instructions injection
+    for (const conn of this.mcpAdapter.getConnections()) {
+      if (conn.instructions) {
+        const tokens = estimateTokens(conn.instructions);
+        injections.push({
+          source: `mcp:${conn.name}:instructions`,
+          priority: 5,
+          content: `[MCP Server "${conn.name}" instructions]\n${conn.instructions}`,
+          tokens,
+        });
+      }
+    }
+
+    // Memory injection — file-based system
+    if (this.fileMemorySystem) {
       try {
-        let queryEmbedding: Float32Array | undefined;
-        if (this.embeddingService) {
-          try {
-            queryEmbedding = await this.embeddingService.embedSingle(userInput);
-          } catch {
-            // Embedding failed — will fall back to FTS5/LIKE
-          }
+        // Behavioral instructions (types, when to save, verification rules)
+        const instructions = this.fileMemorySystem.getMemoryInstructions();
+        const instrTokens = estimateTokens(instructions);
+        injections.push({ source: 'memory:instructions', priority: 2, content: instructions, tokens: instrTokens });
+
+        // MEMORY.md index content
+        const indexContent = await this.fileMemorySystem.buildContextPrompt(threadId);
+        if (indexContent) {
+          const tokens = estimateTokens(indexContent);
+          injections.push({ source: 'memory:index', priority: 3, content: `## MEMORY.md\n${indexContent}`, tokens });
         }
-        const memories = this.memoryManager.recall(userInput, { threadId, limit: 5, embedding: queryEmbedding });
-        if (memories.length > 0) {
-          const content = memories.map(m => `- ${m.content}`).join('\n');
+
+        // LLM-selected relevant memories (from prefetch — already running in parallel)
+        const relevant = memoryPrefetch ? await memoryPrefetch : [];
+        if (relevant.length > 0) {
+          const content = relevant.map(m => {
+            const freshness = memoryFreshnessNote(m.mtimeMs);
+            const header = m.name ?? m.filename;
+            return `- ${header}:${freshness ? ` ${freshness}` : ''} ${m.content}`;
+          }).join('\n');
           const tokens = estimateTokens(content);
-          injections.push({ source: 'memory', priority: 4, content: `Relevant memories:\n${content}`, tokens });
+          injections.push({ source: 'memory:relevant', priority: 4, content: `Relevant memories:\n${content}`, tokens });
+
+          // Track surfaced filenames to avoid re-injection in subsequent turns
+          for (const m of relevant) {
+            this.surfacedMemories.add(m.filename);
+          }
         }
       } catch {
         // Memory recall failed — continue without it
       }
     }
 
-    return injections;
+    return { injections, skillToolNames };
   }
 }

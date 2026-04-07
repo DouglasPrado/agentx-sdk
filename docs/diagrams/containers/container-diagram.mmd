@@ -1,6 +1,6 @@
-%% C4 Nível 2: Container Diagram — Pure Agent
+%% C4 Nível 2: Container Diagram — AgentX SDK
 %% Referência: docs/blueprint/06-system-architecture.md
-%% O Pure Agent é uma biblioteca in-process, não um serviço distribuído.
+%% O AgentX SDK é uma biblioteca in-process, não um serviço distribuído.
 
 graph TB
     %% Atores
@@ -8,7 +8,7 @@ graph TB
     HostApp["🖥️ Aplicação Host<br/>Node.js 18+ (API, CLI, Bot, etc.)"]
 
     %% Fronteira do Sistema
-    subgraph SystemBoundary["📦 Pure Agent (pacote TypeScript in-process)"]
+    subgraph SystemBoundary["📦 AgentX SDK (pacote TypeScript in-process)"]
         direction TB
 
         Agent["⚙️ Agent<br/>TypeScript<br/>Ponto de entrada: chat() / stream()"]

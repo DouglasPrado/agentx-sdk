@@ -2,7 +2,7 @@
 
 > Se você não consegue observar, você não consegue operar. Defina como o sistema será monitorado.
 
-> **Nota:** O Pure Agent é uma biblioteca. Observabilidade é fornecida via `AgentEvents` com `traceId` e `AgentHooks.onEvent`. A aplicação host decide como consumir, agregar e visualizar essas informações.
+> **Nota:** O AgentX SDK é uma biblioteca. Observabilidade é fornecida via `AgentEvents` com `traceId` e `AgentHooks.onEvent`. A aplicação host decide como consumir, agregar e visualizar essas informações.
 
 ---
 
@@ -16,7 +16,7 @@ Logger embutido (console-based) com output estruturado. Consumidor pode integrar
 {
   "timestamp": "2026-04-01T12:00:00.000Z",
   "level": "INFO",
-  "service": "pure-agent",
+  "service": "agentx-sdk",
   "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "threadId": "default",
   "type": "tool_call_end",
@@ -68,7 +68,7 @@ Logger embutido (console-based) com output estruturado. Consumidor pode integrar
 | Erros | Taxa de `error` events / total de `agent_start` | > 5% |
 | Saturação | `agent_end.usage.totalTokens` / `costPolicy.maxTokensPerSession` | > 80% do budget |
 
-### Métricas Custom do Pure Agent
+### Métricas Custom do AgentX SDK
 
 | Métrica | Descrição | Threshold de Alerta |
 |---------|-----------|---------------------|
@@ -95,7 +95,7 @@ Logger embutido (console-based) com output estruturado. Consumidor pode integrar
 
 ## Tracing
 
-O Pure Agent fornece tracing embutido via `ExecutionContext`:
+O AgentX SDK fornece tracing embutido via `ExecutionContext`:
 
 - **Ferramenta:** Embutida (ExecutionContext com traceId). Consumidor integra com OpenTelemetry, Datadog, etc. via `hooks.onEvent`
 - **Protocolo de propagação:** traceId (UUID v4) incluído em todos os AgentEvents
@@ -117,7 +117,7 @@ O Pure Agent fornece tracing embutido via `ExecutionContext`:
 ```typescript
 import { trace } from '@opentelemetry/api';
 
-const tracer = trace.getTracer('pure-agent');
+const tracer = trace.getTracer('agentx-sdk');
 
 agent.stream("Hello", {
   hooks: {
@@ -184,7 +184,7 @@ agent.stream("Hello", {
 
 ## Health Checks
 
-O Pure Agent não expõe endpoints HTTP. O consumidor pode implementar health checks usando a API do Agent:
+O AgentX SDK não expõe endpoints HTTP. O consumidor pode implementar health checks usando a API do Agent:
 
 ### Verificação de Saúde
 

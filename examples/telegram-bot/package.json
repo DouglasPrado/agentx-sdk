@@ -1,7 +1,7 @@
 {
-  "name": "pure-agent-telegram-bot",
+  "name": "agentx-telegram-bot",
   "version": "0.1.0",
-  "description": "Telegram bot powered by Pure Agent with memory, tools, and streaming",
+  "description": "Telegram bot powered by AgentX SDK with memory, tools, and streaming",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/bot.ts",
@@ -12,7 +12,7 @@
   "dependencies": {
     "dotenv": "^16.4.0",
     "grammy": "^1.30.0",
-    "pure-agent": "file:../../",
+    "agentx-sdk": "file:../../",
     "zod": "^3.23.0"
   },
   "devDependencies": {

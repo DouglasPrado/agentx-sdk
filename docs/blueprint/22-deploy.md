@@ -1,6 +1,6 @@
 # Deploy e Ambientes
 
-> O Pure Agent é uma biblioteca TypeScript, não um serviço deployável. Esta seção documenta os ambientes de uso e a estratégia de distribuição do pacote.
+> O AgentX SDK é uma biblioteca TypeScript, não um serviço deployável. Esta seção documenta os ambientes de uso e a estratégia de distribuição do pacote.
 
 ---
 
@@ -40,7 +40,7 @@
 
 ## Rollback
 
-> Como o Pure Agent é uma biblioteca, "rollback" significa reverter para uma versão anterior do pacote.
+> Como o AgentX SDK é uma biblioteca, "rollback" significa reverter para uma versão anterior do pacote.
 
 - **Estratégia:** Pin de versão no `package.json` do consumidor
 - **Compatibilidade:** Interfaces plugáveis (`MemoryStore`, `VectorStore`) são contratos estáveis

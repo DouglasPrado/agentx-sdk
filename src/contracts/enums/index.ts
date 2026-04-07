@@ -1,23 +1,8 @@
 /** Message role in a conversation */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
-/** Scope of a memory — determines visibility */
-export type MemoryScope = 'thread' | 'persistent' | 'learned';
-
-/** Category of an extracted memory */
-export type MemoryCategory = 'fact' | 'preference' | 'procedure' | 'insight' | 'context';
-
-/** Source of a memory — how it was created */
-export type MemorySource = 'extracted' | 'explicit' | 'feedback';
-
-/** Lifecycle state of a Memory */
-export type MemoryState =
-  | 'active'
-  | 'reinforced'
-  | 'decaying'
-  | 'consolidated'
-  | 'expired'
-  | 'removed';
+/** File-based memory type (closed taxonomy) */
+export type { MemoryType } from '../../memory/memory-types.js';
 
 /** State of a ReactLoop execution */
 export type ReactLoopState =
