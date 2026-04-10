@@ -1,6 +1,6 @@
 {
   "name": "agentx-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AgentX SDK - Standalone TypeScript agent library with streaming, tools, memory, knowledge (RAG), and skills",
   "type": "module",
   "main": "dist/index.js",
@@ -41,7 +41,9 @@
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3"]
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   },
   "license": "MIT"
 }
