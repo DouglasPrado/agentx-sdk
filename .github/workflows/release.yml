@@ -1,0 +1,94 @@
+name: Release & Publish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Skip CI commits to avoid infinite loop
+    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          # Collect all commit messages since last tag (or all if no tag)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            MESSAGES=$(git log --format='%s%n%b' HEAD)
+          else
+            MESSAGES=$(git log --format='%s%n%b' "${LAST_TAG}..HEAD")
+          fi
+
+          if echo "$MESSAGES" | grep -qiE 'BREAKING[ _-]CHANGE'; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif echo "$MESSAGES" | grep -qE '^feat(\(.+\))?!?:'; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version
+        id: version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          NEW_VERSION=$(npm version ${{ steps.bump.outputs.type }} --no-git-tag-version)
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+          git add package.json
+          git commit -m "chore: release ${NEW_VERSION}"
+          git tag "$NEW_VERSION"
+          git push origin main --follow-tags
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          LAST_TAG=$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            NOTES=$(git log --format='- %s' HEAD)
+          else
+            NOTES=$(git log --format='- %s' "${LAST_TAG}..${VERSION}^")
+          fi
+
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --notes "$NOTES" \
+            --latest
