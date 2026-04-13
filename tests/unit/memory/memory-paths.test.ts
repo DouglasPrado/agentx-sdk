@@ -36,8 +36,9 @@ describe('memory-paths', () => {
     it('should use default when no config or env', () => {
       delete process.env.AGENT_MEMORY_DIR;
       const result = resolveMemoryDir();
-      expect(result).toContain('.agent');
+      expect(result).toContain('.agentx');
       expect(result).toContain('memory');
+      expect(result).toContain(process.cwd());
     });
 
     it('should expand tilde in path', () => {

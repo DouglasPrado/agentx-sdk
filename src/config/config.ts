@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
 
@@ -26,7 +27,7 @@ const CostPolicySchema = z.object({
 /** Memory subsystem configuration (file-based) */
 const MemoryConfigSchema = z.object({
   enabled: z.boolean().default(true),
-  memoryDir: z.string().default('~/.agent/memory/'),
+  memoryDir: z.string().default(() => join(process.cwd(), '.agentx', 'memory') + '/'),
   relevanceModel: z.string().optional(),
   maxMemoryFiles: z.number().int().positive().default(200),
   extractionEnabled: z.boolean().default(true),
@@ -117,7 +118,7 @@ export const AgentConfigSchema = z.object({
   embedding: EmbeddingProviderConfigSchema.optional(),
 
   // Database path
-  dbPath: z.string().default('~/.agent/data.db'),
+  dbPath: z.string().default(() => join(process.cwd(), '.agentx', 'data.db')),
 });
 
 /** Input type before validation (allows partial/defaults) */

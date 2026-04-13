@@ -26,7 +26,7 @@ const agent = Agent.create({
 | `baseUrl` | `string` | `https://openrouter.ai/api/v1` | Base URL for the LLM API |
 | `systemPrompt` | `string` | `undefined` | System prompt prepended to every conversation |
 | `logLevel` | `string` | `info` | Log verbosity: `debug`, `info`, `warn`, `error`, `silent` |
-| `dbPath` | `string` | `~/.agent/data.db` | Path for the SQLite database file |
+| `dbPath` | `string` | `.agentx/data.db` | Path for the SQLite database file |
 
 ## Embedding Provider
 
@@ -109,7 +109,7 @@ const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
   memory: {
     enabled: true,
-    memoryDir: '~/.agent/memory/',
+    memoryDir: '.agentx/memory/',
     maxMemoryFiles: 200,
     extractionEnabled: true,
     samplingRate: 0.3,
@@ -121,7 +121,7 @@ const agent = Agent.create({
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Enable/disable the memory subsystem |
-| `memoryDir` | `string` | `~/.agent/memory/` | Directory for memory files |
+| `memoryDir` | `string` | `.agentx/memory/` | Directory for memory files |
 | `maxMemoryFiles` | `number` | `200` | Maximum number of memory files to retain |
 | `extractionEnabled` | `boolean` | `true` | Enable automatic fact extraction from conversations |
 | `samplingRate` | `number` | `0.3` | Fraction of turns sampled for extraction (0.0 - 1.0) |

@@ -13,6 +13,7 @@ vi.mock(
   () => ({
     config: {
       agent: { apiKey: 'test-key', model: 'test-model' },
+      embedding: { apiKey: undefined, baseUrl: undefined, model: undefined },
       mcp: { albert: { url: undefined } },
       database: { url: undefined },
     },

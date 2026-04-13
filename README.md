@@ -318,7 +318,7 @@ const memories = await agent.recall('What are the user preferences?');
 // from the conversation in the background (fire-and-forget)
 ```
 
-Memories are `.md` files with YAML frontmatter in `~/.agent/memory/` (configurable). Four types: `user`, `feedback`, `project`, `reference`.
+Memories are `.md` files with YAML frontmatter in `.agentx/memory/` (configurable). Four types: `user`, `feedback`, `project`, `reference`.
 
 ## Knowledge (RAG)
 
@@ -513,7 +513,7 @@ const agent = Agent.create({
   // Memory
   memory: {
     enabled: true,
-    memoryDir: '~/.agent/memory/',
+    memoryDir: '.agentx/memory/',
     extractionEnabled: true,
     samplingRate: 0.3,          // 30% chance per turn
     extractionInterval: 10,     // Force every 10 turns
@@ -897,7 +897,7 @@ const memories = await agent.recall('What are the user preferences?');
 // da conversa em background (fire-and-forget)
 ```
 
-Memorias sao arquivos `.md` com frontmatter YAML em `~/.agent/memory/` (configuravel). Quatro tipos: `user`, `feedback`, `project`, `reference`.
+Memorias sao arquivos `.md` com frontmatter YAML em `.agentx/memory/` (configuravel). Quatro tipos: `user`, `feedback`, `project`, `reference`.
 
 ## Knowledge (RAG)
 
@@ -1092,7 +1092,7 @@ const agent = Agent.create({
   // Memory
   memory: {
     enabled: true,
-    memoryDir: '~/.agent/memory/',
+    memoryDir: '.agentx/memory/',
     extractionEnabled: true,
     samplingRate: 0.3,          // 30% de chance por turn
     extractionInterval: 10,     // Forcar a cada 10 turns

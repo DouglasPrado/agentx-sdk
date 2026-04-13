@@ -11,11 +11,18 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, normalize, sep } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 
-const DEFAULT_MEMORY_DIR = '~/.agent/memory/';
+/**
+ * Default memory directory: `<cwd>/.agentx/memory/`.
+ * Computed dynamically because `process.cwd()` can change across tests.
+ */
+export function getDefaultMemoryDir(): string {
+  const path = join(process.cwd(), '.agentx', 'memory');
+  return (path + sep).normalize('NFC');
+}
 
 /**
  * Resolve the memory directory from config, env var, or default.
- * Priority: config.memoryDir → AGENT_MEMORY_DIR env → ~/.agent/memory/
+ * Priority: config.memoryDir → AGENT_MEMORY_DIR env → <cwd>/.agentx/memory/
  *
  * Config paths support ~/ expansion (user-friendly).
  * Env var paths must be absolute (set programmatically).
@@ -30,8 +37,8 @@ export function resolveMemoryDir(memoryDir?: string): string {
     }
   }
 
-  const raw = memoryDir ?? DEFAULT_MEMORY_DIR;
-  return expandAndNormalize(raw);
+  if (!memoryDir) return getDefaultMemoryDir();
+  return expandAndNormalize(memoryDir);
 }
 
 /**
@@ -47,7 +54,7 @@ function expandAndNormalize(raw: string): string {
     const restNorm = normalize(rest || '.');
     if (restNorm === '.' || restNorm === '..') {
       // Fall through to default — don't expand dangerous paths
-      candidate = join(homedir(), '.agent', 'memory');
+      candidate = join(process.cwd(), '.agentx', 'memory');
     } else {
       candidate = join(homedir(), rest);
     }
