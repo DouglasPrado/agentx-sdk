@@ -24,3 +24,4 @@ coverage/
 /examples/telegram-bot/package-lock.json
 /examples/telegram-bot/package.json
 /examples/telegram-bot/package-lock.json
+.agentx/
