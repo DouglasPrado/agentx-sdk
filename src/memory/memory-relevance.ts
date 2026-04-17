@@ -23,7 +23,7 @@ export async function selectRelevantMemories(
   manifest: string,
   validFilenames: Set<string>,
   client: LLMClient,
-  options?: { model?: string; signal?: AbortSignal },
+  options?: { model?: string; signal?: AbortSignal; logger?: import('../utils/logger.js').Logger },
 ): Promise<string[]> {
   if (!manifest.trim()) return [];
 
@@ -49,7 +49,10 @@ export async function selectRelevantMemories(
     return parsed.selected_memories
       .filter(f => typeof f === 'string' && validFilenames.has(f))
       .slice(0, 5);
-  } catch {
+  } catch (e) {
+    options?.logger?.debug('Memory relevance selection failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
     return [];
   }
 }

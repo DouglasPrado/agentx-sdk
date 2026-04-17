@@ -1,8 +1,20 @@
+import { z } from 'zod';
 import type { AgentTool } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { MCPConnectionConfig } from '../config/config.js';
 import type { ToolExecutor } from './tool-executor.js';
 import { jsonSchemaToZod } from './json-schema-to-zod.js';
+
+/** Shape of the content array returned from MCP server tool calls. */
+const MCPToolContentSchema = z.array(
+  z.object({
+    type: z.string(),
+    text: z.string().optional(),
+    data: z.string().optional(),
+    mimeType: z.string().optional(),
+    uri: z.string().optional(),
+  }).passthrough(),
+);
 
 export interface MCPHealthStatus {
   servers: Array<{
@@ -305,16 +317,22 @@ export class MCPAdapter {
               timeoutPromise,
             ]);
 
+            // Validate the response shape — untrusted MCP servers may return malformed content.
+            const parsedContent = MCPToolContentSchema.safeParse(result.content);
+            if (!parsedContent.success) {
+              return { content: 'MCP tool returned invalid content shape', isError: true };
+            }
+
             // Handle mixed content types (text, image, resource)
-            const parts = result.content.map((c: Record<string, unknown>) => {
-              if (c.type === 'text' && c.text) return c.text as string;
+            const parts = parsedContent.data.map(c => {
+              if (c.type === 'text' && typeof c.text === 'string') return c.text;
               if (c.type === 'image') {
-                const mime = (c.mimeType as string) ?? 'unknown';
+                const mime = c.mimeType ?? 'unknown';
                 const dataLen = typeof c.data === 'string' ? c.data.length : 0;
                 const sizeKB = Math.round(dataLen * 0.75 / 1024);
                 return `[Image: ${mime}, ~${sizeKB}KB]`;
               }
-              if (c.type === 'resource') return (c.text as string) ?? `[Resource: ${c.uri}]`;
+              if (c.type === 'resource') return c.text ?? `[Resource: ${c.uri ?? 'unknown'}]`;
               return `[${c.type}]`;
             });
             const textContent = parts.join('\n');
@@ -353,26 +371,39 @@ export class MCPAdapter {
     if (config.transport !== 'auto') {
       const client = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
       const transport = await createTransport(config);
-      await client.connect(transport);
-      return { client, transport };
+      try {
+        await client.connect(transport);
+        return { client, transport };
+      } catch (err) {
+        // Release the transport (and any spawned stdio subprocess) on connect failure
+        await closeTransportQuietly(transport);
+        throw err;
+      }
     }
 
     // Auto-detect: try StreamableHTTP first, fall back to SSE
     const requestInit: RequestInit | undefined = config.headers ? { headers: config.headers } : undefined;
 
+    const client1 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
+    const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    const httpTransport = new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
     try {
-      const client = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
-      const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
-      const transport = new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
-      await client.connect(transport);
-      return { client, transport };
+      await client1.connect(httpTransport);
+      return { client: client1, transport: httpTransport };
     } catch {
-      // StreamableHTTP failed — try SSE
-      const client = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
-      const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
-      const transport = new SSEClientTransport(new URL(config.url!), { requestInit });
-      await client.connect(transport);
-      return { client, transport };
+      // StreamableHTTP failed — clean up before falling back
+      await closeTransportQuietly(httpTransport);
+    }
+
+    const client2 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
+    const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
+    const sseTransport = new SSEClientTransport(new URL(config.url!), { requestInit });
+    try {
+      await client2.connect(sseTransport);
+      return { client: client2, transport: sseTransport };
+    } catch (err) {
+      await closeTransportQuietly(sseTransport);
+      throw err;
     }
   }
 
@@ -436,6 +467,13 @@ async function loadSDK(): Promise<{ Client: new (opts: { name: string; version: 
       'Install @modelcontextprotocol/sdk to use MCP connections: npm install @modelcontextprotocol/sdk'
     );
   }
+}
+
+async function closeTransportQuietly(transport: unknown): Promise<void> {
+  try {
+    const t = transport as { close?: () => unknown } | null;
+    if (t && typeof t.close === 'function') await Promise.resolve(t.close());
+  } catch { /* best-effort cleanup */ }
 }
 
 async function createTransport(config: MCPConnectionConfig): Promise<unknown> {

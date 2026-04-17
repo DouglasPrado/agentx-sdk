@@ -29,7 +29,7 @@ import {
   MAX_ENTRYPOINT_BYTES,
   parseMemoryType,
 } from './memory-types.js';
-import { resolveMemoryDir, ensureMemoryDir, sanitizeFilename } from './memory-paths.js';
+import { resolveMemoryDir, ensureMemoryDir, sanitizeFilename, sanitizeFrontmatterValue, validateThreadId } from './memory-paths.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
 import { selectRelevantMemories } from './memory-relevance.js';
 import { memoryFreshnessNote } from './memory-age.js';
@@ -50,7 +50,7 @@ export class FileMemorySystem {
   private readonly client: LLMClient;
   private readonly logger: Logger;
   private readonly relevanceModel?: string;
-  private writeLock = false;
+  private lockChain: Promise<void> = Promise.resolve();
 
   constructor(config: FileMemoryConfig, client: LLMClient, logger: Logger) {
     this.memoryDir = resolveMemoryDir(config.memoryDir);
@@ -76,7 +76,9 @@ export class FileMemorySystem {
    */
   private resolveDir(threadId?: string): string {
     if (!threadId) return this.memoryDir;
-    return join(this.memoryDir, THREADS_DIR, threadId);
+    const safeId = validateThreadId(threadId);
+    if (!safeId) throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
+    return join(this.memoryDir, THREADS_DIR, safeId);
   }
 
   /** Ensure a thread directory exists. */
@@ -98,8 +100,8 @@ export class FileMemorySystem {
 
     const fileContent = [
       '---',
-      `name: ${input.name}`,
-      `description: ${input.description}`,
+      `name: ${sanitizeFrontmatterValue(input.name)}`,
+      `description: ${sanitizeFrontmatterValue(input.description)}`,
       `type: ${input.type}`,
       '---',
       '',
@@ -203,7 +205,7 @@ export class FileMemorySystem {
       manifest,
       validFilenames,
       this.client,
-      { model: this.relevanceModel, signal },
+      { model: this.relevanceModel, signal, logger: this.logger },
     );
 
     const results: MemoryFile[] = [];
@@ -306,7 +308,8 @@ export class FileMemorySystem {
 
       if (existing.includes(`(${filename})`)) return;
 
-      const newEntry = `- [${description}](${filename}) — ${description}`;
+      const safeDescription = sanitizeFrontmatterValue(description);
+      const newEntry = `- [${safeDescription}](${filename}) — ${safeDescription}`;
       const updated = existing ? `${existing.trimEnd()}\n${newEntry}\n` : `${newEntry}\n`;
       await writeFile(entrypoint, updated, 'utf-8');
     });
@@ -324,16 +327,10 @@ export class FileMemorySystem {
     });
   }
 
-  private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
-    while (this.writeLock) {
-      await new Promise(r => setTimeout(r, 10));
-    }
-    this.writeLock = true;
-    try {
-      return await fn();
-    } finally {
-      this.writeLock = false;
-    }
+  private withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.lockChain.then(() => fn());
+    this.lockChain = result.then(() => {}, () => {});
+    return result;
   }
 }
 

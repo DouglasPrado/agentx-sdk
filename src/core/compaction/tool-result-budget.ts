@@ -66,7 +66,8 @@ export function applyToolResultBudget(
     remaining -= cut;
   }
 
-  // Apply truncations
+  // Apply truncations. The marker string itself contributes to the final size,
+  // so we subtract its length from the effective target to stay within budget.
   let truncatedCount = 0;
   const result = messages.map((msg, i) => {
     const targetSize = truncateTargets.get(i);
@@ -75,10 +76,14 @@ export function applyToolResultBudget(
     truncatedCount++;
     const content = msg.content as string;
 
-    const headSize = Math.floor(targetSize * HEAD_RATIO);
-    const tailSize = Math.floor(targetSize * TAIL_RATIO);
+    const omittedPreview = content.length - targetSize;
+    const marker = `\n\n[truncated ${omittedPreview} characters — tool result budget exceeded]\n\n`;
+    const effectiveTarget = Math.max(0, targetSize - marker.length);
+
+    const headSize = Math.floor(effectiveTarget * HEAD_RATIO);
+    const tailSize = Math.floor(effectiveTarget * TAIL_RATIO);
     const head = content.slice(0, headSize);
-    const tail = content.slice(-tailSize);
+    const tail = tailSize > 0 ? content.slice(-tailSize) : '';
     const omitted = content.length - headSize - tailSize;
 
     return {

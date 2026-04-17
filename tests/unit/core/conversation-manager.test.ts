@@ -76,4 +76,24 @@ describe('ConversationManager', () => {
     await Promise.all([p1, p2]);
     expect(order).toEqual(['t2', 't1']); // t2 finishes first (parallel)
   });
+
+  it('should serialize 3 concurrent waiters without dropping any', async () => {
+    const cm = new ConversationManager();
+    const order: number[] = [];
+
+    const p1 = cm.withThread('t1', async () => {
+      await new Promise(r => setTimeout(r, 20));
+      order.push(1);
+    });
+    const p2 = cm.withThread('t1', async () => {
+      await new Promise(r => setTimeout(r, 5));
+      order.push(2);
+    });
+    const p3 = cm.withThread('t1', async () => {
+      order.push(3);
+    });
+
+    await Promise.all([p1, p2, p3]);
+    expect(order).toEqual([1, 2, 3]);
+  });
 });

@@ -52,8 +52,8 @@ export class ConversationManager {
     try {
       return await fn();
     } finally {
-      this.locks.delete(threadId);
       releaseLock!();
+      this.locks.delete(threadId);
     }
   }
 

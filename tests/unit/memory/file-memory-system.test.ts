@@ -249,3 +249,122 @@ describe('truncateEntrypointContent', () => {
     expect(result).toContain('truncated');
   });
 });
+
+describe('FileMemorySystem — threadId path traversal', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-tid-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('rejects threadId with path traversal sequences', async () => {
+    await expect(
+      system.saveMemory({ name: 'test', description: 'd', type: 'user', content: 'c' }, '../../../tmp/evil'),
+    ).rejects.toThrow(/invalid threadid/i);
+  });
+
+  it('rejects threadId with path separators', async () => {
+    await expect(
+      system.saveMemory({ name: 'test', description: 'd', type: 'user', content: 'c' }, 'foo/bar'),
+    ).rejects.toThrow(/invalid threadid/i);
+  });
+});
+
+describe('FileMemorySystem — frontmatter injection prevention', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-fm-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('sanitizes newlines in description to prevent YAML injection', async () => {
+    await system.saveMemory({
+      name: 'Test',
+      description: 'First line\nmalicious: injected-value',
+      type: 'user',
+      content: 'body',
+    });
+
+    const fileContent = await readFile(join(tempDir, 'test.md'), 'utf-8');
+    const fm = fileContent.split('---')[1] ?? '';
+    expect(fm).not.toMatch(/^malicious:/m);
+  });
+
+  it('sanitizes newlines in name to prevent YAML injection', async () => {
+    await system.saveMemory({
+      name: 'NameLine',
+      description: 'ok',
+      type: 'user',
+      content: 'body',
+    });
+    // Above should work fine. Now with injected newline:
+    await system.saveMemory({
+      name: 'Inject\nbad: value',
+      description: 'ok',
+      type: 'user',
+      content: 'body',
+    });
+    // Both files should parse correctly
+    const files = (await import('node:fs/promises')).readdir;
+    const list = await files(tempDir);
+    const mdFiles = list.filter(f => f.endsWith('.md') && f !== 'MEMORY.md');
+    for (const f of mdFiles) {
+      const content = await readFile(join(tempDir, f), 'utf-8');
+      const fm = content.split('---')[1] ?? '';
+      expect(fm).not.toMatch(/^bad:/m);
+    }
+  });
+});
+
+describe('FileMemorySystem — concurrent writes (withWriteLock)', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-lock-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('should write all entries to MEMORY.md without corruption under concurrent saves', async () => {
+    const saves = Array.from({ length: 5 }, (_, i) =>
+      system.saveMemory({
+        name: `mem ${i}`,
+        description: `desc-${i}`,
+        type: 'user',
+        content: `content ${i}`,
+      }),
+    );
+
+    await Promise.all(saves);
+
+    const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
+    for (let i = 0; i < 5; i++) {
+      expect(index).toContain(`mem-${i}.md`);
+    }
+  });
+});

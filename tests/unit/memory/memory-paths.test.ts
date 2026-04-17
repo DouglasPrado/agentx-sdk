@@ -5,6 +5,7 @@ import {
   sanitizeFilename,
   ensureMemoryDir,
   isMemoryPath,
+  validateThreadId,
 } from '../../../src/memory/memory-paths.js';
 import { sep } from 'node:path';
 
@@ -132,6 +133,34 @@ describe('memory-paths', () => {
   describe('ensureMemoryDir', () => {
     it('should be a function', () => {
       expect(typeof ensureMemoryDir).toBe('function');
+    });
+  });
+
+  describe('validateThreadId', () => {
+    it('accepts safe alphanumeric thread ids', () => {
+      expect(validateThreadId('default')).toBe('default');
+      expect(validateThreadId('thread-42')).toBe('thread-42');
+      expect(validateThreadId('user_123')).toBe('user_123');
+    });
+
+    it('rejects thread ids with path traversal sequences', () => {
+      expect(validateThreadId('../../../etc')).toBeUndefined();
+      expect(validateThreadId('..')).toBeUndefined();
+      expect(validateThreadId('foo/../bar')).toBeUndefined();
+    });
+
+    it('rejects thread ids containing path separators', () => {
+      expect(validateThreadId('foo/bar')).toBeUndefined();
+      expect(validateThreadId('foo\\bar')).toBeUndefined();
+    });
+
+    it('rejects thread ids with null bytes or control chars', () => {
+      expect(validateThreadId('foo\0bar')).toBeUndefined();
+      expect(validateThreadId('foo\nbar')).toBeUndefined();
+    });
+
+    it('rejects empty thread id', () => {
+      expect(validateThreadId('')).toBeUndefined();
     });
   });
 });

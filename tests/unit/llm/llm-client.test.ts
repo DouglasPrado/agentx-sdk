@@ -146,6 +146,103 @@ describe('LLMClient', () => {
     });
   });
 
+  describe('resilience', () => {
+    it('chat() throws a clear error on malformed JSON response body', async () => {
+      mockFetch(new Response('not json', { status: 200 }));
+      await expect(
+        client.chat({ messages: [{ role: 'user', content: 'Hi' }] }),
+      ).rejects.toThrow(/parse/i);
+    });
+
+    it('embed() throws a clear error on malformed JSON response body', async () => {
+      mockFetch(new Response('not json', { status: 200 }));
+      await expect(client.embed(['hello'])).rejects.toThrow(/parse/i);
+    });
+
+    it('streamChat cancels the reader when signal is aborted mid-stream', async () => {
+      const cancelSpy = vi.fn().mockResolvedValue(undefined);
+      const neverReader = {
+        read: () => new Promise(() => { /* hang */ }),
+        releaseLock: vi.fn(),
+        cancel: cancelSpy,
+        closed: Promise.resolve(undefined),
+      };
+      const fakeBody = { getReader: () => neverReader } as unknown as ReadableStream<Uint8Array>;
+      const response = new Response(null, { status: 200 });
+      Object.defineProperty(response, 'body', { value: fakeBody });
+      mockFetch(response);
+
+      const controller = new AbortController();
+      const iter = client.streamChat({
+        messages: [{ role: 'user', content: 'Hi' }],
+        signal: controller.signal,
+      });
+
+      const consume = (async () => {
+        // Start consuming; the first read will hang
+        for await (const _ of iter) { /* no-op */ }
+      })();
+
+      // Abort after next tick so the stream is actively reading
+      await new Promise(r => setTimeout(r, 10));
+      controller.abort();
+
+      // The iterator should settle without hanging, and cancel must be called
+      await Promise.race([
+        consume,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('hung')), 500)),
+      ]).catch(() => { /* iterator may throw on abort — both OK */ });
+
+      expect(cancelSpy).toHaveBeenCalled();
+    });
+
+    it('applies a default fetch timeout when caller provides no signal', async () => {
+      const fetchSpy = mockFetch(new Response(JSON.stringify({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      }), { status: 200 }));
+
+      await client.chat({ messages: [{ role: 'user', content: 'Hi' }] });
+
+      const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('flushes UTF-8 decoder at end of stream so no trailing bytes are dropped', async () => {
+      // Build a response whose last chunk is the continuation of a multibyte char.
+      // The emoji '😀' is 4 bytes in UTF-8: 0xF0 0x9F 0x98 0x80
+      const encoder = new TextEncoder();
+      const head = encoder.encode('data: {"choices":[{"delta":{"content":"Hi '); // partial JSON
+      const emojiBytes = encoder.encode('😀');
+      const tail = encoder.encode('"},"index":0}]}\n\ndata: {"choices":[{"finish_reason":"stop","index":0}]}\n\n');
+
+      // Split the emoji in the middle across two chunks
+      const first = new Uint8Array([...head, ...emojiBytes.slice(0, 2)]);
+      const second = new Uint8Array([...emojiBytes.slice(2), ...tail]);
+
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(first);
+          controller.enqueue(second);
+          controller.close();
+        },
+      });
+      const response = new Response(stream, { status: 200 });
+      mockFetch(response);
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.streamChat({ messages: [{ role: 'user', content: 'Hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      const content = chunks
+        .filter(c => c.type === 'content')
+        .map(c => (c as { type: 'content'; data: string }).data)
+        .join('');
+      expect(content).toContain('😀');
+    });
+  });
+
   describe('reasoning', () => {
     it('should convert system messages for o1 models', async () => {
       const o1Client = new LLMClient({ apiKey: 'test', model: 'openai/o1-preview', baseUrl: 'https://api.test.com/v1' });

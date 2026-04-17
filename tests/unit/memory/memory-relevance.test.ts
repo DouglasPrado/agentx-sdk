@@ -101,4 +101,24 @@ describe('memory-relevance', () => {
       expect.objectContaining({ model: 'anthropic/claude-sonnet-4-20250514' }),
     );
   });
+
+  it('should log error via logger when LLM call fails', async () => {
+    const debugSpy = vi.fn();
+    const logger = { debug: debugSpy, info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const client = createErrorClient();
+
+    const result = await selectRelevantMemories(
+      'query',
+      manifest,
+      validFilenames,
+      client,
+      { logger: logger as any },
+    );
+
+    expect(result).toEqual([]);
+    expect(debugSpy).toHaveBeenCalledWith(
+      'Memory relevance selection failed',
+      expect.objectContaining({ error: 'API error' }),
+    );
+  });
 });

@@ -64,4 +64,38 @@ describe('builtin/web-fetch', () => {
     const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
     expect(parsed.isError).toBe(true);
   });
+
+  describe('SSRF protection', () => {
+    const tool = createWebFetchTool();
+
+    it('blocks localhost and loopback addresses', async () => {
+      for (const url of ['http://localhost/', 'http://127.0.0.1:6379', 'http://[::1]/', 'http://0.0.0.0/']) {
+        const result = await tool.execute({ url }, signal);
+        const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+        expect(parsed.isError, `should block ${url}`).toBe(true);
+      }
+    });
+
+    it('blocks cloud metadata endpoints', async () => {
+      const result = await tool.execute({ url: 'http://169.254.169.254/latest/meta-data/' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+
+    it('blocks private IPv4 ranges', async () => {
+      for (const url of ['http://10.0.0.1/', 'http://192.168.1.1/', 'http://172.16.0.1/']) {
+        const result = await tool.execute({ url }, signal);
+        const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+        expect(parsed.isError, `should block ${url}`).toBe(true);
+      }
+    });
+
+    it('blocks non-http(s) schemes', async () => {
+      for (const url of ['file:///etc/passwd', 'ftp://example.com/', 'gopher://example.com/']) {
+        const result = await tool.execute({ url }, signal);
+        const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+        expect(parsed.isError, `should block ${url}`).toBe(true);
+      }
+    });
+  });
 });

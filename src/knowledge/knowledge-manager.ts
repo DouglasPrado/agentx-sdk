@@ -48,19 +48,26 @@ export class KnowledgeManager {
     if (chunks.length === 0) return 0;
 
     const embeddings = await this.embeddingService.embed(chunks);
+    const now = Date.now();
+    const chunkObjs: KnowledgeChunk[] = chunks.map((content, i) => ({
+      id: randomUUID(),
+      content,
+      embedding: new Float32Array(embeddings[i]!),
+      metadata: { ...document.metadata, chunkIndex: i, totalChunks: chunks.length },
+      createdAt: now,
+    }));
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk: KnowledgeChunk = {
-        id: randomUUID(),
-        content: chunks[i]!,
-        embedding: new Float32Array(embeddings[i]!),
-        metadata: { ...document.metadata, chunkIndex: i, totalChunks: chunks.length },
-        createdAt: Date.now(),
-      };
-      this.store.upsert(chunk);
+    // Prefer atomic batch insert when the store supports it — this makes the
+    // operation all-or-nothing and avoids partial-state on mid-ingest errors.
+    if (typeof this.store.upsertMany === 'function') {
+      this.store.upsertMany(chunkObjs);
+    } else {
+      for (const chunk of chunkObjs) {
+        this.store.upsert(chunk);
+      }
     }
 
-    return chunks.length;
+    return chunkObjs.length;
   }
 
   /**

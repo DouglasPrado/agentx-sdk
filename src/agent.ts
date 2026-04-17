@@ -15,6 +15,7 @@ import { MCPAdapter, type MCPHealthStatus } from './tools/mcp-adapter.js';
 import { SkillManager } from './skills/skill-manager.js';
 import { createSkillTool, SKILL_TOOL_NAME, buildSkillToolPrompt } from './tools/skill-tool.js';
 import { FileMemorySystem } from './memory/file-memory-system.js';
+import { validateThreadId } from './memory/memory-paths.js';
 import { extractMemories, shouldExtract } from './memory/memory-extractor.js';
 import { memoryFreshnessNote } from './memory/memory-age.js';
 import { KnowledgeManager } from './knowledge/knowledge-manager.js';
@@ -31,6 +32,7 @@ import { runTurnEndHooks, type TurnEndHook } from './core/turn-end-hooks.js';
 import { estimateTokens } from './utils/token-counter.js';
 import { getModelContextWindow } from './utils/model-context.js';
 import { buildToolUsagePrompt, buildEnvironmentPrompt } from './core/prompt-builders.js';
+import { homedir } from 'node:os';
 
 export interface ChatOptions {
   threadId?: string;
@@ -158,6 +160,7 @@ export class Agent {
     if (this.destroyed) throw new Error('Agent is destroyed');
 
     const threadId = options?.threadId ?? 'default';
+    if (!validateThreadId(threadId)) throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
     const model = options?.model ?? this.config.model;
     const ctx = createExecutionContext(threadId, model);
 
@@ -235,6 +238,14 @@ export class Agent {
       reserveTokens: this.config.reserveTokens,
       maxPinnedMessages: this.config.maxPinnedMessages,
     });
+
+    if (contextResult.droppedPinnedCount > 0) {
+      this.logger.warn('Pinned messages dropped due to context budget', {
+        dropped: contextResult.droppedPinnedCount,
+        totalTokens: contextResult.totalTokens,
+        maxTokens: this.config.maxContextTokens,
+      });
+    }
 
     // Snapshot memory dir time for mutual exclusion with extraction
     const turnStartMs = Date.now();
@@ -416,7 +427,7 @@ export class Agent {
             const text = typeof m.content === 'string' ? m.content : '[multimodal]';
             return `${m.role}: ${text}`;
           }).join('\n');
-          await extractMemories(conversationText, memSystem, forkFn, { threadId });
+          await extractMemories(conversationText, memSystem, forkFn, { threadId, logger });
         } catch (err) {
           logger.debug('Memory extraction failed', { error: String(err) });
         }
@@ -557,6 +568,8 @@ export class Agent {
     const tid = threadId ?? 'default';
     this.conversations.clearThread(tid);
     this.skillManager?.clearStickySkills(tid);
+    // Prevent unbounded growth of the surfaced-memory set across long sessions.
+    this.surfacedMemories.clear();
     this.logger.info('Thread cleared', { threadId: tid });
   }
 
@@ -630,6 +643,8 @@ export class Agent {
   async destroy(): Promise<void> {
     this.destroyed = true;
     this.skillManager?.clearAllStickySessions();
+    this.skillManager?.clearInvokedSkills();
+    this.surfacedMemories.clear();
     await this.mcpAdapter.disconnectAll();
     this.database?.close();
     this.logger.info('Agent destroyed');
@@ -649,9 +664,8 @@ export class Agent {
     if (!this.database) {
       // Expand ~ to home directory
       let dbPath = this.config.dbPath;
-      if (dbPath.startsWith('~/')) {
-        const os = require('node:os') as typeof import('node:os');
-        dbPath = dbPath.replace('~', os.homedir());
+      if (dbPath === '~' || dbPath.startsWith('~/')) {
+        dbPath = homedir() + dbPath.slice(1);
       }
       this.database = new SQLiteDatabase(dbPath);
       this.database.initialize();

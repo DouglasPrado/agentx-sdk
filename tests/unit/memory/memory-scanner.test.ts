@@ -202,4 +202,23 @@ Content here`);
       expect(formatMemoryManifest([])).toBe('');
     });
   });
+
+  describe('scanMemoryFiles — AbortSignal', () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'scanner-abort-'));
+    });
+
+    afterEach(async () => {
+      await rm(tempDir, { recursive: true, force: true });
+    });
+
+    it('should return empty array when signal is already aborted before readdir', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const result = await scanMemoryFiles(tempDir, controller.signal);
+      expect(result).toEqual([]);
+    });
+  });
 });

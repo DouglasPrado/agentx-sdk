@@ -155,6 +155,24 @@ describe('memory-extractor', () => {
       );
     });
 
+    it('logs error via logger when fork fails', async () => {
+      const debugSpy = vi.fn();
+      const testLogger = { debug: debugSpy, info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+      const failingFork = vi.fn().mockRejectedValue(new Error('network error'));
+
+      await extractMemories(
+        'user: test\nassistant: ok',
+        system,
+        failingFork as ForkFn,
+        { logger: testLogger },
+      );
+
+      expect(debugSpy).toHaveBeenCalledWith(
+        'Memory extraction failed',
+        expect.objectContaining({ error: 'network error' }),
+      );
+    });
+
     it('passes threadId to memory tools when provided', async () => {
       await extractMemories(
         'user: test\nassistant: ok',

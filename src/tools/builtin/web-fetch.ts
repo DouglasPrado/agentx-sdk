@@ -3,6 +3,41 @@ import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 
 const DEFAULT_MAX_CHARS = 50_000;
 
+/** Validate URL against SSRF attack vectors. Returns null if safe, error message if blocked. */
+function validateFetchUrl(rawUrl: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return 'Invalid URL';
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return `Blocked scheme: ${parsed.protocol}`;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+
+  // Loopback and wildcard hostnames
+  if (host === 'localhost' || host === '0.0.0.0' || host === '::1' || host === '[::1]' || host === '::') {
+    return `Blocked hostname: ${host}`;
+  }
+
+  // IPv4 literal checks (loopback, private ranges, link-local metadata)
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = ipv4.slice(1).map(Number) as [number, number, number, number];
+    if (a === 127) return 'Blocked loopback address';
+    if (a === 10) return 'Blocked private range 10.0.0.0/8';
+    if (a === 192 && b === 168) return 'Blocked private range 192.168.0.0/16';
+    if (a === 172 && b >= 16 && b <= 31) return 'Blocked private range 172.16.0.0/12';
+    if (a === 169 && b === 254) return 'Blocked link-local range (cloud metadata)';
+    if (a === 0) return 'Blocked 0.0.0.0/8';
+  }
+
+  return null;
+}
+
 const WebFetchParams = z.object({
   url: z.string().describe('URL to fetch'),
   max_chars: z.number().optional().describe('Max characters to return. Default: 50000.'),
@@ -34,6 +69,9 @@ export function createWebFetchTool(): AgentTool {
     async execute(rawArgs: unknown, signal: AbortSignal) {
       const { url, max_chars } = rawArgs as z.infer<typeof WebFetchParams>;
       const maxChars = max_chars ?? DEFAULT_MAX_CHARS;
+
+      const blocked = validateFetchUrl(url);
+      if (blocked) return { content: blocked, isError: true };
 
       try {
         const response = await fetch(url, {

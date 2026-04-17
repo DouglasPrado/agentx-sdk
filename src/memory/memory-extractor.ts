@@ -82,7 +82,7 @@ export async function extractMemories(
   conversationText: string,
   memorySystem: FileMemorySystem,
   fork: ForkFn,
-  options?: { model?: string; threadId?: string },
+  options?: { model?: string; threadId?: string; logger?: import('../utils/logger.js').Logger },
 ): Promise<void> {
   if (!conversationText.trim()) return;
 
@@ -112,7 +112,10 @@ export async function extractMemories(
       tools,
       background: true,
     });
-  } catch {
+  } catch (e) {
     // Extraction is best-effort — never propagate errors
+    options?.logger?.debug('Memory extraction failed', {
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
 }

@@ -25,6 +25,27 @@ export class SQLiteVectorStore implements VectorStore {
     );
   }
 
+  /** Atomic batch insert: rolls back all rows if any single insert fails. */
+  upsertMany(chunks: KnowledgeChunk[]): void {
+    if (chunks.length === 0) return;
+    const stmt = this.database.db.prepare(`
+      INSERT OR REPLACE INTO vectors (id, content, embedding, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const tx = this.database.db.transaction((rows: KnowledgeChunk[]) => {
+      for (const c of rows) {
+        stmt.run(
+          c.id,
+          c.content,
+          Buffer.from(c.embedding.buffer),
+          c.metadata ? JSON.stringify(c.metadata) : null,
+          c.createdAt,
+        );
+      }
+    });
+    tx(chunks);
+  }
+
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[] {
     const rows = this.database.db.prepare('SELECT * FROM vectors').all() as VectorRow[];
 
@@ -70,7 +91,10 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
     normB += b[i]! * b[i]!;
   }
   const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
+  if (denom === 0) return 0;
+  // Clamp to [0, 1]: opposite-direction vectors are treated as "not similar"
+  // for RAG ranking purposes, matching the minScore config range.
+  return Math.max(0, Math.min(1, dot / denom));
 }
 
 interface VectorRow {

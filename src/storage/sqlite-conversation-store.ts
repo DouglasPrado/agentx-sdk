@@ -55,10 +55,15 @@ function rowToMessage(row: ConversationRow): ChatMessage {
     content = row.content;
   }
 
+  let toolCalls: ChatMessage['toolCalls'];
+  if (row.tool_calls) {
+    try { toolCalls = JSON.parse(row.tool_calls); } catch { toolCalls = undefined; }
+  }
+
   return {
     role: row.role as ChatMessage['role'],
     content: content as ChatMessage['content'],
-    toolCalls: row.tool_calls ? JSON.parse(row.tool_calls) : undefined,
+    toolCalls,
     toolCallId: row.tool_call_id ?? undefined,
     pinned: row.pinned === 1,
     createdAt: row.created_at,

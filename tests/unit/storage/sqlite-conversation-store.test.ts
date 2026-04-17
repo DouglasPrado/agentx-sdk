@@ -81,6 +81,17 @@ describe('SQLiteConversationStore', () => {
     expect(messages[1]!.toolCallId).toBe('tc1');
   });
 
+  it('should return undefined toolCalls for corrupt tool_calls JSON', () => {
+    database.db.prepare(`
+      INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run('t-corrupt', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
+
+    const messages = store.listThread('t-corrupt');
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.toolCalls).toBeUndefined();
+  });
+
   it('should return empty array for unknown thread', () => {
     expect(store.listThread('nonexistent')).toHaveLength(0);
   });

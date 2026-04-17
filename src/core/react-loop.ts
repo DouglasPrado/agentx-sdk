@@ -386,12 +386,14 @@ export async function* executeReactLoop(
             if (tc) {
               try {
                 const parsed = JSON.parse(tc.arguments);
-                const paths = toolDef.getFilePath(parsed);
-                if (paths) {
-                  const arr = Array.isArray(paths) ? paths : [paths];
-                  touchedFilePaths.push(...arr);
-                }
-              } catch { /* parse error — skip */ }
+                try {
+                  const paths = toolDef.getFilePath(parsed);
+                  if (paths) {
+                    const arr = Array.isArray(paths) ? paths : [paths];
+                    touchedFilePaths.push(...arr);
+                  }
+                } catch { /* getFilePath error — skip */ }
+              } catch { /* JSON parse error — skip */ }
             }
           }
           // Also check metadata.filePaths

@@ -56,6 +56,11 @@ export function createGrepTool(): AgentTool {
         return { content: `Invalid regex: ${String(e)}`, isError: true };
       }
 
+      // ReDoS defense: cap per-line length so pathological patterns
+      // (e.g. `(a+)+b` on long runs) can't hang the tool. Matching lines
+      // longer than this is rare in practice for source-code grep.
+      const MAX_LINE_LENGTH = 10_000;
+
       const files = await collectFiles(baseDir, globFilter);
       const matches: string[] = [];
 
@@ -72,10 +77,12 @@ export function createGrepTool(): AgentTool {
 
           for (let i = 0; i < lines.length; i++) {
             if (matches.length >= maxResults) break;
+            const line = lines[i]!;
+            if (line.length > MAX_LINE_LENGTH) continue;
             regex.lastIndex = 0;
-            if (regex.test(lines[i]!)) {
+            if (regex.test(line)) {
               const relative = file.slice(baseDir.length + 1) || file;
-              matches.push(`${relative}:${i + 1}:${lines[i]}`);
+              matches.push(`${relative}:${i + 1}:${line}`);
             }
           }
         } catch {

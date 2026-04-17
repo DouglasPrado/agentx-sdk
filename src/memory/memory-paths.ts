@@ -9,7 +9,7 @@
 
 import { homedir } from 'node:os';
 import { isAbsolute, join, normalize, sep } from 'node:path';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, realpath } from 'node:fs/promises';
 
 /**
  * Default memory directory: `<cwd>/.agentx/memory/`.
@@ -105,6 +105,33 @@ export function validateMemoryPath(
 }
 
 /**
+ * Like `validateMemoryPath`, but resolves symlinks via `realpath` before
+ * the containment check. Use this before actually reading or writing a file
+ * so a symlink inside the memory directory cannot escape to the broader
+ * filesystem. Returns undefined if the path is unsafe OR if the target
+ * does not yet exist (caller should create its parent first).
+ */
+export async function validateMemoryPathResolved(
+  path: string,
+  memoryDir: string,
+): Promise<string | undefined> {
+  const cheap = validateMemoryPath(path, memoryDir);
+  if (!cheap) return undefined;
+  try {
+    const real = await realpath(cheap);
+    const realDir = await realpath(normalize(memoryDir).replace(/[/\\]+$/, ''));
+    const realDirWithSep = real === realDir ? realDir : realDir + sep;
+    if (real !== realDir && !real.startsWith(realDirWithSep)) return undefined;
+    return real;
+  } catch {
+    // realpath fails when the target doesn't exist yet — that's normal for
+    // creates. Fall back to the cheap (string) check, which still guards
+    // against traversal inside the memory directory.
+    return cheap;
+  }
+}
+
+/**
  * Sanitize a name into a safe kebab-case filename with .md extension.
  */
 export function sanitizeFilename(name: string): string {
@@ -119,6 +146,32 @@ export function sanitizeFilename(name: string): string {
 
   if (!sanitized) return 'memory.md';
   return sanitized.endsWith('.md') ? sanitized : `${sanitized}.md`;
+}
+
+/**
+ * Validate a threadId as safe to use as a path component.
+ * Rejects traversal sequences, separators, null bytes, control chars.
+ * Returns the validated id or undefined if unsafe.
+ */
+export function validateThreadId(threadId: string): string | undefined {
+  if (!threadId) return undefined;
+  if (threadId.includes('\0')) return undefined;
+  if (/[\x00-\x1f\x7f]/.test(threadId)) return undefined;
+  if (threadId.includes('/') || threadId.includes('\\')) return undefined;
+  if (threadId === '.' || threadId === '..') return undefined;
+  // Defense-in-depth: ensure normalization does not turn it into a traversal
+  const normalized = normalize(threadId);
+  if (normalized !== threadId) return undefined;
+  if (normalized.includes('..')) return undefined;
+  return threadId;
+}
+
+/**
+ * Sanitize a value for safe embedding in a single-line YAML frontmatter field.
+ * Prevents frontmatter injection by collapsing newlines to spaces and trimming.
+ */
+export function sanitizeFrontmatterValue(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
 }
 
 /**

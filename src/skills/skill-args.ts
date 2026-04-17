@@ -60,19 +60,21 @@ export function substituteArgs(
     for (let i = 0; i < argNames.length; i++) {
       const name = argNames[i]!;
       const value = tokens[i] ?? '';
-      // Replace $argName (word boundary aware — don't replace $argNameExtra)
-      result = result.replace(new RegExp(`\\$${name}(?![a-zA-Z0-9_])`, 'g'), value);
+      // Replace $argName (word boundary aware — don't replace $argNameExtra).
+      // Use a function replacer so special sequences in the value (e.g. $&, $1)
+      // are treated as literals, not as backreferences.
+      result = result.replace(new RegExp(`\\$${name}(?![a-zA-Z0-9_])`, 'g'), () => value);
     }
 
     // Also make remaining args available as $ARGS (everything after named args)
     const remaining = tokens.slice(argNames.length).join(' ');
-    result = result.replace(/\$ARGS(?![a-zA-Z0-9_])/g, remaining);
+    result = result.replace(/\$ARGS(?![a-zA-Z0-9_])/g, () => remaining);
   }
 
   // 2. Variable substitution: ${VARIABLE}
   if (variables) {
     for (const [key, value] of Object.entries(variables)) {
-      result = result.replace(new RegExp(`\\$\\{${escapeRegex(key)}\\}`, 'g'), value);
+      result = result.replace(new RegExp(`\\$\\{${escapeRegex(key)}\\}`, 'g'), () => value);
     }
   }
 

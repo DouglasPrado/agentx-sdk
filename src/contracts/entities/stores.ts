@@ -4,6 +4,8 @@ import type { KnowledgeChunk, RetrievedKnowledge } from './knowledge.js';
 /** Pluggable interface for vector storage (knowledge/RAG) */
 export interface VectorStore {
   upsert(chunk: KnowledgeChunk): void;
+  /** Optional: batch insert in a single atomic transaction — avoids partial-state on error. */
+  upsertMany?(chunks: KnowledgeChunk[]): void;
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[];
   delete(id: string): void;
   listAll(): KnowledgeChunk[];

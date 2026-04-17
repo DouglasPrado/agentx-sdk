@@ -105,5 +105,20 @@ describe('skill-args', () => {
       );
       expect(result).toBe('test.ts and test.ts again');
     });
+
+    it('treats replacement special chars in named args as literals', () => {
+      const result = substituteArgs('Result: $x', '$&', ['x']);
+      expect(result).toBe('Result: $&');
+    });
+
+    it('treats replacement special chars in $ARGS as literals', () => {
+      const result = substituteArgs('Result: $ARGS', 'name extra $& tokens', ['first']);
+      expect(result).toContain('$&');
+    });
+
+    it('treats replacement special chars in ${VAR} substitution as literals', () => {
+      const result = substituteArgs('Use ${X}', '', [], { X: '$&$1' });
+      expect(result).toBe('Use $&$1');
+    });
   });
 });

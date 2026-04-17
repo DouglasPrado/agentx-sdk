@@ -63,6 +63,7 @@ export async function scanMemoryFiles(
   signal?: AbortSignal,
 ): Promise<MemoryHeader[]> {
   try {
+    if (signal?.aborted) return [];
     const entries = await readdir(memoryDir, { recursive: true });
     const mdFiles = entries.filter(
       f => f.endsWith('.md')

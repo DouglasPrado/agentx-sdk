@@ -29,10 +29,16 @@ export function classifyAPIError(error: unknown): unknown {
   }
   if (error instanceof Error) {
     const msg = error.message;
-    if (msg.includes('402')) return new InsufficientCreditsError(msg);
-    if (msg.includes('413')) return new PromptTooLongError(msg);
-    if (msg.includes('529') || (msg.includes('503') && msg.toLowerCase().includes('overload'))) {
-      return new OverloadedError(msg);
+    // Match only the "LLM API error <status>:" prefix produced by fetchAPI,
+    // so unrelated digits in request IDs or error strings don't trigger misclassification.
+    const match = msg.match(/LLM API error (\d+):/);
+    if (match) {
+      const status = Number(match[1]);
+      if (status === 402) return new InsufficientCreditsError(msg);
+      if (status === 413) return new PromptTooLongError(msg);
+      if (status === 529 || (status === 503 && msg.toLowerCase().includes('overload'))) {
+        return new OverloadedError(msg);
+      }
     }
   }
   return error;

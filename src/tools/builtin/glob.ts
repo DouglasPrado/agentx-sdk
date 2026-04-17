@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { matchGlob } from '../../skills/skill-glob.js';
@@ -43,10 +43,13 @@ export function createGlobTool(): AgentTool {
         return { content: `Cannot read directory: ${baseDir}`, isError: true };
       }
 
-      // Match against pattern (relative paths)
+      // Match against pattern (relative paths). Use path.relative + posix-style
+      // separators so `/home/user` does not prefix-match `/home/username`.
       const matched = allFiles.filter(f => {
-        const relative = f.slice(baseDir.length + 1);
-        return matchGlob(pattern, relative);
+        const rel = relative(baseDir, f);
+        if (rel.startsWith('..') || rel === '') return false;
+        const posix = sep === '/' ? rel : rel.split(sep).join('/');
+        return matchGlob(pattern, posix);
       });
 
       if (matched.length === 0) {

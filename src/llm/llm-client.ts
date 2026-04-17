@@ -19,7 +19,18 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
+/**
+ * LLMClient performs automatic retry on RetryableError (HTTP 429 / 5xx).
+ * Non-idempotent POST requests to /chat/completions and /embeddings are retried
+ * only when the server signals rate-limit or server-side failure, where the
+ * request typically did not complete processing. Other failures (4xx) are not
+ * retried. Callers that need strict at-most-once semantics should pass their
+ * own signal and handle failures at the call site.
+ */
 export class LLMClient {
+  /** Default request timeout when caller provides no AbortSignal. */
+  private static readonly DEFAULT_TIMEOUT_MS = 120_000;
+
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;
@@ -91,13 +102,21 @@ export class LLMClient {
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
     );
 
-    const json = await response.json() as {
+    type ChatJson = {
       choices: Array<{
         message: { content?: string; tool_calls?: LLMToolCall[] };
         finish_reason: string;
       }>;
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
     };
+    let json: ChatJson;
+    try {
+      json = await response.json() as ChatJson;
+    } catch (e) {
+      // Ensure body is fully consumed so the HTTP connection is returned to the pool
+      await response.body?.cancel().catch(() => {});
+      throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
     const choice = json.choices[0]!;
     const usage: TokenUsage = {
@@ -123,14 +142,24 @@ export class LLMClient {
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
     );
 
-    const json = await response.json() as {
-      data: Array<{ embedding: number[] }>;
-    };
+    type EmbedJson = { data: Array<{ embedding: number[] }> };
+    let json: EmbedJson;
+    try {
+      json = await response.json() as EmbedJson;
+    } catch (e) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`);
+    }
 
     return json.data.map(d => d.embedding);
   }
 
   private async fetchAPI(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+    // Always apply a default timeout; compose with the caller-provided signal if any.
+    const signals: AbortSignal[] = [AbortSignal.timeout(LLMClient.DEFAULT_TIMEOUT_MS)];
+    if (signal) signals.push(signal);
+    const effectiveSignal = AbortSignal.any(signals);
+
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: {
@@ -138,7 +167,7 @@ export class LLMClient {
         'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
-      signal,
+      signal: effectiveSignal,
     });
 
     if (!response.ok) {
@@ -172,12 +201,23 @@ export class LLMClient {
     // Accumulate tool calls incrementally
     const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
 
+    // Propagate abort to the reader so a hanging read() is unblocked immediately.
+    const abortHandler = (): void => { void reader.cancel().catch(() => {}); };
+    if (signal) {
+      if (signal.aborted) abortHandler();
+      else signal.addEventListener('abort', abortHandler, { once: true });
+    }
+
     try {
       while (true) {
         if (signal?.aborted) break;
 
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // Flush any pending multibyte bytes held in the decoder
+          buffer += decoder.decode();
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -254,6 +294,7 @@ export class LLMClient {
         }
       }
     } finally {
+      if (signal) signal.removeEventListener('abort', abortHandler);
       reader.releaseLock();
     }
   }

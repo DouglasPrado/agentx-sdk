@@ -14,6 +14,8 @@ export interface ContextBuildResult {
   messages: LLMMessage[];
   totalTokens: number;
   injections: ContextInjection[];
+  /** Count of pinned messages that did not fit in the budget and were omitted. */
+  droppedPinnedCount: number;
 }
 
 /**
@@ -56,12 +58,16 @@ export function buildContext(options: {
   const pinned = history.filter(m => m.pinned).slice(0, maxPinnedMessages);
   const unpinned = history.filter(m => !m.pinned);
 
-  // Include pinned first
+  // Include pinned first. Track how many did not fit so the caller can surface
+  // a warning instead of silently losing critical context.
+  let droppedPinnedCount = 0;
   for (const msg of pinned) {
     const tokens = estimateTokens(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
     if (used + tokens <= budget) {
       messages.push(chatMessageToLLM(msg));
       used += tokens;
+    } else {
+      droppedPinnedCount++;
     }
   }
 
@@ -82,7 +88,7 @@ export function buildContext(options: {
   // 4. Merge consecutive same-role messages (API constraint: no consecutive user/user)
   const merged = mergeConsecutiveMessages(messages);
 
-  return { messages: merged, totalTokens: used, injections: appliedInjections };
+  return { messages: merged, totalTokens: used, injections: appliedInjections, droppedPinnedCount };
 }
 
 /**

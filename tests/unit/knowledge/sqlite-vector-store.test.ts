@@ -71,4 +71,12 @@ describe('SQLiteVectorStore', () => {
     const found = results.find(r => r.id === 'up-1');
     expect(found!.content).toBe('version 2');
   });
+
+  it('returns score in [0, 1] even for opposite-direction vectors', () => {
+    store.upsert(createChunk({ id: 'opp', content: 'opposite', embedding: new Float32Array([1, 0, 0, 0]) }));
+    const query = new Float32Array([-1, 0, 0, 0]);
+    const results = store.search(query, 1);
+    expect(results[0]!.score).toBeGreaterThanOrEqual(0);
+    expect(results[0]!.score).toBeLessThanOrEqual(1);
+  });
 });

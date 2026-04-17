@@ -10,21 +10,41 @@
  */
 
 import { z } from 'zod';
-import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import type { AgentTool } from '../contracts/entities/agent-tool.js';
 import { ENTRYPOINT_NAME } from './memory-types.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
-import { sanitizeFilename } from './memory-paths.js';
+import { sanitizeFilename, sanitizeFrontmatterValue, validateMemoryPath, validateMemoryPathResolved, validateThreadId } from './memory-paths.js';
 
 const THREADS_DIR = 'threads';
+
+/**
+ * Per-directory promise-chain mutex for index writes. Multiple concurrent
+ * memory_write calls must not interleave reads and writes on MEMORY.md.
+ */
+const indexLocks = new Map<string, Promise<void>>();
+
+async function withIndexLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
+  const prev = indexLocks.get(dir) ?? Promise.resolve();
+  const result = prev.then(() => fn());
+  const tail = result.then(() => {}, () => {});
+  indexLocks.set(dir, tail);
+  // Opportunistically drop completed locks so the Map doesn't grow unbounded
+  void tail.finally(() => {
+    if (indexLocks.get(dir) === tail) indexLocks.delete(dir);
+  });
+  return result;
+}
 
 /**
  * Resolve the effective directory for memory operations.
  */
 function resolveDir(memoryDir: string, threadId?: string): string {
   if (!threadId) return memoryDir;
-  return join(memoryDir, THREADS_DIR, threadId);
+  const safeId = validateThreadId(threadId);
+  if (!safeId) throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
+  return join(memoryDir, THREADS_DIR, safeId);
 }
 
 /**
@@ -32,6 +52,7 @@ function resolveDir(memoryDir: string, threadId?: string): string {
  */
 function validateFilename(filename: string): string | null {
   if (!filename || filename.includes('\0')) return 'Invalid filename';
+  if (/[\r\n\t]/.test(filename)) return 'Filename contains invalid whitespace characters';
   if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
     return 'Path traversal not allowed';
   }
@@ -45,6 +66,18 @@ function validateFilename(filename: string): string | null {
  */
 export function createMemoryTools(memoryDir: string, threadId?: string): AgentTool[] {
   const dir = resolveDir(memoryDir, threadId);
+
+  /** Defense-in-depth: ensure the resolved path stays inside memoryDir (sync, shallow). */
+  const safeJoin = (filename: string): string | null => {
+    const candidate = join(dir, filename);
+    return validateMemoryPath(candidate, memoryDir) ?? null;
+  };
+
+  /** Like safeJoin, but resolves symlinks via realpath to prevent symlink escape. */
+  const safeJoinResolved = async (filename: string): Promise<string | null> => {
+    const candidate = join(dir, filename);
+    return (await validateMemoryPathResolved(candidate, memoryDir)) ?? null;
+  };
 
   const memoryList: AgentTool = {
     name: 'memory_list',
@@ -72,8 +105,11 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       const err = validateFilename(filename);
       if (err) return { content: err, isError: true };
 
+      const safePath = await safeJoinResolved(filename);
+      if (!safePath) return { content: 'Invalid path', isError: true };
+
       try {
-        const content = await readFile(join(dir, filename), 'utf-8');
+        const content = await readFile(safePath, 'utf-8');
         return content;
       } catch {
         return { content: `File not found: ${filename}`, isError: true };
@@ -94,10 +130,14 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       const args = rawArgs as { name: string; description: string; type: string; content: string };
       const filename = sanitizeFilename(args.name);
 
+      await mkdir(dir, { recursive: true });
+      const safePath = safeJoin(filename);
+      if (!safePath) return { content: 'Invalid path', isError: true };
+
       const fileContent = [
         '---',
-        `name: ${args.name}`,
-        `description: ${args.description}`,
+        `name: ${sanitizeFrontmatterValue(args.name)}`,
+        `description: ${sanitizeFrontmatterValue(args.description)}`,
         `type: ${args.type}`,
         '---',
         '',
@@ -105,7 +145,7 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
         '',
       ].join('\n');
 
-      await writeFile(join(dir, filename), fileContent, 'utf-8');
+      await writeFile(safePath, fileContent, 'utf-8');
       await addToIndex(dir, filename, args.description);
       return `Memory saved: ${filename}`;
     },
@@ -125,7 +165,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       const err = validateFilename(args.filename);
       if (err) return { content: err, isError: true };
 
-      const filePath = join(dir, args.filename);
+      const filePath = await safeJoinResolved(args.filename);
+      if (!filePath) return { content: 'Invalid path', isError: true };
 
       // Read existing to preserve frontmatter fields
       let existingContent: string;
@@ -142,8 +183,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 
       const fileContent = [
         '---',
-        `name: ${name}`,
-        `description: ${description}`,
+        `name: ${sanitizeFrontmatterValue(name)}`,
+        `description: ${sanitizeFrontmatterValue(description)}`,
         `type: ${type}`,
         '---',
         '',
@@ -168,8 +209,11 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       const err = validateFilename(filename);
       if (err) return { content: err, isError: true };
 
+      const safePath = await safeJoinResolved(filename);
+      if (!safePath) return { content: 'Invalid path', isError: true };
+
       try {
-        await unlink(join(dir, filename));
+        await unlink(safePath);
       } catch {
         return { content: `File not found: ${filename}`, isError: true };
       }
@@ -185,24 +229,31 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 // --- Index helpers (mirror FileMemorySystem's private methods) ---
 
 async function addToIndex(dir: string, filename: string, description: string): Promise<void> {
-  const entrypoint = join(dir, ENTRYPOINT_NAME);
-  let existing = '';
-  try {
-    existing = await readFile(entrypoint, 'utf-8');
-  } catch { /* File doesn't exist yet */ }
+  await withIndexLock(dir, async () => {
+    const entrypoint = join(dir, ENTRYPOINT_NAME);
+    let existing = '';
+    try {
+      existing = await readFile(entrypoint, 'utf-8');
+    } catch { /* File doesn't exist yet */ }
 
-  if (existing.includes(`(${filename})`)) return;
+    if (existing.includes(`(${filename})`)) return;
 
-  const newEntry = `- [${description}](${filename}) — ${description}`;
-  const updated = existing ? `${existing.trimEnd()}\n${newEntry}\n` : `${newEntry}\n`;
-  await writeFile(entrypoint, updated, 'utf-8');
+    const safeDesc = sanitizeFrontmatterValue(description);
+    const newEntry = `- [${safeDesc}](${filename}) — ${safeDesc}`;
+    const updated = existing ? `${existing.trimEnd()}\n${newEntry}\n` : `${newEntry}\n`;
+    try {
+      await writeFile(entrypoint, updated, 'utf-8');
+    } catch { /* index update is non-critical — ignore I/O failures */ }
+  });
 }
 
 async function removeFromIndex(dir: string, filename: string): Promise<void> {
-  const entrypoint = join(dir, ENTRYPOINT_NAME);
-  try {
-    const content = await readFile(entrypoint, 'utf-8');
-    const lines = content.split('\n').filter(line => !line.includes(`(${filename})`));
-    await writeFile(entrypoint, lines.join('\n'), 'utf-8');
-  } catch { /* Index doesn't exist */ }
+  await withIndexLock(dir, async () => {
+    const entrypoint = join(dir, ENTRYPOINT_NAME);
+    try {
+      const content = await readFile(entrypoint, 'utf-8');
+      const lines = content.split('\n').filter(line => !line.includes(`(${filename})`));
+      await writeFile(entrypoint, lines.join('\n'), 'utf-8');
+    } catch { /* Index doesn't exist */ }
+  });
 }

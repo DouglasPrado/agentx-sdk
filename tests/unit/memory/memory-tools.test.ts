@@ -206,6 +206,38 @@ describe('memory-tools', () => {
     });
   });
 
+  describe('filename validation', () => {
+    it('rejects filenames containing newlines', async () => {
+      const tool = findTool(tools, 'memory_read');
+      const result = await tool.execute({ filename: 'file\nEVIL.md' }, signal);
+      const res = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(res.isError).toBe(true);
+    });
+
+    it('rejects filenames containing carriage returns', async () => {
+      const tool = findTool(tools, 'memory_delete');
+      const result = await tool.execute({ filename: 'file\rEVIL.md' }, signal);
+      const res = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(res.isError).toBe(true);
+    });
+  });
+
+  describe('frontmatter injection prevention', () => {
+    it('sanitizes newlines in name and description when writing', async () => {
+      const tool = findTool(tools, 'memory_write');
+      await tool.execute({
+        name: 'Safe Name',
+        description: 'Line one\nmalicious: injected',
+        type: 'user',
+        content: 'body',
+      }, signal);
+
+      const fileContent = await readFile(join(tempDir, 'safe-name.md'), 'utf-8');
+      const fm = fileContent.split('---')[1] ?? '';
+      expect(fm).not.toMatch(/^malicious:/m);
+    });
+  });
+
   describe('thread-scoped tools', () => {
     it('operates within thread subdirectory', async () => {
       const threadDir = join(tempDir, 'threads', 'thread-42');

@@ -297,6 +297,11 @@ export class SkillManager {
     return [...this.invokedSkills];
   }
 
+  /** Clear the invocation tracking set — call on session reset to avoid unbounded growth. */
+  clearInvokedSkills(): void {
+    this.invokedSkills.clear();
+  }
+
   // ---------------------------------------------------------------------------
   // Sticky session management
   // ---------------------------------------------------------------------------
