@@ -64,6 +64,40 @@ describe('LLMClient', () => {
       expect(body.tools[0].function.name).toBe('test');
     });
 
+    it('should send max_completion_tokens for reasoning models (gpt-5)', async () => {
+      const fetchSpy = mockFetch(new Response(JSON.stringify({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      }), { status: 200 }));
+
+      await client.chat({
+        model: 'openai/gpt-5.4',
+        messages: [{ role: 'user', content: 'Hi' }],
+        maxTokens: 512,
+      });
+
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      expect(body.max_completion_tokens).toBe(512);
+      expect(body.max_tokens).toBeUndefined();
+    });
+
+    it('should send max_tokens for non-reasoning models', async () => {
+      const fetchSpy = mockFetch(new Response(JSON.stringify({
+        choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      }), { status: 200 }));
+
+      await client.chat({
+        model: 'openai/gpt-4o',
+        messages: [{ role: 'user', content: 'Hi' }],
+        maxTokens: 512,
+      });
+
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      expect(body.max_tokens).toBe(512);
+      expect(body.max_completion_tokens).toBeUndefined();
+    });
+
     it('should throw on non-retryable HTTP errors', async () => {
       mockFetch(new Response('Bad Request', { status: 400 }));
 

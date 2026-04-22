@@ -7,7 +7,7 @@ import type {
 } from './message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import { retry } from '../utils/retry.js';
-import { buildReasoningArgs, requiresNoSystemRole } from './reasoning.js';
+import { buildReasoningArgs, isReasoningModel, requiresNoSystemRole } from './reasoning.js';
 
 export interface LLMClientConfig {
   apiKey: string;
@@ -63,7 +63,10 @@ export class LLMClient {
     if (params.temperature !== undefined) body.temperature = params.temperature;
     if (params.responseFormat) body.response_format = params.responseFormat;
     if (params.seed !== undefined) body.seed = params.seed;
-    if (params.maxTokens !== undefined) body.max_tokens = params.maxTokens;
+    if (params.maxTokens !== undefined) {
+      if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;
+      else body.max_tokens = params.maxTokens;
+    }
 
     const response = await retry(
       () => this.fetchAPI('/chat/completions', body, params.signal),
@@ -95,7 +98,10 @@ export class LLMClient {
     if (params.temperature !== undefined) body.temperature = params.temperature;
     if (params.responseFormat) body.response_format = params.responseFormat;
     if (params.seed !== undefined) body.seed = params.seed;
-    if (params.maxTokens !== undefined) body.max_tokens = params.maxTokens;
+    if (params.maxTokens !== undefined) {
+      if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;
+      else body.max_tokens = params.maxTokens;
+    }
 
     const response = await retry(
       () => this.fetchAPI('/chat/completions', body, params.signal),
