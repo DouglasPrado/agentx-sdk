@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -88,6 +92,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Sync with the latest main before bumping so we never start from a
+          # stale SHA when multiple PRs are merged in quick succession.
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
 
           NEW_VERSION=$(npm version ${{ steps.bump.outputs.type }} --no-git-tag-version)
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
