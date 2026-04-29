@@ -19,6 +19,18 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
+const MAX_ERROR_BODY = 500;
+
+function sanitizeErrorBody(text: string): string {
+  const truncated = text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
+  try {
+    const parsed = JSON.parse(truncated);
+    const msg = parsed?.error?.message ?? parsed?.message;
+    if (typeof msg === 'string') return msg.slice(0, MAX_ERROR_BODY);
+  } catch { /* not JSON — return truncated plain text */ }
+  return truncated;
+}
+
 /**
  * LLMClient performs automatic retry on RetryableError (HTTP 429 / 5xx).
  * Non-idempotent POST requests to /chat/completions and /embeddings are retried
@@ -190,7 +202,7 @@ export class LLMClient {
         throw new RetryableError(`LLM API error: ${response.status}`, retryAfterMs);
       }
       const text = await response.text().catch(() => '');
-      throw new Error(`LLM API error ${response.status}: ${text}`);
+      throw new Error(`LLM API error ${response.status}: ${sanitizeErrorBody(text)}`);
     }
 
     return response;
