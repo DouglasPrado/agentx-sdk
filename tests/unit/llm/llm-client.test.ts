@@ -105,6 +105,41 @@ describe('LLMClient', () => {
         messages: [{ role: 'user', content: 'Hi' }],
       })).rejects.toThrow('LLM API error 400');
     });
+
+    it('should truncate large error bodies to avoid leaking conversation content (issue #8)', async () => {
+      // Simulate an API that echoes request content in error messages (e.g. OpenRouter)
+      const sensitiveContent = 'SENSITIVE_USER_DATA: ' + 'x'.repeat(1000);
+      mockFetch(new Response(sensitiveContent, { status: 400 }));
+
+      let errorMessage = '';
+      try {
+        await client.chat({ messages: [{ role: 'user', content: 'Hi' }] });
+      } catch (e) {
+        errorMessage = (e as Error).message;
+      }
+
+      // Error must not include the full 1000-char sensitive body
+      expect(errorMessage.length).toBeLessThan(600);
+      expect(errorMessage).not.toContain('x'.repeat(600));
+    });
+
+    it('should extract structured error message from JSON error body (issue #8)', async () => {
+      const jsonBody = JSON.stringify({
+        error: { message: 'Model context limit exceeded', code: 400 },
+      });
+      mockFetch(new Response(jsonBody, { status: 400 }));
+
+      let errorMessage = '';
+      try {
+        await client.chat({ messages: [{ role: 'user', content: 'Hi' }] });
+      } catch (e) {
+        errorMessage = (e as Error).message;
+      }
+
+      // Should extract the structured message, not include raw JSON envelope
+      expect(errorMessage).toContain('Model context limit exceeded');
+      expect(errorMessage).not.toContain('"error"');
+    });
   });
 
   describe('streamChat()', () => {
