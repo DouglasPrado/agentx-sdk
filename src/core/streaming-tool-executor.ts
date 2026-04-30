@@ -72,12 +72,15 @@ export class StreamingToolExecutor {
   *getCompletedResults(): Generator<ToolExecutionResult> {
     for (const tool of this.tools) {
       if (tool.status === 'completed') {
+        if (tool.result === undefined || tool.duration === undefined) {
+          throw new Error(`Tool "${tool.id}" completed but result or duration not set`);
+        }
         tool.status = 'yielded';
         yield {
           id: tool.id,
           name: tool.name,
-          result: tool.result!,
-          duration: tool.duration!,
+          result: tool.result,
+          duration: tool.duration,
         };
       } else if (tool.status !== 'yielded') {
         break;
@@ -107,12 +110,16 @@ export class StreamingToolExecutor {
         await tool.promise;
       }
 
+      if (tool.result === undefined || tool.duration === undefined) {
+        throw new Error(`Tool "${tool.id}" completed but result or duration not set`);
+      }
+
       tool.status = 'yielded';
       yield {
         id: tool.id,
         name: tool.name,
-        result: tool.result!,
-        duration: tool.duration!,
+        result: tool.result,
+        duration: tool.duration,
       };
     }
   }
