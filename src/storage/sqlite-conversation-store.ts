@@ -63,7 +63,13 @@ function rowToMessage(row: ConversationRow): ChatMessage {
 
   let toolCalls: ChatMessage['toolCalls'];
   if (row.tool_calls) {
-    try { toolCalls = JSON.parse(row.tool_calls); } catch { toolCalls = undefined; }
+    try {
+      toolCalls = JSON.parse(row.tool_calls);
+    } catch (e) {
+      throw new Error(
+        `Corrupted tool_calls in conversation row id=${row.id}, thread=${row.thread_id}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   return {
