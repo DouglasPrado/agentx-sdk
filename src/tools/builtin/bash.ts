@@ -34,7 +34,16 @@ const BashParams = z.object({
     .describe('Timeout in milliseconds. Default: 120000 (2 minutes). Max: 300000 (5 minutes).'),
 });
 
-export function createBashTool(): AgentTool {
+export interface BashToolOptions {
+  /** Restrict the subprocess working directory. Commands run relative to this path. */
+  workingDir?: string;
+  /** If set, only commands whose first token matches a prefix in this list are allowed. */
+  allowedCommands?: string[];
+}
+
+export function createBashTool(options: BashToolOptions = {}): AgentTool {
+  const { workingDir, allowedCommands } = options;
+
   return {
     name: 'Bash',
     description: 'Execute a shell command and return stdout/stderr.',
@@ -44,6 +53,18 @@ export function createBashTool(): AgentTool {
 
     async execute(rawArgs: unknown, signal: AbortSignal) {
       const { command, timeout } = BashParams.parse(rawArgs);
+
+      if (allowedCommands && allowedCommands.length > 0) {
+        const firstToken = command.trimStart().split(/\s+/)[0] ?? '';
+        const allowed = allowedCommands.some(prefix => firstToken === prefix || firstToken.startsWith(prefix + ' '));
+        if (!allowed) {
+          return {
+            content: `Command not allowed by allowedCommands policy. Allowed prefixes: ${allowedCommands.join(', ')}`,
+            isError: true,
+          };
+        }
+      }
+
       const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT;
 
       return new Promise<string | { content: string; isError?: boolean }>((resolve) => {
@@ -51,6 +72,7 @@ export function createBashTool(): AgentTool {
           timeout: effectiveTimeout,
           maxBuffer: MAX_OUTPUT,
           shell: process.env.SHELL || '/bin/sh',
+          ...(workingDir ? { cwd: workingDir } : {}),
           // Detach on POSIX so the child gets its own process group —
           // lets us kill the whole tree (including backgrounded grandchildren).
           ...(process.platform !== 'win32' ? { detached: true } : {}),
