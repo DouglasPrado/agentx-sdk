@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { ZodError } from 'zod';
 import { MCPAdapter, type MCPHealthStatus } from '../../../src/tools/mcp-adapter.js';
 import type { ToolExecutor } from '../../../src/tools/tool-executor.js';
 
@@ -620,6 +621,51 @@ describe('MCPAdapter', () => {
     });
   });
 
+  describe('Zod validation of server responses (issue #28)', () => {
+    it('listResources should return empty when resource is missing required uri field', async () => {
+      (mockClient as Record<string, unknown>).listResources = vi.fn().mockResolvedValue({
+        resources: [{ name: 'no-uri-here' }], // uri is required but missing
+      });
+
+      await adapter.connect({ name: 'zod-res', transport: 'stdio', command: 'node' });
+      const result = await adapter.listResources('zod-res');
+
+      // Without Zod: returns [{ name: 'no-uri-here', uri: undefined, serverName: 'zod-res' }]
+      // With Zod: parse fails → catch returns []
+      expect(result).toHaveLength(0);
+
+      delete (mockClient as Record<string, unknown>).listResources;
+    });
+
+    it('readResource should throw ZodError when contents is not an array', async () => {
+      (mockClient as Record<string, unknown>).readResource = vi.fn().mockResolvedValue({
+        contents: 'not-an-array',
+      });
+
+      await adapter.connect({ name: 'zod-read', transport: 'stdio', command: 'node' });
+
+      // Without Zod: throws TypeError ('not-an-array'.map is not a function)
+      // With Zod: throws ZodError with descriptive validation message
+      await expect(adapter.readResource('zod-read', 'file:///x')).rejects.toBeInstanceOf(ZodError);
+
+      delete (mockClient as Record<string, unknown>).readResource;
+    });
+
+    it('getPrompt should throw ZodError when messages is not an array', async () => {
+      (mockClient as Record<string, unknown>).getPrompt = vi.fn().mockResolvedValue({
+        messages: 'not-an-array',
+      });
+
+      await adapter.connect({ name: 'zod-prompt', transport: 'stdio', command: 'node' });
+
+      // Without Zod: throws TypeError ('not-an-array'.map is not a function)
+      // With Zod: throws ZodError with descriptive validation message
+      await expect(adapter.getPrompt('zod-prompt', 'p')).rejects.toBeInstanceOf(ZodError);
+
+      delete (mockClient as Record<string, unknown>).getPrompt;
+    });
+  });
+
   describe('connectWithFallback — auto transport', () => {
     const mockStreamableTransport = vi.fn().mockImplementation(() => ({}));
 
@@ -672,6 +718,121 @@ describe('MCPAdapter', () => {
       });
 
       expect(tools).toHaveLength(2);
+    });
+  });
+
+  describe('Zod validation in readResource / getPrompt / listResources (issue #28)', () => {
+    it('readResource should throw clear error when server returns invalid shape', async () => {
+      (mockClient as Record<string, unknown>).readResource = vi.fn().mockResolvedValue({
+        notContents: 'unexpected',  // missing required `contents` array
+      });
+
+      await adapter.connect({ name: 'bad-read', transport: 'stdio', command: 'node' });
+
+      await expect(adapter.readResource('bad-read', 'file:///x.txt'))
+        .rejects.toThrow(/invalid.*shape|invalid resource/i);
+
+      delete (mockClient as Record<string, unknown>).readResource;
+    });
+
+    it('getPrompt should throw clear error when server returns invalid shape', async () => {
+      (mockClient as Record<string, unknown>).getPrompt = vi.fn().mockResolvedValue({
+        notMessages: 'unexpected',  // missing required `messages` array
+      });
+
+      await adapter.connect({ name: 'bad-prompt', transport: 'stdio', command: 'node' });
+
+      await expect(adapter.getPrompt('bad-prompt', 'p'))
+        .rejects.toThrow(/invalid.*shape|invalid prompt/i);
+
+      delete (mockClient as Record<string, unknown>).getPrompt;
+    });
+
+    it('listResources should return empty when server returns invalid shape', async () => {
+      (mockClient as Record<string, unknown>).listResources = vi.fn().mockResolvedValue({
+        notResources: 'unexpected',  // missing required `resources` array
+      });
+
+      await adapter.connect({ name: 'bad-list', transport: 'stdio', command: 'node' });
+      const result = await adapter.listResources('bad-list');
+      expect(result).toEqual([]);  // graceful fallback for list operation
+
+      delete (mockClient as Record<string, unknown>).listResources;
+  describe('healthCheck race condition (issue #24)', () => {
+    it('concurrent healthCheck fires should not start multiple reconnect attempts', async () => {
+      // Regression test: if healthCheck fires while a reconnect is in progress,
+      // only ONE reconnect process should be active (status window elimination).
+      vi.useFakeTimers();
+
+      let reconnectConnectCalls = 0;
+      mockClient.listTools
+        .mockResolvedValueOnce({ tools: [] }) // initial connect
+        .mockRejectedValue(new Error('conn lost')); // all health checks fail
+      mockClient.connect
+        .mockResolvedValueOnce(undefined) // initial connect succeeds
+        .mockImplementation(async () => {
+          reconnectConnectCalls++;
+        });
+
+      await adapter.connect({
+        name: 'hc-race',
+        transport: 'stdio',
+        command: 'node',
+        healthCheckInterval: 100,
+        maxRetries: 1, // one reconnect attempt per reconnect cycle
+      });
+
+      // Advance 200ms: healthCheck fires at 100ms and 200ms.
+      // Both fail → buggy code starts TWO reconnect processes;
+      // fixed code starts ONE (second healthCheck returns early).
+      await vi.advanceTimersByTimeAsync(200);
+
+      // Advance past reconnect delays: first attempt delay=1000ms (starts at 100ms, fires at 1100ms);
+      // a second reconnect (if started at 200ms) fires at 1200ms.
+      await vi.advanceTimersByTimeAsync(2000);
+
+      // Fixed code: exactly 1 reconnect connect call (one process, one attempt).
+      // Buggy code: 2 reconnect connect calls (two concurrent processes, one attempt each).
+      expect(reconnectConnectCalls).toBe(1);
+
+      vi.useRealTimers();
+      await adapter.disconnectAll();
+    });
+
+    it('healthCheck while reconnecting should skip (status stays reconnecting)', async () => {
+      // After the first healthCheck failure, status should go to 'reconnecting'.
+      // A subsequent healthCheck must NOT overwrite it back to 'error' nor spawn a second reconnect.
+      vi.useFakeTimers();
+
+      mockClient.listTools
+        .mockResolvedValueOnce({ tools: [] })
+        .mockRejectedValue(new Error('conn lost'));
+      mockClient.connect
+        .mockResolvedValueOnce(undefined) // initial
+        .mockImplementation(async () => { /* reconnect — completes */ });
+
+      await adapter.connect({
+        name: 'hc-status',
+        transport: 'stdio',
+        command: 'node',
+        healthCheckInterval: 100,
+        maxRetries: 1,
+      });
+
+      // Fire first health check — should transition to 'reconnecting'
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Fire second health check while first reconnect's delay is pending
+      // Fixed code: guard at top of healthCheck skips; status stays 'reconnecting'.
+      // Buggy code: listTools fails → status set to 'error' (briefly) then reconnecting again.
+      await vi.advanceTimersByTimeAsync(100);
+
+      // After the second fire, status must still be 'reconnecting' (not 'error')
+      const status = adapter.getHealth().servers.find(s => s.name === 'hc-status')?.status;
+      expect(status).toBe('reconnecting');
+
+      vi.useRealTimers();
+      await adapter.disconnectAll();
     });
   });
 

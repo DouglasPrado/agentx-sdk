@@ -5,6 +5,50 @@ import type { MCPConnectionConfig } from '../config/config.js';
 import type { ToolExecutor } from './tool-executor.js';
 import { jsonSchemaToZod } from './json-schema-to-zod.js';
 
+/** Validated shape of listResources server response. */
+const ListResourcesResultSchema = z.object({
+const MCPResourceListSchema = z.object({
+  resources: z.array(z.object({
+    uri: z.string(),
+    name: z.string(),
+    mimeType: z.string().optional(),
+    description: z.string().optional(),
+  }).passthrough()),
+});
+
+/** Validated shape of readResource server response. */
+const ReadResourceResultSchema = z.object({
+  contents: z.array(z.object({
+    text: z.string().optional(),
+    uri: z.string(),
+  }).passthrough()),
+});
+
+/** Validated shape of getPrompt server response. */
+const GetPromptResultSchema = z.object({
+  messages: z.array(z.object({
+    role: z.string(),
+    content: z.union([
+      z.string(),
+      z.object({ type: z.string(), text: z.string().optional() }).passthrough(),
+    ]),
+  })),
+});
+
+const MCPResourceReadSchema = z.object({
+  contents: z.array(z.object({
+    text: z.string().optional(),
+    uri: z.string(),
+  })),
+});
+
+const MCPGetPromptSchema = z.object({
+  messages: z.array(z.object({
+    role: z.string(),
+    content: z.union([z.string(), z.object({ type: z.string(), text: z.string().optional() }).passthrough()]),
+  })),
+});
+
 /** Shape of the content array returned from MCP server tool calls. */
 const MCPToolContentSchema = z.array(
   z.object({
@@ -224,11 +268,12 @@ export class MCPAdapter {
     if (!conn || conn.status !== 'connected') return [];
 
     try {
-      const result = await (conn.client as unknown as {
-        listResources?: () => Promise<{ resources: Array<{ uri: string; name: string; mimeType?: string; description?: string }> }>;
+      const raw = await (conn.client as unknown as {
+        listResources?: () => Promise<unknown>;
       }).listResources?.();
-      if (!result) return [];
-      return result.resources.map(r => ({ ...r, serverName }));
+      if (!raw) return [];
+      const parsed = ListResourcesResultSchema.parse(raw);
+      return parsed.resources.map(r => ({ ...r, serverName }));
     } catch {
       return [];
     }
@@ -241,12 +286,13 @@ export class MCPAdapter {
       throw new Error(`MCP server "${serverName}" not connected`);
     }
 
-    const result = await (conn.client as unknown as {
-      readResource?: (params: { uri: string }) => Promise<{ contents: Array<{ text?: string; uri: string }> }>;
+    const raw = await (conn.client as unknown as {
+      readResource?: (params: { uri: string }) => Promise<unknown>;
     }).readResource?.({ uri });
-    if (!result) throw new Error('Server does not support resources');
+    if (!raw) throw new Error('Server does not support resources');
 
-    return result.contents.map(c => c.text ?? `[Binary: ${c.uri}]`).join('\n');
+    const parsed = ReadResourceResultSchema.parse(raw);
+    return parsed.contents.map(c => c.text ?? `[Binary: ${c.uri}]`).join('\n');
   }
 
   /** Fetch and return a prompt from a server (for skill getPrompt). */
@@ -258,22 +304,20 @@ export class MCPAdapter {
 
     const parsedArgs: Record<string, string> = {};
     if (args) {
-      // Simple key=value parsing from args string
       for (const part of args.split(/\s+/)) {
         const [k, ...v] = part.split('=');
         if (k && v.length > 0) parsedArgs[k] = v.join('=');
       }
     }
 
-    const result = await (conn.client as unknown as {
-      getPrompt?: (params: { name: string; arguments?: Record<string, string> }) => Promise<{
-        messages: Array<{ role: string; content: { type: string; text?: string } | string }>;
-      }>;
+    const raw = await (conn.client as unknown as {
+      getPrompt?: (params: { name: string; arguments?: Record<string, string> }) => Promise<unknown>;
     }).getPrompt?.({ name: promptName, arguments: parsedArgs });
 
-    if (!result) throw new Error('Server does not support prompts');
+    if (!raw) throw new Error('Server does not support prompts');
 
-    return result.messages.map(m => {
+    const parsed = GetPromptResultSchema.parse(raw);
+    return parsed.messages.map(m => {
       const content = typeof m.content === 'string' ? m.content : m.content.text ?? '';
       return content;
     }).join('\n');
@@ -412,25 +456,25 @@ export class MCPAdapter {
   private async healthCheck(name: string): Promise<void> {
     const conn = this.connections.get(name);
     if (!conn) return;
+    // Skip if a reconnect is already in progress — prevents concurrent reconnects.
+    if (conn.status === 'reconnecting') return;
 
     try {
       await conn.client.listTools();
       conn.status = 'connected';
       conn.lastError = undefined;
     } catch (error) {
-      conn.status = 'error';
+      // Set reconnecting BEFORE firing attemptReconnect to close the race window.
+      conn.status = 'reconnecting';
       conn.lastError = error instanceof Error ? error.message : String(error);
-
-      // Attempt reconnection
       void this.attemptReconnect(name);
     }
   }
 
   private async attemptReconnect(name: string): Promise<void> {
     const conn = this.connections.get(name);
-    if (!conn || conn.status === 'reconnecting') return;
-
-    conn.status = 'reconnecting';
+    if (!conn) return;
+    // Status is already 'reconnecting' (set atomically in healthCheck).
     const maxRetries = conn.config.maxRetries ?? 3;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
