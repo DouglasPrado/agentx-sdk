@@ -46,6 +46,41 @@ describe('builtin/bash', () => {
     expect(content).toContain('line2');
   });
 
+  describe('sandboxing: workingDir + allowedCommands (issue #23)', () => {
+    it('should restrict cwd to workingDir when set', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tool = createBashTool({ workingDir: '/tmp' } as any);
+      const result = await tool.execute({ command: 'pwd' }, signal);
+      const content = (typeof result === 'string' ? result : result.content).trim();
+      // Must run inside /tmp, not the process cwd
+      expect(content).toBe('/tmp');
+    });
+
+    it('should allow commands matching allowedCommands prefixes', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tool = createBashTool({ allowedCommands: ['echo', 'pwd'] } as any);
+      const result = await tool.execute({ command: 'echo allowed' }, signal);
+      const content = typeof result === 'string' ? result : result.content;
+      expect(content).toContain('allowed');
+    });
+
+    it('should block commands not in allowedCommands', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tool = createBashTool({ allowedCommands: ['echo'] } as any);
+      const result = await tool.execute({ command: 'ls /' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/not allowed|allowedCommands/i);
+    });
+
+    it('should allow all commands when allowedCommands is not set', async () => {
+      const tool = createBashTool();  // no restrictions
+      const result = await tool.execute({ command: 'echo unrestricted' }, signal);
+      const content = typeof result === 'string' ? result : result.content;
+      expect(content).toContain('unrestricted');
+    });
+  });
+
   describe('timeout parameter bounds (issue #9)', () => {
     it('should reject timeout=0 (would disable exec timeout)', async () => {
       const tool = createBashTool();
