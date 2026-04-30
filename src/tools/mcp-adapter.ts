@@ -7,6 +7,7 @@ import { jsonSchemaToZod } from './json-schema-to-zod.js';
 
 /** Validated shape of listResources server response. */
 const ListResourcesResultSchema = z.object({
+const MCPResourceListSchema = z.object({
   resources: z.array(z.object({
     uri: z.string(),
     name: z.string(),
@@ -31,6 +32,20 @@ const GetPromptResultSchema = z.object({
       z.string(),
       z.object({ type: z.string(), text: z.string().optional() }).passthrough(),
     ]),
+  })),
+});
+
+const MCPResourceReadSchema = z.object({
+  contents: z.array(z.object({
+    text: z.string().optional(),
+    uri: z.string(),
+  })),
+});
+
+const MCPGetPromptSchema = z.object({
+  messages: z.array(z.object({
+    role: z.string(),
+    content: z.union([z.string(), z.object({ type: z.string(), text: z.string().optional() }).passthrough()]),
   })),
 });
 
@@ -289,7 +304,6 @@ export class MCPAdapter {
 
     const parsedArgs: Record<string, string> = {};
     if (args) {
-      // Simple key=value parsing from args string
       for (const part of args.split(/\s+/)) {
         const [k, ...v] = part.split('=');
         if (k && v.length > 0) parsedArgs[k] = v.join('=');
@@ -442,25 +456,25 @@ export class MCPAdapter {
   private async healthCheck(name: string): Promise<void> {
     const conn = this.connections.get(name);
     if (!conn) return;
+    // Skip if a reconnect is already in progress — prevents concurrent reconnects.
+    if (conn.status === 'reconnecting') return;
 
     try {
       await conn.client.listTools();
       conn.status = 'connected';
       conn.lastError = undefined;
     } catch (error) {
-      conn.status = 'error';
+      // Set reconnecting BEFORE firing attemptReconnect to close the race window.
+      conn.status = 'reconnecting';
       conn.lastError = error instanceof Error ? error.message : String(error);
-
-      // Attempt reconnection
       void this.attemptReconnect(name);
     }
   }
 
   private async attemptReconnect(name: string): Promise<void> {
     const conn = this.connections.get(name);
-    if (!conn || conn.status === 'reconnecting') return;
-
-    conn.status = 'reconnecting';
+    if (!conn) return;
+    // Status is already 'reconnecting' (set atomically in healthCheck).
     const maxRetries = conn.config.maxRetries ?? 3;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
