@@ -270,6 +270,29 @@ describe('StreamingToolExecutor', () => {
     expect(results).toHaveLength(2);
   });
 
+  it('should return error result for malformed JSON args instead of using {} (#61)', async () => {
+    const executor = new ToolExecutor();
+    const mockExecute = vi.fn().mockResolvedValue('should not be called');
+    executor.register(createTool({
+      name: 'my_tool',
+      execute: mockExecute,
+    }));
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c_bad', 'my_tool', '{invalid json{{');
+
+    const results: Array<{ id: string; result: { content: string; isError?: boolean } }> = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.id).toBe('c_bad');
+    expect(results[0]!.result.isError).toBe(true);
+    expect(results[0]!.result.content).toMatch(/JSON/i);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
   it('should parse tool args exactly once per tool call (issue #3)', async () => {
     // Double JSON.parse wastes CPU and creates inconsistency when JSON is malformed.
     // parsedArgs computed in addTool() must be reused in executeTool() without re-parsing.
