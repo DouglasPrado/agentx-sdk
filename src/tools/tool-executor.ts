@@ -156,7 +156,10 @@ export class ToolExecutor {
   }
 
   async executeParallel(calls: ToolCallRequest[], signal?: AbortSignal): Promise<AgentToolResult[]> {
-    return Promise.all(calls.map(call => this.execute(call.name, call.args, signal)));
+    const callsWithId = calls.map((c, i) => ({ id: String(i), name: c.name, args: c.args }));
+    const results = await this.executePartitioned(callsWithId, signal);
+    results.sort((a, b) => Number(a.id) - Number(b.id));
+    return results.map(r => r.result);
   }
 
   /**
