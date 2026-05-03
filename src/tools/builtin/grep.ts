@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { matchGlob } from '../../skills/skill-glob.js';
+import { assertSafePath } from './path-guard.js';
 
 const DEFAULT_MAX_RESULTS = 50;
 
@@ -36,7 +37,7 @@ async function collectFiles(dir: string, globPattern?: string): Promise<string[]
   return results;
 }
 
-export function createGrepTool(): AgentTool {
+export function createGrepTool(workingDir?: string): AgentTool {
   return {
     name: 'Grep',
     description: 'Search file contents using regex. Returns matching lines with file paths and line numbers.',
@@ -46,7 +47,16 @@ export function createGrepTool(): AgentTool {
 
     async execute(rawArgs: unknown, signal: AbortSignal) {
       const { pattern, path: searchPath, glob: globFilter, max_results } = rawArgs as z.infer<typeof GrepParams>;
-      const baseDir = searchPath || process.cwd();
+
+      if (workingDir && searchPath) {
+        try {
+          assertSafePath(searchPath, workingDir);
+        } catch (error) {
+          return { content: (error as Error).message, isError: true };
+        }
+      }
+
+      const baseDir = searchPath || workingDir || process.cwd();
       const maxResults = max_results ?? DEFAULT_MAX_RESULTS;
 
       // Reject patterns that can cause catastrophic backtracking (ReDoS).
