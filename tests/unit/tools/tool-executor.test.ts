@@ -91,8 +91,8 @@ describe('ToolExecutor', () => {
     const slow = vi.fn().mockImplementation(() => new Promise(r => setTimeout(() => r('a'), 50)));
     const fast = vi.fn().mockResolvedValue('b');
 
-    executor.register(createTool({ name: 'slow', execute: slow }));
-    executor.register(createTool({ name: 'fast', execute: fast }));
+    executor.register(createTool({ name: 'slow', isConcurrencySafe: true, execute: slow }));
+    executor.register(createTool({ name: 'fast', isConcurrencySafe: true, execute: fast }));
 
     const start = Date.now();
     const results = await executor.executeParallel([
@@ -103,6 +103,81 @@ describe('ToolExecutor', () => {
 
     expect(results).toHaveLength(2);
     expect(elapsed).toBeLessThan(150); // parallel, not sequential (~100ms)
+  });
+
+  describe('executeParallel respects isConcurrencySafe (issue #71)', () => {
+    it('should serialize non-concurrency-safe tools', async () => {
+      const executor = new ToolExecutor();
+      let concurrent = 0;
+      let maxConcurrent = 0;
+
+      const unsafeTool = (name: string) => createTool({
+        name,
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          concurrent++;
+          maxConcurrent = Math.max(maxConcurrent, concurrent);
+          await new Promise(r => setTimeout(r, 20));
+          concurrent--;
+          return name;
+        }),
+      });
+
+      executor.register(unsafeTool('write_a'));
+      executor.register(unsafeTool('write_b'));
+
+      const results = await executor.executeParallel([
+        { name: 'write_a', args: { input: 'x' } },
+        { name: 'write_b', args: { input: 'y' } },
+      ]);
+
+      expect(results).toHaveLength(2);
+      expect(maxConcurrent).toBe(1); // never ran more than one unsafe tool at a time
+    });
+
+    it('should still parallelize concurrency-safe tools', async () => {
+      const executor = new ToolExecutor();
+      let concurrent = 0;
+      let maxConcurrent = 0;
+
+      const safeTool = (name: string) => createTool({
+        name,
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          concurrent++;
+          maxConcurrent = Math.max(maxConcurrent, concurrent);
+          await new Promise(r => setTimeout(r, 20));
+          concurrent--;
+          return name;
+        }),
+      });
+
+      executor.register(safeTool('read_a'));
+      executor.register(safeTool('read_b'));
+
+      const results = await executor.executeParallel([
+        { name: 'read_a', args: { input: 'x' } },
+        { name: 'read_b', args: { input: 'y' } },
+      ]);
+
+      expect(results).toHaveLength(2);
+      expect(maxConcurrent).toBe(2); // both ran concurrently
+    });
+
+    it('should return results in original call order', async () => {
+      const executor = new ToolExecutor();
+
+      executor.register(createTool({ name: 'slow', isConcurrencySafe: true, execute: vi.fn().mockImplementation(() => new Promise(r => setTimeout(() => r('slow'), 30))) }));
+      executor.register(createTool({ name: 'fast', isConcurrencySafe: true, execute: vi.fn().mockResolvedValue('fast') }));
+
+      const results = await executor.executeParallel([
+        { name: 'slow', args: { input: 'x' } },
+        { name: 'fast', args: { input: 'y' } },
+      ]);
+
+      expect(results[0]!.content).toBe('slow');
+      expect(results[1]!.content).toBe('fast');
+    });
   });
 
   it('should support AbortSignal', async () => {
