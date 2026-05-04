@@ -3,6 +3,7 @@ import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 
 const DEFAULT_MAX_CHARS = 50_000;
 const MAX_REDIRECT_HOPS = 5;
+const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB hard limit — prevents OOM via large responses
 
 /** Validate URL against SSRF attack vectors. Returns null if safe, error message if blocked. */
 function validateFetchUrl(rawUrl: string): string | null {
@@ -123,6 +124,42 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+/**
+ * Read the response body via a streaming reader, stopping at MAX_BODY_BYTES.
+ * This prevents OOM when a server returns a very large or infinite body.
+ */
+async function readBodyWithLimit(response: Response): Promise<{ text: string; truncatedByBytes: boolean }> {
+  if (!response.body) {
+    return { text: '', truncatedByBytes: false };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let bytesRead = 0;
+  let truncatedByBytes = false;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytesRead += value.byteLength;
+      text += decoder.decode(value, { stream: true });
+      if (bytesRead >= MAX_BODY_BYTES) {
+        await reader.cancel();
+        truncatedByBytes = true;
+        break;
+      }
+    }
+    // Flush any remaining bytes in the decoder
+    text += decoder.decode();
+  } catch {
+    // Partial read is acceptable; return what we have
+  }
+
+  return { text, truncatedByBytes };
+}
+
 export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): AgentTool {
   let resolverPromise: Promise<DnsResolver> | null = null;
   const getResolver = (): Promise<DnsResolver> => {
@@ -191,13 +228,16 @@ export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): Age
         }
 
         const contentType = response.headers.get('content-type') ?? '';
-        let text = await response.text();
+        const { text: rawText, truncatedByBytes } = await readBodyWithLimit(response);
 
+        let text = rawText;
         if (contentType.includes('text/html')) {
           text = stripHtml(text);
         }
 
-        if (text.length > maxChars) {
+        if (truncatedByBytes) {
+          text = text.slice(0, maxChars) + `\n\n[truncated — body size limit reached]`;
+        } else if (text.length > maxChars) {
           text = text.slice(0, maxChars) + `\n\n[truncated — ${text.length - maxChars} characters omitted]`;
         }
 
