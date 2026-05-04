@@ -174,8 +174,14 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
 
         return JSON.stringify(result.rows, null, 2);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: `Query execution failed: ${message}`, isError: true };
+        // Return a generic message to the LLM — raw DB errors may contain sensitive
+        // table/column names (CWE-209). Full error details go to server logs only.
+        const pgCode = (err as { code?: string }).code;
+        const genericMessage = pgCode
+          ? `Query execution failed (error code: ${pgCode})`
+          : 'Query execution failed';
+        console.error('[SqlTool] query execution error:', err);
+        return { content: genericMessage, isError: true };
       }
     },
   };
