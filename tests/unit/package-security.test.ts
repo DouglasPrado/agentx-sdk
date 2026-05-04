@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')) as Record<string, unknown>;
+const releaseYml = readFileSync(resolve(__dirname, '../../.github/workflows/release.yml'), 'utf-8');
 
 describe('package.json security overrides (issue #26)', () => {
   it('should have a top-level "overrides" field for npm compatibility', () => {
@@ -29,5 +30,19 @@ describe('package.json security overrides (issue #26)', () => {
     const overrides = pkg['overrides'] as Record<string, string>;
     expect(overrides).toHaveProperty('postcss');
     expect(overrides['postcss']).toBe('>=8.5.10');
+  });
+});
+
+describe('release.yml shell injection hardening (issue #51)', () => {
+  it('does NOT interpolate ${{ steps.version.outputs.version }} directly in a run: shell command', () => {
+    // Direct interpolation: VERSION=${{ steps.version.outputs.version }} inside run: is a shell injection risk.
+    // The value must be passed via env: instead.
+    const directInterpolation = /VERSION=\$\{\{[^}]*steps\.version\.outputs\.version[^}]*\}\}/;
+    expect(releaseYml).not.toMatch(directInterpolation);
+  });
+
+  it('passes version to the release step via env: variable (not inline ${{ }})', () => {
+    // The release step should have RELEASE_VERSION (or similar) in its env: block
+    expect(releaseYml).toMatch(/RELEASE_VERSION:\s*\$\{\{[^}]*steps\.version\.outputs\.version/);
   });
 });
