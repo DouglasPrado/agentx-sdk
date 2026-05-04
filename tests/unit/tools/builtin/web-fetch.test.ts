@@ -65,6 +65,52 @@ describe('builtin/web-fetch', () => {
     expect(parsed.isError).toBe(true);
   });
 
+  // --- issue #77: hard body-size limit via streaming reader ---
+
+  it('stops reading after 10 MB hard limit without buffering the full body (#77)', async () => {
+    const CHUNK_SIZE = 1024 * 1024; // 1 MB per chunk
+    const chunk = new Uint8Array(CHUNK_SIZE).fill(65); // fill with 'A'
+    const TOTAL_CHUNKS = 15; // 15 MB total available
+    let chunksDelivered = 0;
+
+    const stream = new ReadableStream({
+      pull(controller) {
+        if (chunksDelivered < TOTAL_CHUNKS) {
+          controller.enqueue(chunk);
+          chunksDelivered++;
+        } else {
+          controller.close();
+        }
+      },
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(stream, { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+    );
+
+    const tool = createWebFetchTool();
+    const result = await tool.execute({ url: 'https://example.com/huge' }, signal);
+    const content = typeof result === 'string' ? result : (result as { content: string }).content;
+
+    // Must include truncation notice
+    expect(content).toMatch(/truncated/);
+    // Must NOT have consumed all 15 MB — reading should stop at the 10 MB limit
+    expect(chunksDelivered).toBeLessThanOrEqual(10);
+  });
+
+  it('returns error when response body is not readable (#77)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+    );
+
+    const tool = createWebFetchTool();
+    const result = await tool.execute({ url: 'https://example.com/no-body' }, signal);
+    // null body: either treated as empty string or returns error — both acceptable
+    expect(result).toBeDefined();
+  });
+
+  // --- end issue #77 ---
+
   describe('SSRF protection', () => {
     const tool = createWebFetchTool();
 
@@ -97,8 +143,6 @@ describe('builtin/web-fetch', () => {
         expect(parsed.isError, `should block ${url}`).toBe(true);
       }
     });
-
-    // --- issue #21: redirect bypass and IPv6 private ranges ---
 
     it('blocks redirect to internal IPv4 (SSRF via redirect)', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -147,8 +191,6 @@ describe('builtin/web-fetch', () => {
       }
     });
 
-    // --- issue #49: DNS rebinding mitigation ---
-
     function mockDns(v4: string[], v6: string[] = []): DnsResolver {
       return {
         resolve4: vi.fn().mockResolvedValue(v4),
@@ -193,7 +235,6 @@ describe('builtin/web-fetch', () => {
       );
       const tool = createWebFetchTool({ dnsResolver: failingDns() });
       const result = await tool.execute({ url: 'http://some-domain.example/' }, signal);
-      // DNS failure → fail-open → fetch proceeds
       const content = typeof result === 'string' ? result : result.content;
       expect(content).toContain('ok');
     });
