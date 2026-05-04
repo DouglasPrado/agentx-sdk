@@ -70,12 +70,17 @@ function rowToMessage(row: ConversationRow, logger: Logger): ChatMessage {
     try {
       toolCalls = JSON.parse(row.tool_calls);
     } catch (e) {
-      logger.warn('Invalid tool_calls JSON in conversations table', {
-        rowId: row.id,
-        threadId: row.thread_id,
-        error: e instanceof Error ? e.message : String(e),
-      });
-      toolCalls = undefined;
+      // Issue #25: corrupted tool_calls must be loud, not silently dropped —
+      // partial writes, migration bugs, or manual DB edits would otherwise
+      // feed the LLM a truncated history. Issue #63: use the injected logger
+      // (never console.* directly) so tests / hosts can capture warnings.
+      const errMsg = e instanceof Error ? e.message : String(e);
+      logger.warn(
+        `[SQLiteConversationStore] Invalid tool_calls JSON (rowId=${row.id}, threadId=${row.thread_id}): ${errMsg}`,
+      );
+      throw new Error(
+        `Corrupted tool_calls JSON for rowId=${row.id} (threadId=${row.thread_id}): ${errMsg}`,
+      );
     }
   }
 

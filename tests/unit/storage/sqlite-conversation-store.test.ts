@@ -102,7 +102,8 @@ describe('SQLiteConversationStore', () => {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run('t-corrupt-warn', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
 
-    store.listThread('t-corrupt-warn');
+    // Corrupted tool_calls also throws (see test above) — assert both warn AND throw.
+    expect(() => store.listThread('t-corrupt-warn')).toThrow(/tool_calls|Corrupted/i);
 
     expect(warnSpy).toHaveBeenCalledOnce();
     const [firstArg] = warnSpy.mock.calls[0]!;
@@ -155,7 +156,9 @@ describe('SQLiteConversationStore', () => {
     `).run('t-custom-logger', 'assistant', '""', 'NOT_VALID_JSON', null, 0, Date.now());
 
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    storeWithLogger.listThread('t-custom-logger');
+    // Corrupted tool_calls also throws (issue #25) — the warn call must
+    // happen before the throw so we wrap in expect.toThrow.
+    expect(() => storeWithLogger.listThread('t-custom-logger')).toThrow(/tool_calls|Corrupted/i);
     const consoleWarnCalled = consoleSpy.mock.calls.length > 0;
     consoleSpy.mockRestore();
 

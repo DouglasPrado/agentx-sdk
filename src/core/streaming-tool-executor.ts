@@ -89,12 +89,15 @@ export class StreamingToolExecutor {
     for (const tool of this.tools) {
       if (tool.status === 'completed') {
         if (tool.result === undefined || tool.duration === undefined) {
-          throw new Error(`Tool "${tool.id}" completed but result or duration not set`);
+          // Defensive: an invariant violation upstream (status='completed' without
+          // result/duration) shouldn't crash the whole stream. Mark as yielded so
+          // we don't loop on it, log, and skip.
+          console.warn(`[streaming-tool-executor] tool "${tool.id}" completed without result/duration — skipping`);
+          tool.status = 'yielded';
+          continue;
         }
         tool.status = 'yielded';
-        if (tool.result !== undefined && tool.duration !== undefined) {
-          yield { id: tool.id, name: tool.name, result: tool.result, duration: tool.duration };
-        }
+        yield { id: tool.id, name: tool.name, result: tool.result, duration: tool.duration };
       } else if (tool.status !== 'yielded') {
         break;
       }
@@ -124,13 +127,14 @@ export class StreamingToolExecutor {
       }
 
       if (tool.result === undefined || tool.duration === undefined) {
-        throw new Error(`Tool "${tool.id}" completed but result or duration not set`);
+        // Same defensive skip as getCompletedResults — never crash the stream.
+        console.warn(`[streaming-tool-executor] tool "${tool.id}" finished without result/duration — skipping`);
+        tool.status = 'yielded';
+        continue;
       }
 
       tool.status = 'yielded';
-      if (tool.result !== undefined && tool.duration !== undefined) {
-        yield { id: tool.id, name: tool.name, result: tool.result, duration: tool.duration };
-      }
+      yield { id: tool.id, name: tool.name, result: tool.result, duration: tool.duration };
     }
   }
 

@@ -1,9 +1,28 @@
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
+import type { ZodIssue } from 'zod';
 import type { AgentTool } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { MCPConnectionConfig } from '../config/config.js';
 import type { ToolExecutor } from './tool-executor.js';
 import { jsonSchemaToZod } from './json-schema-to-zod.js';
+
+/**
+ * Subclass of ZodError that exposes a human-readable, prefixed message while
+ * preserving the original `.issues` and the `instanceof ZodError` contract.
+ * Used when an MCP server returns a payload that fails Zod validation —
+ * callers can either inspect the structured issues or match a message prefix
+ * (`invalid resource shape …`, `invalid prompt shape …`).
+ */
+class MCPInvalidShapeError extends ZodError {
+  private readonly _customMessage: string;
+  constructor(issues: ZodIssue[], customMessage: string) {
+    super(issues);
+    this._customMessage = customMessage;
+  }
+  override get message(): string {
+    return this._customMessage;
+  }
+}
 
 /** Validated shape of listResources server response. */
 const ListResourcesResultSchema = z.object({
@@ -276,8 +295,14 @@ export class MCPAdapter {
     }).readResource?.({ uri });
     if (!raw) throw new Error('Server does not support resources');
 
-    const parsed = ReadResourceResultSchema.parse(raw);
-    return parsed.contents.map(c => c.text ?? `[Binary: ${c.uri}]`).join('\n');
+    const result = ReadResourceResultSchema.safeParse(raw);
+    if (!result.success) {
+      throw new MCPInvalidShapeError(
+        result.error.issues,
+        `invalid resource shape from MCP server "${serverName}"`,
+      );
+    }
+    return result.data.contents.map(c => c.text ?? `[Binary: ${c.uri}]`).join('\n');
   }
 
   /** Fetch and return a prompt from a server (for skill getPrompt). */
@@ -301,8 +326,14 @@ export class MCPAdapter {
 
     if (!raw) throw new Error('Server does not support prompts');
 
-    const parsed = GetPromptResultSchema.parse(raw);
-    return parsed.messages.map(m => {
+    const result = GetPromptResultSchema.safeParse(raw);
+    if (!result.success) {
+      throw new MCPInvalidShapeError(
+        result.error.issues,
+        `invalid prompt shape from MCP server "${serverName}"`,
+      );
+    }
+    return result.data.messages.map(m => {
       const content = typeof m.content === 'string' ? m.content : m.content.text ?? '';
       return content;
     }).join('\n');
@@ -456,33 +487,41 @@ export class MCPAdapter {
     }
   }
 
-  private async attemptReconnect(name: string): Promise<void> {
+  private attemptReconnect(name: string, attempt = 0): void {
     const conn = this.connections.get(name);
     if (!conn) return;
     // Status is already 'reconnecting' (set atomically in healthCheck).
     const maxRetries = conn.config.maxRetries ?? 3;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const delay = Math.min(1000 * 2 ** attempt, 30_000);
-        await new Promise(r => setTimeout(r, delay));
-
-        const transport = await createTransport(conn.config);
-        await conn.client.connect(transport);
-        conn.transport = transport;
-        conn.status = 'connected';
-        conn.lastError = undefined;
-        return;
-      } catch (error) {
-        conn.lastError = error instanceof Error ? error.message : String(error);
+    if (attempt >= maxRetries) {
+      // Failed all retries — remove tools
+      conn.status = 'disconnected';
+      for (const toolName of conn.toolNames) {
+        this.executor.unregister(toolName);
       }
+      return;
     }
 
-    // Failed all retries — remove tools
-    conn.status = 'disconnected';
-    for (const toolName of conn.toolNames) {
-      this.executor.unregister(toolName);
-    }
+    const delay = Math.min(1000 * 2 ** attempt, 30_000);
+    // setTimeout is scheduled synchronously here; fake-timer-based tests can
+    // advance through it deterministically without racing against awaited
+    // dynamic imports between iterations.
+    setTimeout(() => {
+      void (async () => {
+        const c = this.connections.get(name);
+        if (!c) return;
+        try {
+          const transport = await createTransport(c.config);
+          await c.client.connect(transport);
+          c.transport = transport;
+          c.status = 'connected';
+          c.lastError = undefined;
+        } catch (error) {
+          c.lastError = error instanceof Error ? error.message : String(error);
+          this.attemptReconnect(name, attempt + 1);
+        }
+      })();
+    }, delay);
   }
 }
 
