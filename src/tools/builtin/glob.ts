@@ -3,6 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { matchGlob } from '../../skills/skill-glob.js';
+import { assertSafePath } from './path-guard.js';
 
 const MAX_RESULTS = 100;
 
@@ -24,7 +25,7 @@ async function walkDir(dir: string, results: string[]): Promise<void> {
   }
 }
 
-export function createGlobTool(): AgentTool {
+export function createGlobTool(workingDir?: string): AgentTool {
   return {
     name: 'Glob',
     description: 'Fast file pattern matching. Returns matching file paths sorted by modification time.',
@@ -34,7 +35,16 @@ export function createGlobTool(): AgentTool {
 
     async execute(rawArgs: unknown, _signal: AbortSignal) {
       const { pattern, path: searchPath } = rawArgs as z.infer<typeof GlobParams>;
-      const baseDir = searchPath || process.cwd();
+
+      if (workingDir && searchPath) {
+        try {
+          assertSafePath(searchPath, workingDir);
+        } catch (error) {
+          return { content: (error as Error).message, isError: true };
+        }
+      }
+
+      const baseDir = searchPath || workingDir || process.cwd();
 
       const allFiles: string[] = [];
       try {
