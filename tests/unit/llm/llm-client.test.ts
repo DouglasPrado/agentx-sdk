@@ -200,6 +200,60 @@ describe('LLMClient', () => {
       expect(chunks).toHaveLength(1);
       expect(chunks[0]).toEqual({ type: 'content', data: 'Hi' });
     });
+
+    it('captures usage from a separate chunk that arrives after finish_reason', async () => {
+      // Real OpenAI / OpenRouter / LiteLLM behaviour with stream_options.include_usage=true:
+      // the usage payload arrives in its own chunk (with empty choices) AFTER the chunk
+      // that carried finish_reason. Previously the parser emitted `done` on finish_reason
+      // and returned, dropping the usage chunk → all production traces had usage=0.
+      const sseResponse = createSSEResponse([
+        'data: {"choices":[{"delta":{"content":"hi"},"index":0}]}',
+        'data: {"choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}',
+        'data: {"choices":[],"usage":{"prompt_tokens":42,"completion_tokens":7,"total_tokens":49}}',
+        'data: [DONE]',
+      ]);
+      const fetchSpy = mockFetch(sseResponse);
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.streamChat({ messages: [{ role: 'user', content: 'Hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      const done = chunks.find((c) => c.type === 'done');
+      expect(done).toMatchObject({
+        type: 'done',
+        finishReason: 'stop',
+        usage: { inputTokens: 42, outputTokens: 7, totalTokens: 49 },
+      });
+
+      // And the streamChat body must opt-in to receiving usage.
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      expect(body.stream_options).toEqual({ include_usage: true });
+    });
+
+    it('emits a single done event even when finish_reason and usage share a chunk', async () => {
+      // Backwards-compat: some providers still bundle usage into the finish_reason
+      // chunk (this is what the older test assumed). The new buffering parser must
+      // still emit exactly one `done` for that legacy shape.
+      const sseResponse = createSSEResponse([
+        'data: {"choices":[{"delta":{"content":"ok"},"index":0}]}',
+        'data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}',
+        'data: [DONE]',
+      ]);
+      mockFetch(sseResponse);
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.streamChat({ messages: [{ role: 'user', content: 'Hi' }] })) {
+        chunks.push(chunk);
+      }
+
+      const doneChunks = chunks.filter((c) => c.type === 'done');
+      expect(doneChunks).toHaveLength(1);
+      expect(doneChunks[0]).toMatchObject({
+        finishReason: 'stop',
+        usage: { inputTokens: 3, outputTokens: 1, totalTokens: 4 },
+      });
+    });
   });
 
   describe('embed()', () => {

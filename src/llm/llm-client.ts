@@ -71,6 +71,10 @@ export class LLMClient {
       model,
       messages,
       stream: true,
+      // OpenAI-compatible providers (OpenAI, OpenRouter, LiteLLM, vLLM) only emit
+      // usage on the SSE stream when this flag is set. Without it, the final chunk
+      // has finish_reason but no token counts — costs cannot be computed downstream.
+      stream_options: { include_usage: true },
       ...reasoningArgs,
     };
 
@@ -222,6 +226,14 @@ export class LLMClient {
     // Accumulate tool calls incrementally
     const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
 
+    // Defer the `done` event until end-of-stream. With stream_options.include_usage,
+    // OpenAI-compatible providers send usage in a SEPARATE chunk (with empty choices)
+    // AFTER the chunk that carried finish_reason. If we emitted `done` on
+    // finish_reason like before, we'd race ahead of the usage chunk and lose it.
+    let pendingFinishReason: string | undefined;
+    let pendingUsage: TokenUsage | undefined;
+    let donePending = false;
+
     // Propagate abort to the reader so a hanging read() is unblocked immediately.
     const abortHandler = (): void => { void reader.cancel().catch(() => {}); };
     if (signal) {
@@ -230,7 +242,7 @@ export class LLMClient {
     }
 
     try {
-      while (true) {
+      streamLoop: while (true) {
         if (signal?.aborted) break;
 
         const { done, value } = await reader.read();
@@ -252,7 +264,7 @@ export class LLMClient {
           const data = trimmed.slice(6);
 
           if (data === '[DONE]') {
-            return;
+            break streamLoop;
           }
 
           let parsed: SSEPayload;
@@ -260,6 +272,16 @@ export class LLMClient {
             parsed = JSON.parse(data) as SSEPayload;
           } catch {
             continue;
+          }
+
+          // Capture usage from any chunk — when stream_options.include_usage is set
+          // it usually arrives on its own chunk with choices=[].
+          if (parsed.usage) {
+            pendingUsage = {
+              inputTokens: parsed.usage.prompt_tokens,
+              outputTokens: parsed.usage.completion_tokens,
+              totalTokens: parsed.usage.total_tokens,
+            };
           }
 
           const choice = parsed.choices?.[0];
@@ -296,23 +318,18 @@ export class LLMClient {
             }
           }
 
-          // Done
           if (choice.finish_reason) {
-            // Emit accumulated tool calls
-            for (const tc of toolCalls.values()) {
-              yield { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments };
-            }
-
-            const usage: TokenUsage | undefined = parsed.usage ? {
-              inputTokens: parsed.usage.prompt_tokens,
-              outputTokens: parsed.usage.completion_tokens,
-              totalTokens: parsed.usage.total_tokens,
-            } : undefined;
-
-            yield { type: 'done', finishReason: choice.finish_reason, usage };
-            return;
+            pendingFinishReason = choice.finish_reason;
+            donePending = true;
           }
         }
+      }
+
+      if (donePending) {
+        for (const tc of toolCalls.values()) {
+          yield { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments };
+        }
+        yield { type: 'done', finishReason: pendingFinishReason ?? 'stop', usage: pendingUsage };
       }
     } finally {
       if (signal) signal.removeEventListener('abort', abortHandler);
