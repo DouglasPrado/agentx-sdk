@@ -39,6 +39,9 @@ export interface SqlToolFactoryOptions {
   toolNamePrefix?: string;
 }
 
+/** SQL statements that mutate state — used to derive isReadOnly/isConcurrencySafe flags. */
+const SQL_WRITE_PATTERN = /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|MERGE)\b/i;
+
 /**
  * Creates two meta-tools (`search_queries` + `run_query`) from a catalog of SQL queries.
  *
@@ -121,6 +124,10 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
     return `- ${q.name}: ${q.description} Params: { ${paramList} }`;
   }).join('\n');
 
+  // Derive flags from the catalog — write queries must not run concurrently or be
+  // reported as read-only, as that would cause race conditions in ToolExecutor.
+  const hasWriteQueries = queries.some(q => SQL_WRITE_PATTERN.test(q.sql));
+
   const runTool: AgentTool = {
     name: `${toolNamePrefix}run_query`,
     description:
@@ -131,8 +138,8 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
         .record(z.unknown())
         .describe('Parameters as key-value pairs. Use null for nullable params you want to skip'),
     }),
-    isConcurrencySafe: true,
-    isReadOnly: true,
+    isConcurrencySafe: !hasWriteQueries,
+    isReadOnly: !hasWriteQueries,
     maxResultChars,
     timeoutMs: defaultTimeoutMs,
 
@@ -174,8 +181,12 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
 
         return JSON.stringify(result.rows, null, 2);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: `Query execution failed: ${message}`, isError: true };
+        const pgCode = (err as { code?: string }).code;
+        const genericMessage = pgCode
+          ? `Query execution failed (error code: ${pgCode})`
+          : 'Query execution failed';
+        console.error('[SqlTool] query execution error:', err);
+        return { content: genericMessage, isError: true };
       }
     },
   };
