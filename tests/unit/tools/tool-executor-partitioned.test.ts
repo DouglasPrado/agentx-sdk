@@ -18,27 +18,31 @@ describe('ToolExecutor.executePartitioned', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'read_a',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('read_a:start');
-        await new Promise(r => setTimeout(r, 50));
-        order.push('read_a:end');
-        return 'a';
+    executor.register(
+      createTool({
+        name: 'read_a',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('read_a:start');
+          await new Promise((r) => setTimeout(r, 50));
+          order.push('read_a:end');
+          return 'a';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'read_b',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('read_b:start');
-        await new Promise(r => setTimeout(r, 50));
-        order.push('read_b:end');
-        return 'b';
+    executor.register(
+      createTool({
+        name: 'read_b',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('read_b:start');
+          await new Promise((r) => setTimeout(r, 50));
+          order.push('read_b:end');
+          return 'b';
+        }),
       }),
-    }));
+    );
 
     const start = Date.now();
     const results = await executor.executePartitioned([
@@ -66,27 +70,31 @@ describe('ToolExecutor.executePartitioned', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'write_a',
-      isConcurrencySafe: false,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('write_a:start');
-        await new Promise(r => setTimeout(r, 30));
-        order.push('write_a:end');
-        return 'a';
+    executor.register(
+      createTool({
+        name: 'write_a',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('write_a:start');
+          await new Promise((r) => setTimeout(r, 30));
+          order.push('write_a:end');
+          return 'a';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'write_b',
-      isConcurrencySafe: false,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('write_b:start');
-        await new Promise(r => setTimeout(r, 30));
-        order.push('write_b:end');
-        return 'b';
+    executor.register(
+      createTool({
+        name: 'write_b',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('write_b:start');
+          await new Promise((r) => setTimeout(r, 30));
+          order.push('write_b:end');
+          return 'b';
+        }),
       }),
-    }));
+    );
 
     const results = await executor.executePartitioned([
       { id: 'c1', name: 'write_a', args: { input: 'x' } },
@@ -105,21 +113,36 @@ describe('ToolExecutor.executePartitioned', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'read_x',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => { order.push('read_x'); return 'rx'; }),
-    }));
-    executor.register(createTool({
-      name: 'read_y',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => { order.push('read_y'); return 'ry'; }),
-    }));
-    executor.register(createTool({
-      name: 'write_z',
-      isConcurrencySafe: false,
-      execute: vi.fn().mockImplementation(async () => { order.push('write_z'); return 'wz'; }),
-    }));
+    executor.register(
+      createTool({
+        name: 'read_x',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('read_x');
+          return 'rx';
+        }),
+      }),
+    );
+    executor.register(
+      createTool({
+        name: 'read_y',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('read_y');
+          return 'ry';
+        }),
+      }),
+    );
+    executor.register(
+      createTool({
+        name: 'write_z',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('write_z');
+          return 'wz';
+        }),
+      }),
+    );
 
     const results = await executor.executePartitioned([
       { id: 'c1', name: 'read_x', args: { input: 'a' } },
@@ -140,14 +163,16 @@ describe('ToolExecutor.executePartitioned', () => {
   it('should support isConcurrencySafe as a function', async () => {
     const executor = new ToolExecutor();
 
-    executor.register(createTool({
-      name: 'bash',
-      isConcurrencySafe: (args: unknown) => {
-        const a = args as { input: string };
-        return a.input.startsWith('ls');
-      },
-      execute: vi.fn().mockResolvedValue('ok'),
-    }));
+    executor.register(
+      createTool({
+        name: 'bash',
+        isConcurrencySafe: (args: unknown) => {
+          const a = args as { input: string };
+          return a.input.startsWith('ls');
+        },
+        execute: vi.fn().mockResolvedValue('ok'),
+      }),
+    );
 
     // Two "ls" commands should be concurrent-safe
     const results = await executor.executePartitioned([
@@ -162,26 +187,30 @@ describe('ToolExecutor.executePartitioned', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'tool_a',
-      // No isConcurrencySafe — defaults to false
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('a:start');
-        await new Promise(r => setTimeout(r, 20));
-        order.push('a:end');
-        return 'a';
+    executor.register(
+      createTool({
+        name: 'tool_a',
+        // No isConcurrencySafe — defaults to false
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('a:start');
+          await new Promise((r) => setTimeout(r, 20));
+          order.push('a:end');
+          return 'a';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'tool_b',
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('b:start');
-        await new Promise(r => setTimeout(r, 20));
-        order.push('b:end');
-        return 'b';
+    executor.register(
+      createTool({
+        name: 'tool_b',
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('b:start');
+          await new Promise((r) => setTimeout(r, 20));
+          order.push('b:end');
+          return 'b';
+        }),
       }),
-    }));
+    );
 
     await executor.executePartitioned([
       { id: 'c1', name: 'tool_a', args: { input: 'x' } },

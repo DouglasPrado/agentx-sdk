@@ -38,7 +38,7 @@ describe('TokenCounter', () => {
       { role: 'user' as const, content: 'Hello' },
       { role: 'assistant' as const, content: 'Hi there!' },
     ];
-    const tokens = estimateTokens(messages.map(m => m.content).join('\n'));
+    const tokens = estimateTokens(messages.map((m) => m.content).join('\n'));
     expect(tokens).toBeGreaterThan(2);
   });
 });

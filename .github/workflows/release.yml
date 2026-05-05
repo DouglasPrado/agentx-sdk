@@ -32,8 +32,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Build
         run: pnpm build
+
+      - name: Validate publish artifacts
+        run: pnpm validate:publish
 
       - name: Run tests
         run: pnpm test
@@ -45,7 +54,7 @@ jobs:
     environment: npm-publish
     permissions:
       contents: write
-      id-token: write  # Required for npm provenance attestation
+      id-token: write # Required for npm provenance attestation
 
     steps:
       - uses: actions/checkout@v4

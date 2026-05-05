@@ -1,5 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import type { AgentEvent, AgentEndEvent, TextDeltaEvent } from '../../src/contracts/entities/agent-event.js';
+import type {
+  AgentEvent,
+  AgentEndEvent,
+  TextDeltaEvent,
+} from '../../src/contracts/entities/agent-event.js';
 import {
   createSSEResponse,
   scriptFetch,
@@ -20,11 +24,13 @@ describe('E2E 01 — basic chat flow', () => {
   it('streams a full response and persists the turn', async () => {
     const scripted = scriptFetch({
       chat: [
-        createSSEResponse(textResponseFrames({
-          content: 'Olá, mundo!',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 },
-        })),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'Olá, mundo!',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 },
+          }),
+        ),
       ],
     });
 
@@ -37,7 +43,7 @@ describe('E2E 01 — basic chat flow', () => {
 
     const textDeltas = events.filter((e): e is TextDeltaEvent => e.type === 'text_delta');
     expect(textDeltas.length).toBeGreaterThan(0);
-    expect(textDeltas.map(e => e.content).join('')).toContain('Olá, mundo!');
+    expect(textDeltas.map((e) => e.content).join('')).toContain('Olá, mundo!');
 
     // --- Usage + duration ---
     const end = events[events.length - 1] as AgentEndEvent;
@@ -61,9 +67,7 @@ describe('E2E 01 — basic chat flow', () => {
 
   it('emits agent_end with reason=stop even when usage is missing from SSE', async () => {
     scriptFetch({
-      chat: [
-        createSSEResponse(textResponseFrames({ content: 'hi', finishReason: 'stop' })),
-      ],
+      chat: [createSSEResponse(textResponseFrames({ content: 'hi', finishReason: 'stop' }))],
     });
 
     handle = await createTempAgent({ memory: { enabled: false }, knowledge: { enabled: false } });

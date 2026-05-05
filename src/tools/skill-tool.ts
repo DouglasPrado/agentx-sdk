@@ -52,7 +52,7 @@ export function buildSkillToolPrompt(listing: string): string {
     '  - `skill: "commit", args: "-m \'Fix bug\'"` — invoke with arguments',
     '',
     'Important:',
-    '- When a skill matches the user\'s request, invoke it BEFORE generating other responses',
+    "- When a skill matches the user's request, invoke it BEFORE generating other responses",
     '- Do not mention a skill without actually calling the Skill tool',
     '- Do not invoke a skill that is already active in the current context',
     '- If a <skill> tag already appears in the conversation, the skill is ALREADY loaded — follow its instructions directly instead of calling the Skill tool again',
@@ -69,23 +69,24 @@ function findSkill(skillManager: SkillManager, skillName: string): AgentSkill | 
   const allSkills = skillManager.listAllSkills();
 
   // 1. Exact name match
-  const byName = allSkills.find(s => s.name === skillName);
+  const byName = allSkills.find((s) => s.name === skillName);
   if (byName) return byName;
 
   // 2. Normalized name (strip leading /)
   const normalized = skillName.startsWith('/') ? skillName.slice(1) : skillName;
-  const byNormalized = allSkills.find(s =>
-    s.name === normalized
-    || s.aliases?.some(a => {
-      const clean = a.startsWith('/') ? a.slice(1) : a;
-      return clean === normalized;
-    }),
+  const byNormalized = allSkills.find(
+    (s) =>
+      s.name === normalized ||
+      s.aliases?.some((a) => {
+        const clean = a.startsWith('/') ? a.slice(1) : a;
+        return clean === normalized;
+      }),
   );
   if (byNormalized) return byNormalized;
 
   // 3. triggerPrefix match
   const withSlash = skillName.startsWith('/') ? skillName : `/${skillName}`;
-  return allSkills.find(s => s.triggerPrefix === withSlash);
+  return allSkills.find((s) => s.triggerPrefix === withSlash);
 }
 
 /**
@@ -105,7 +106,8 @@ export function createSkillTool(
 
   return {
     name: SKILL_TOOL_NAME,
-    description: 'Execute a skill by name. Use this when you want to activate a skill\'s specialized behavior. Pass the skill name and optional arguments.',
+    description:
+      "Execute a skill by name. Use this when you want to activate a skill's specialized behavior. Pass the skill name and optional arguments.",
     parameters: SkillToolParameters,
     isConcurrencySafe: false,
 
@@ -117,7 +119,10 @@ export function createSkillTool(
       const skill = findSkill(skillManager, skillName);
 
       if (!skill) {
-        const available = skillManager.listSkills().map(s => s.name).join(', ');
+        const available = skillManager
+          .listSkills()
+          .map((s) => s.name)
+          .join(', ');
         return {
           content: `Skill "${skillName}" not found. Available skills: ${available || 'none'}`,
           isError: true,
@@ -160,20 +165,19 @@ export function createSkillTool(
       skillManager.markInvoked(skill.name);
 
       // --- Build result ---
-      const parts: string[] = [
-        `<skill name="${skill.name}">`,
-        resolved,
-        '</skill>',
-      ];
+      const parts: string[] = [`<skill name="${skill.name}">`, resolved, '</skill>'];
 
       // Append metadata hints for the model
       if (skill.tools?.length) {
-        const toolNames = skill.tools.map(t => t.name).join(', ');
+        const toolNames = skill.tools.map((t) => t.name).join(', ');
         parts.push('', `This skill provides tools: ${toolNames}. Use them as needed.`);
       }
 
       if (skill.model) {
-        parts.push('', `[Note: This skill recommends model "${skill.model}" but the current model will be used.]`);
+        parts.push(
+          '',
+          `[Note: This skill recommends model "${skill.model}" but the current model will be used.]`,
+        );
       }
 
       parts.push('', `Follow the instructions above from the "${skill.name}" skill.`);

@@ -82,13 +82,16 @@ type: project
     });
 
     it('should scan .md files and parse frontmatter', async () => {
-      await writeFile(join(tempDir, 'test.md'), `---
+      await writeFile(
+        join(tempDir, 'test.md'),
+        `---
 name: Test Memory
 description: A test
 type: user
 ---
 
-Content here`);
+Content here`,
+      );
 
       const result = await scanMemoryFiles(tempDir);
       expect(result).toHaveLength(1);
@@ -110,7 +113,7 @@ Content here`);
     it('should sort by mtime newest first', async () => {
       await writeFile(join(tempDir, 'old.md'), '---\nname: old\n---\n');
       // Wait a bit to ensure different mtime
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       await writeFile(join(tempDir, 'new.md'), '---\nname: new\n---\n');
 
       const result = await scanMemoryFiles(tempDir);

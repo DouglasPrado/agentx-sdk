@@ -32,7 +32,9 @@ describe('KnowledgeManager', () => {
   });
 
   it('should ingest a document and persist chunks', async () => {
-    const count = await manager.ingest({ content: 'This is a test document with enough content to be chunked into pieces.' });
+    const count = await manager.ingest({
+      content: 'This is a test document with enough content to be chunked into pieces.',
+    });
     expect(count).toBeGreaterThan(0);
     expect(store.upsert).toHaveBeenCalledTimes(count);
     expect(embeddingService.embed).toHaveBeenCalledOnce();
@@ -46,7 +48,7 @@ describe('KnowledgeManager', () => {
 
   it('should pass metadata to chunks', async () => {
     await manager.ingest({ content: 'Short.', metadata: { source: 'readme' } });
-    const chunk = vi.mocked(store.upsert).mock.calls[0]![0]!;
+    const chunk = vi.mocked(store.upsert).mock.calls[0]![0];
     expect(chunk.metadata).toMatchObject({ source: 'readme', chunkIndex: 0 });
   });
 
@@ -62,9 +64,7 @@ describe('KnowledgeManager', () => {
   });
 
   it('should cache search results', async () => {
-    vi.mocked(store.search).mockReturnValue([
-      { id: '1', content: 'test', score: 0.8 },
-    ]);
+    vi.mocked(store.search).mockReturnValue([{ id: '1', content: 'test', score: 0.8 }]);
 
     await manager.search('query');
     await manager.search('query'); // should hit cache

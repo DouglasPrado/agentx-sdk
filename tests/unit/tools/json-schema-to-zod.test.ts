@@ -19,8 +19,12 @@ describe('jsonSchemaToZod (deep)', () => {
       required: ['name'],
     });
 
-    expect(schema.parse({ name: 'John', age: 30, score: 9.5, active: true }))
-      .toEqual({ name: 'John', age: 30, score: 9.5, active: true });
+    expect(schema.parse({ name: 'John', age: 30, score: 9.5, active: true })).toEqual({
+      name: 'John',
+      age: 30,
+      score: 9.5,
+      active: true,
+    });
 
     // name is required
     expect(() => schema.parse({ age: 30 })).toThrow();
@@ -90,7 +94,12 @@ describe('jsonSchemaToZod (deep)', () => {
       },
     });
 
-    const result = schema.parse({ users: [{ name: 'A', age: 1 }, { name: 'B', age: 2 }] });
+    const result = schema.parse({
+      users: [
+        { name: 'A', age: 1 },
+        { name: 'B', age: 2 },
+      ],
+    });
     expect(result.users).toHaveLength(2);
   });
 
@@ -123,10 +132,7 @@ describe('jsonSchemaToZod (deep)', () => {
       type: 'object',
       properties: {
         value: {
-          anyOf: [
-            { type: 'string' },
-            { type: 'number' },
-          ],
+          anyOf: [{ type: 'string' }, { type: 'number' }],
         },
       },
     });
@@ -167,8 +173,53 @@ describe('jsonSchemaToZod (deep)', () => {
       current = { type: 'object', properties: { nested: current } };
     }
 
-    const schema = jsonSchemaToZod(current as any);
+    const schema = jsonSchemaToZod(current);
     // Should produce a valid schema (deep nesting falls back to z.unknown)
     expect(schema).toBeDefined();
   });
+
+  // --- issue #78: DoS protection — MAX_PROPERTIES and MAX_UNION_MEMBERS limits ---
+
+  it('limits required properties beyond MAX_PROPERTIES (501st required prop is not enforced) (#78)', () => {
+    const MAX_PROPERTIES = 500;
+    const props: Record<string, { type: string }> = {};
+    const required: string[] = [];
+    for (let i = 0; i <= MAX_PROPERTIES; i++) {
+      const key = `p${String(i).padStart(6, '0')}`;
+      props[key] = { type: 'string' };
+      required.push(key);
+    }
+
+    const schema = jsonSchemaToZod({ type: 'object', properties: props, required });
+
+    // Build input with only the first MAX_PROPERTIES keys (omitting p000500)
+    const input: Record<string, string> = {};
+    for (let i = 0; i < MAX_PROPERTIES; i++) {
+      input[`p${String(i).padStart(6, '0')}`] = 'x';
+    }
+
+    // Without the fix: parse throws because p000500 is required.
+    // With the fix: p000500 is beyond the limit so it is not in the shape.
+    expect(() => schema.parse(input)).not.toThrow();
+  });
+
+  it('limits anyOf members to MAX_UNION_MEMBERS (51st member is excluded from union) (#78)', () => {
+    const MAX_UNION_MEMBERS = 50;
+    // Build 51 single-value enum schemas: value0 .. value50
+    const schemas = Array.from({ length: MAX_UNION_MEMBERS + 1 }, (_, i) => ({
+      enum: [`value${i}`],
+    }));
+
+    const schema = jsonSchemaToZod({ anyOf: schemas });
+
+    // First value is within the limit — must be valid
+    expect(schema.parse('value0')).toBe('value0');
+
+    // 51st value is beyond the limit — must be rejected by the union
+    // Without the fix: all 51 members included, so value50 is valid.
+    // With the fix: only first 50 members included, so value50 is invalid.
+    expect(() => schema.parse('value50')).toThrow();
+  });
+
+  // --- end issue #78 ---
 });

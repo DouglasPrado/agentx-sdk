@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createGlobTool } from '../../../../src/tools/builtin/glob.js';
 
-
 describe('builtin/glob', () => {
   let tempDir: string;
   const signal = new AbortController().signal;

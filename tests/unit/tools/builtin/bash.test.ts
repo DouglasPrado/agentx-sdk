@@ -48,8 +48,7 @@ describe('builtin/bash', () => {
 
   describe('sandboxing: workingDir + allowedCommands (issue #23)', () => {
     it('should restrict cwd to workingDir when set', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tool = createBashTool({ workingDir: '/tmp' } as any);
+      const tool = createBashTool({ workingDir: '/tmp' });
       const result = await tool.execute({ command: 'pwd' }, signal);
       const content = (typeof result === 'string' ? result : result.content).trim();
       // Must run inside /tmp, not the process cwd
@@ -57,16 +56,14 @@ describe('builtin/bash', () => {
     });
 
     it('should allow commands matching allowedCommands prefixes', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tool = createBashTool({ allowedCommands: ['echo', 'pwd'] } as any);
+      const tool = createBashTool({ allowedCommands: ['echo', 'pwd'] });
       const result = await tool.execute({ command: 'echo allowed' }, signal);
       const content = typeof result === 'string' ? result : result.content;
       expect(content).toContain('allowed');
     });
 
     it('should block commands not in allowedCommands', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tool = createBashTool({ allowedCommands: ['echo'] } as any);
+      const tool = createBashTool({ allowedCommands: ['echo'] });
       const result = await tool.execute({ command: 'ls /' }, signal);
       const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
       expect(parsed.isError).toBe(true);
@@ -74,7 +71,7 @@ describe('builtin/bash', () => {
     });
 
     it('should allow all commands when allowedCommands is not set', async () => {
-      const tool = createBashTool();  // no restrictions
+      const tool = createBashTool(); // no restrictions
       const result = await tool.execute({ command: 'echo unrestricted' }, signal);
       const content = typeof result === 'string' ? result : result.content;
       expect(content).toContain('unrestricted');
@@ -125,7 +122,10 @@ describe('builtin/bash', () => {
 
     it('does NOT block metacharacters when allowedCommands is not set', async () => {
       const unrestricted = createBashTool();
-      const result = await unrestricted.execute({ command: 'echo "line1" && echo "line2"' }, signal);
+      const result = await unrestricted.execute(
+        { command: 'echo "line1" && echo "line2"' },
+        signal,
+      );
       const content = typeof result === 'string' ? result : result.content;
       expect(content).toContain('line1');
       expect(content).toContain('line2');
@@ -136,22 +136,18 @@ describe('builtin/bash', () => {
     it('should reject timeout=0 (would disable exec timeout)', async () => {
       const tool = createBashTool();
       // timeout=0 is interpreted by Node exec as "no timeout" — must be rejected
-      await expect(
-        tool.execute({ command: 'echo ok', timeout: 0 }, signal)
-      ).rejects.toThrow();
+      await expect(tool.execute({ command: 'echo ok', timeout: 0 }, signal)).rejects.toThrow();
     });
 
     it('should reject negative timeout values', async () => {
       const tool = createBashTool();
-      await expect(
-        tool.execute({ command: 'echo ok', timeout: -1000 }, signal)
-      ).rejects.toThrow();
+      await expect(tool.execute({ command: 'echo ok', timeout: -1000 }, signal)).rejects.toThrow();
     });
 
     it('should reject timeout exceeding 300000ms (5 minutes)', async () => {
       const tool = createBashTool();
       await expect(
-        tool.execute({ command: 'echo ok', timeout: 301_000 }, signal)
+        tool.execute({ command: 'echo ok', timeout: 301_000 }, signal),
       ).rejects.toThrow();
     });
 

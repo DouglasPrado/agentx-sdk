@@ -7,29 +7,34 @@ export interface RetryOptions {
   isRetryable?: (error: unknown) => boolean;
 }
 
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('Aborted');
+}
+
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(signal.reason ?? new Error('Aborted'));
+      reject(abortError(signal));
       return;
     }
 
     const timer = setTimeout(resolve, ms);
 
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(signal.reason ?? new Error('Aborted'));
-    }, { once: true });
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(abortError(signal));
+      },
+      { once: true },
+    );
   });
 }
 
 /**
  * Retries an async function with exponential backoff.
  */
-export async function retry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions,
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
   const {
     maxRetries,
     initialDelay = 1000,

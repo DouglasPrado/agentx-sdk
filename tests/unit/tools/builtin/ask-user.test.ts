@@ -31,7 +31,9 @@ describe('builtin/ask-user', () => {
 
   it('should return error if onAsk throws', async () => {
     const tool = createAskUserTool({
-      onAsk: async () => { throw new Error('User cancelled'); },
+      onAsk: async () => {
+        throw new Error('User cancelled');
+      },
     });
 
     const result = await tool.execute({ question: 'Test' }, signal);

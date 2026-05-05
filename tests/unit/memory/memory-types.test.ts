@@ -7,7 +7,12 @@ import {
   MAX_ENTRYPOINT_LINES,
   MAX_ENTRYPOINT_BYTES,
 } from '../../../src/memory/memory-types.js';
-import type { MemoryType, MemoryHeader, MemoryFile, SaveMemoryInput } from '../../../src/memory/memory-types.js';
+import type {
+  MemoryType,
+  MemoryHeader,
+  MemoryFile,
+  SaveMemoryInput,
+} from '../../../src/memory/memory-types.js';
 
 describe('memory-types', () => {
   describe('MEMORY_TYPES', () => {

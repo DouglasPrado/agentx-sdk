@@ -12,7 +12,8 @@ const FileWriteParams = z.object({
 export function createFileWriteTool(workingDir?: string): AgentTool {
   return {
     name: 'Write',
-    description: 'Write content to a file. Creates parent directories if needed. Overwrites existing files.',
+    description:
+      'Write content to a file. Creates parent directories if needed. Overwrites existing files.',
     parameters: FileWriteParams,
     isDestructive: true,
     getFilePath: (args) => (args as { file_path: string }).file_path,
@@ -34,7 +35,10 @@ export function createFileWriteTool(workingDir?: string): AgentTool {
         const bytes = Buffer.byteLength(content, 'utf-8');
         return `Successfully wrote ${bytes} bytes to ${file_path}`;
       } catch (error) {
-        return { content: `Cannot write file: ${file_path} — ${(error as Error).message}`, isError: true };
+        return {
+          content: `Cannot write file: ${file_path} — ${(error as Error).message}`,
+          isError: true,
+        };
       }
     },
   };

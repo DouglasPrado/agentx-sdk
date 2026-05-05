@@ -10,7 +10,8 @@ describe('Retry', () => {
   });
 
   it('should retry on failure and succeed', async () => {
-    const fn = vi.fn()
+    const fn = vi
+      .fn()
       .mockRejectedValueOnce(new Error('fail 1'))
       .mockRejectedValueOnce(new Error('fail 2'))
       .mockResolvedValue('ok');
@@ -23,16 +24,12 @@ describe('Retry', () => {
   it('should throw after exhausting retries', async () => {
     const fn = vi.fn().mockRejectedValue(new Error('always fails'));
 
-    await expect(
-      retry(fn, { maxRetries: 2, initialDelay: 1 })
-    ).rejects.toThrow('always fails');
+    await expect(retry(fn, { maxRetries: 2, initialDelay: 1 })).rejects.toThrow('always fails');
     expect(fn).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
   });
 
   it('should apply exponential backoff', async () => {
-    const fn = vi.fn()
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValue('ok');
+    const fn = vi.fn().mockRejectedValueOnce(new Error('fail')).mockResolvedValue('ok');
 
     const start = Date.now();
     await retry(fn, { maxRetries: 1, initialDelay: 50, backoffMultiplier: 2 });
@@ -48,12 +45,13 @@ describe('Retry', () => {
     setTimeout(() => controller.abort(), 10);
 
     await expect(
-      retry(fn, { maxRetries: 10, initialDelay: 50, signal: controller.signal })
+      retry(fn, { maxRetries: 10, initialDelay: 50, signal: controller.signal }),
     ).rejects.toThrow();
   });
 
   it('should support custom retryable check', async () => {
-    const fn = vi.fn()
+    const fn = vi
+      .fn()
       .mockRejectedValueOnce(new Error('retryable'))
       .mockRejectedValueOnce(new Error('not retryable'));
 
@@ -62,7 +60,7 @@ describe('Retry', () => {
         maxRetries: 3,
         initialDelay: 1,
         isRetryable: (err) => (err as Error).message === 'retryable',
-      })
+      }),
     ).rejects.toThrow('not retryable');
     expect(fn).toHaveBeenCalledTimes(2);
   });

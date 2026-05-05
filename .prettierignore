@@ -1,0 +1,12 @@
+dist
+node_modules
+documentation
+docs
+data
+coverage
+.agentx
+.pnpm-store
+.claude
+examples
+pnpm-lock.yaml
+*.tsbuildinfo

@@ -4,7 +4,11 @@ import type { ExecutionContext as IExecutionContext } from '../contracts/entitie
 /**
  * Creates a new execution context with a unique traceId.
  */
-export function createExecutionContext(threadId: string, model: string, parentTraceId?: string): IExecutionContext {
+export function createExecutionContext(
+  threadId: string,
+  model: string,
+  parentTraceId?: string,
+): IExecutionContext {
   return {
     traceId: randomUUID(),
     threadId,

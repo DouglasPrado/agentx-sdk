@@ -34,7 +34,7 @@ export function applyToolResultBudget(
   const { maxTotalToolResultChars } = options;
 
   // Collect tool result indices and sizes
-  const toolResults: Array<{ index: number; size: number }> = [];
+  const toolResults: { index: number; size: number }[] = [];
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]!;
     if (msg.role === 'tool' && typeof msg.content === 'string') {

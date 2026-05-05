@@ -48,10 +48,50 @@ describe('createSqlTools', () => {
   });
 
   it('respects toolNamePrefix', () => {
-    const tools = createSqlTools({ pool: makePool(), queries: sampleQueries, toolNamePrefix: 'pg_' });
+    const tools = createSqlTools({
+      pool: makePool(),
+      queries: sampleQueries,
+      toolNamePrefix: 'pg_',
+    });
     expect(tools[0]!.name).toBe('pg_search_queries');
     expect(tools[1]!.name).toBe('pg_run_query');
   });
+
+  // --- issue #76: flags dinâmicas baseadas no catálogo ---
+
+  it('sets isReadOnly and isConcurrencySafe to false when catalog has INSERT query (#76)', () => {
+    const writeQuery: SqlQueryDef = {
+      name: 'insert_order',
+      description: 'Insert a new order',
+      sql: 'INSERT INTO orders (product_id, amount) VALUES ($1, $2)',
+      parameters: z.object({ product_id: z.number(), amount: z.number() }),
+    };
+    const tools = createSqlTools({ pool: makePool(), queries: [writeQuery] });
+    const runTool = tools[1]!;
+    expect(runTool.isReadOnly).toBe(false);
+    expect(runTool.isConcurrencySafe).toBe(false);
+  });
+
+  it('keeps isReadOnly and isConcurrencySafe true when all queries are SELECT (#76)', () => {
+    const tools = createSqlTools({ pool: makePool(), queries: sampleQueries });
+    const runTool = tools[1]!;
+    expect(runTool.isReadOnly).toBe(true);
+    expect(runTool.isConcurrencySafe).toBe(true);
+  });
+
+  it('sets flags to false for UPDATE query (#76)', () => {
+    const updateQuery: SqlQueryDef = {
+      name: 'update_balance',
+      description: 'Debit or credit user balance',
+      sql: 'UPDATE accounts SET balance = balance + $1 WHERE user_id = $2',
+      parameters: z.object({ amount: z.number(), user_id: z.string() }),
+    };
+    const tools = createSqlTools({ pool: makePool(), queries: [updateQuery] });
+    expect(tools[1]!.isReadOnly).toBe(false);
+    expect(tools[1]!.isConcurrencySafe).toBe(false);
+  });
+
+  // --- end issue #76 ---
 
   describe('search_queries', () => {
     it('finds queries by keyword in name', async () => {
@@ -140,7 +180,10 @@ describe('createSqlTools', () => {
         AbortSignal.timeout(5000),
       );
       expect(result).toEqual(
-        expect.objectContaining({ isError: true, content: expect.stringContaining('Invalid parameters') }),
+        expect.objectContaining({
+          isError: true,
+          content: expect.stringContaining('Invalid parameters'),
+        }),
       );
     });
 
@@ -203,6 +246,7 @@ describe('createSqlTools', () => {
       expect(result.content).toContain('23505');
       // Raw constraint name must NOT appear
       expect(result.content).not.toContain('users_email_key');
+      expect(result).toEqual(expect.objectContaining({ isError: true }));
     });
 
     // --- end issue #79 ---

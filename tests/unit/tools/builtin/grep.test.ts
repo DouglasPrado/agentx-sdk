@@ -11,7 +11,10 @@ describe('builtin/grep', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'grep-tool-'));
     await mkdir(join(tempDir, 'src'), { recursive: true });
-    await writeFile(join(tempDir, 'src', 'index.ts'), 'export function hello() {\n  return "world";\n}\n');
+    await writeFile(
+      join(tempDir, 'src', 'index.ts'),
+      'export function hello() {\n  return "world";\n}\n',
+    );
     await writeFile(join(tempDir, 'src', 'agent.ts'), 'class Agent {\n  run() {}\n}\n');
     await writeFile(join(tempDir, 'readme.md'), '# Hello World\n');
   });
@@ -54,7 +57,7 @@ describe('builtin/grep', () => {
     const tool = createGrepTool();
     const result = await tool.execute({ pattern: '\\{', path: tempDir, max_results: 1 }, signal);
     const content = typeof result === 'string' ? result : result.content;
-    const lines = content.split('\n').filter(l => l.includes(':'));
+    const lines = content.split('\n').filter((l) => l.includes(':'));
     expect(lines.length).toBeLessThanOrEqual(2); // 1 match + possible context
   });
 
@@ -70,7 +73,10 @@ describe('builtin/grep', () => {
 
     it('should allow path inside workingDir when workingDir is set', async () => {
       const tool = createGrepTool(tempDir);
-      const result = await tool.execute({ pattern: 'function', path: join(tempDir, 'src') }, signal);
+      const result = await tool.execute(
+        { pattern: 'function', path: join(tempDir, 'src') },
+        signal,
+      );
       const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
       expect(parsed.isError).toBeFalsy();
     });

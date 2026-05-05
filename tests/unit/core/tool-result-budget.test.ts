@@ -29,9 +29,9 @@ describe('applyToolResultBudget', () => {
 
   it('should truncate largest tool results first when over budget', () => {
     const messages: LLMMessage[] = [
-      toolMsg('x'.repeat(5000), 'tc-1'),  // 5000 chars
-      toolMsg('y'.repeat(3000), 'tc-2'),  // 3000 chars
-      toolMsg('z'.repeat(1000), 'tc-3'),  // 1000 chars — smallest, should survive
+      toolMsg('x'.repeat(5000), 'tc-1'), // 5000 chars
+      toolMsg('y'.repeat(3000), 'tc-2'), // 3000 chars
+      toolMsg('z'.repeat(1000), 'tc-3'), // 1000 chars — smallest, should survive
     ];
 
     // Budget of 5000 — total is 9000, need to cut ~4000
@@ -42,7 +42,7 @@ describe('applyToolResultBudget', () => {
 
     // Total chars should be roughly within budget
     const totalChars = result.messages
-      .filter(m => m.role === 'tool')
+      .filter((m) => m.role === 'tool')
       .reduce((sum, m) => sum + (typeof m.content === 'string' ? m.content.length : 0), 0);
     expect(totalChars).toBeLessThanOrEqual(6000); // some overhead from truncation markers
   });
@@ -67,10 +67,7 @@ describe('applyToolResultBudget', () => {
   });
 
   it('should handle no tool messages', () => {
-    const messages: LLMMessage[] = [
-      userMsg('hi'),
-      assistantMsg('hello'),
-    ];
+    const messages: LLMMessage[] = [userMsg('hi'), assistantMsg('hello')];
 
     const result = applyToolResultBudget(messages, { maxTotalToolResultChars: 1000 });
     expect(result.messages).toEqual(messages);
@@ -78,9 +75,7 @@ describe('applyToolResultBudget', () => {
   });
 
   it('should add truncation marker with original length', () => {
-    const messages: LLMMessage[] = [
-      toolMsg('x'.repeat(10000), 'tc-1'),
-    ];
+    const messages: LLMMessage[] = [toolMsg('x'.repeat(10000), 'tc-1')];
 
     const result = applyToolResultBudget(messages, { maxTotalToolResultChars: 500 });
     const content = result.messages[0]!.content as string;

@@ -1,9 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import {
-  scriptFetch,
-  createTempAgent,
-  type TempAgentHandle,
-} from './helpers.js';
+import { scriptFetch, createTempAgent, type TempAgentHandle } from './helpers.js';
 import type { AgentEvent } from '../../src/contracts/entities/agent-event.js';
 
 /**
@@ -28,17 +24,25 @@ describe('E2E 06 — abort mid-stream', () => {
     // ReadableStream semantics. Our mock exposes a rejecter tied to cancel.
     let rejectRead: ((e: Error) => void) | null = null;
     const hangingReader = {
-      read: () => new Promise<never>((_, reject) => { rejectRead = reject; }),
+      read: () =>
+        new Promise<never>((_, reject) => {
+          rejectRead = reject;
+        }),
       cancel: vi.fn().mockImplementation(async () => {
         cancelCalls.push(Date.now());
         rejectRead?.(new Error('stream cancelled'));
       }),
-      releaseLock: vi.fn().mockImplementation(() => { releasedLock = true; }),
+      releaseLock: vi.fn().mockImplementation(() => {
+        releasedLock = true;
+      }),
       closed: Promise.resolve(undefined),
     };
 
     const hangingBody = { getReader: () => hangingReader } as unknown as ReadableStream<Uint8Array>;
-    const hangingResponse = new Response(null, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    const hangingResponse = new Response(null, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
     Object.defineProperty(hangingResponse, 'body', { value: hangingBody });
 
     scriptFetch({ chat: [hangingResponse] });
@@ -53,11 +57,13 @@ describe('E2E 06 — abort mid-stream', () => {
         for await (const event of handle.agent.stream('hi', { signal: controller.signal })) {
           events.push(event);
         }
-      } catch { /* abort may surface as a throw */ }
+      } catch {
+        /* abort may surface as a throw */
+      }
     })();
 
     // Let the stream start, then abort.
-    await new Promise(r => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 30));
     const abortAt = Date.now();
     controller.abort();
 
@@ -75,6 +81,6 @@ describe('E2E 06 — abort mid-stream', () => {
     expect(releasedLock).toBe(true);
 
     // At least agent_start was emitted before cancellation
-    expect(events.some(e => e.type === 'agent_start')).toBe(true);
+    expect(events.some((e) => e.type === 'agent_start')).toBe(true);
   });
 });

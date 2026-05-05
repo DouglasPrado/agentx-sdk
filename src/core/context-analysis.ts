@@ -35,7 +35,7 @@ export function analyzeContext(messages: readonly LLMMessage[]): ContextAnalysis
     const tokens = estimateTokens(content);
     totalTokens += tokens;
 
-    const role = msg.role as keyof typeof byRole;
+    const role = msg.role;
     if (role in byRole) {
       byRole[role] += tokens;
     }

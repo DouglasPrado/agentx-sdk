@@ -17,32 +17,38 @@ export class SQLiteConversationStore implements ConversationStore {
   }
 
   appendMessage(message: ChatMessage, threadId: string): void {
-    this.database.db.prepare(`
+    this.database.db
+      .prepare(
+        `
       INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      threadId,
-      message.role,
-      typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
-      message.toolCalls ? JSON.stringify(message.toolCalls) : null,
-      message.toolCallId ?? null,
-      message.pinned ? 1 : 0,
-      message.createdAt,
-    );
+    `,
+      )
+      .run(
+        threadId,
+        message.role,
+        typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+        message.toolCalls ? JSON.stringify(message.toolCalls) : null,
+        message.toolCallId ?? null,
+        message.pinned ? 1 : 0,
+        message.createdAt,
+      );
   }
 
   listThread(threadId: string): ChatMessage[] {
-    const rows = this.database.db.prepare(
-      'SELECT * FROM conversations WHERE thread_id = ? ORDER BY created_at ASC'
-    ).all(threadId) as ConversationRow[];
-    return rows.map(row => rowToMessage(row, this.logger));
+    const rows = this.database.db
+      .prepare('SELECT * FROM conversations WHERE thread_id = ? ORDER BY created_at ASC')
+      .all(threadId) as ConversationRow[];
+    return rows.map((row) => rowToMessage(row, this.logger));
   }
 
   listPinned(threadId: string): ChatMessage[] {
-    const rows = this.database.db.prepare(
-      'SELECT * FROM conversations WHERE thread_id = ? AND pinned = 1 ORDER BY created_at ASC'
-    ).all(threadId) as ConversationRow[];
-    return rows.map(row => rowToMessage(row, this.logger));
+    const rows = this.database.db
+      .prepare(
+        'SELECT * FROM conversations WHERE thread_id = ? AND pinned = 1 ORDER BY created_at ASC',
+      )
+      .all(threadId) as ConversationRow[];
+    return rows.map((row) => rowToMessage(row, this.logger));
   }
 
   clearThread(threadId: string): void {
@@ -57,10 +63,12 @@ function rowToMessage(row: ConversationRow, logger: Logger): ChatMessage {
     throw new Error(`Invalid message role in database: "${row.role}"`);
   }
 
-  let content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  let content: string | { type: string; text?: string; image_url?: { url: string } }[];
   try {
-    const parsed = JSON.parse(row.content);
-    content = Array.isArray(parsed) ? parsed : row.content;
+    const parsed: unknown = JSON.parse(row.content);
+    content = Array.isArray(parsed)
+      ? (parsed as { type: string; text?: string; image_url?: { url: string } }[])
+      : row.content;
   } catch {
     content = row.content;
   }
@@ -68,14 +76,19 @@ function rowToMessage(row: ConversationRow, logger: Logger): ChatMessage {
   let toolCalls: ChatMessage['toolCalls'];
   if (row.tool_calls) {
     try {
-      toolCalls = JSON.parse(row.tool_calls);
+      toolCalls = JSON.parse(row.tool_calls) as ChatMessage['toolCalls'];
     } catch (e) {
-      logger.warn('Invalid tool_calls JSON in conversations table', {
-        rowId: row.id,
-        threadId: row.thread_id,
-        error: e instanceof Error ? e.message : String(e),
-      });
-      toolCalls = undefined;
+      // Issue #25: corrupted tool_calls must be loud, not silently dropped —
+      // partial writes, migration bugs, or manual DB edits would otherwise
+      // feed the LLM a truncated history. Issue #63: use the injected logger
+      // (never console.* directly) so tests / hosts can capture warnings.
+      const errMsg = e instanceof Error ? e.message : String(e);
+      logger.warn(
+        `[SQLiteConversationStore] Invalid tool_calls JSON (rowId=${row.id}, threadId=${row.thread_id}): ${errMsg}`,
+      );
+      throw new Error(
+        `Corrupted tool_calls JSON for rowId=${row.id} (threadId=${row.thread_id}): ${errMsg}`,
+      );
     }
   }
 

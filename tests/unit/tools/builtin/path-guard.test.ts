@@ -48,6 +48,8 @@ describe('assertSafePath', () => {
   it('blocks a symlink inside workDir that points to a directory outside (issue #47)', async () => {
     const link = join(workDir, 'outside-dir-link');
     await symlink(outsideDir, link);
-    expect(() => assertSafePath(join(link, 'anything'), workDir)).toThrow(/symlink|traversal|outside/i);
+    expect(() => assertSafePath(join(link, 'anything'), workDir)).toThrow(
+      /symlink|traversal|outside/i,
+    );
   });
 });

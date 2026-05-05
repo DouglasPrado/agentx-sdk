@@ -12,7 +12,11 @@ import { z } from 'zod';
 
 const MAX_DEPTH = 10;
 
-type JsonSchema = {
+/** Hard caps against DoS via malicious MCP schemas with huge property counts. */
+const MAX_PROPERTIES = 500;
+const MAX_UNION_MEMBERS = 50;
+
+interface JsonSchema {
   type?: string;
   properties?: Record<string, JsonSchema>;
   required?: string[];
@@ -24,7 +28,7 @@ type JsonSchema = {
   description?: string;
   default?: unknown;
   [key: string]: unknown;
-};
+}
 
 /**
  * Convert a JSON Schema to a Zod schema.
@@ -55,9 +59,7 @@ export function jsonSchemaToZod(schema?: JsonSchema | null, depth = 0): z.ZodTyp
 
   // Array
   if (type === 'array') {
-    const items = schema.items
-      ? jsonSchemaToZod(schema.items, depth + 1)
-      : z.unknown();
+    const items = schema.items ? jsonSchemaToZod(schema.items, depth + 1) : z.unknown();
     let arr: z.ZodTypeAny = z.array(items);
     if (schema.nullable) arr = arr.nullable();
     if (schema.description) arr = arr.describe(schema.description);
@@ -94,10 +96,12 @@ export function jsonSchemaToZod(schema?: JsonSchema | null, depth = 0): z.ZodTyp
 function buildObject(schema: JsonSchema, depth: number): z.ZodTypeAny {
   if (!schema.properties) return z.object({}).passthrough();
 
-  const required = new Set(schema.required ?? []);
+  // Limit entries and required set to prevent DoS via malicious MCP schemas.
+  const entries = Object.entries(schema.properties).slice(0, MAX_PROPERTIES);
+  const required = new Set((schema.required ?? []).slice(0, MAX_PROPERTIES));
   const shape: Record<string, z.ZodTypeAny> = {};
 
-  for (const [key, propSchema] of Object.entries(schema.properties)) {
+  for (const [key, propSchema] of entries) {
     let field = jsonSchemaToZod(propSchema, depth + 1);
     if (!required.has(key)) {
       field = field.optional();
@@ -125,7 +129,7 @@ function buildEnum(values: unknown[], nullable?: boolean): z.ZodTypeAny {
     return e;
   }
   // Mixed types — fall back to union of literals
-  const literals = values.map(v => z.literal(v as z.Primitive));
+  const literals = values.map((v) => z.literal(v as z.Primitive));
   if (literals.length >= 2) {
     return z.union(literals as unknown as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }
@@ -133,7 +137,9 @@ function buildEnum(values: unknown[], nullable?: boolean): z.ZodTypeAny {
 }
 
 function buildUnion(schemas: JsonSchema[], depth: number): z.ZodTypeAny {
-  const members = schemas.map(s => jsonSchemaToZod(s, depth + 1));
+  // Limit members to prevent DoS via malicious MCP schemas with huge anyOf/oneOf arrays.
+  const limited = schemas.slice(0, MAX_UNION_MEMBERS);
+  const members = limited.map((s) => jsonSchemaToZod(s, depth + 1));
   if (members.length >= 2) {
     return z.union(members as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }

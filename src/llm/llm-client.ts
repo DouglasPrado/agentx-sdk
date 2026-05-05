@@ -23,12 +23,15 @@ function isRetryableStatus(status: number): boolean {
 const MAX_ERROR_BODY = 500;
 
 function sanitizeErrorBody(text: string): string {
-  const truncated = text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
+  const truncated =
+    text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
   try {
-    const parsed = JSON.parse(truncated);
-    const msg = parsed?.error?.message ?? parsed?.message;
+    const parsed = JSON.parse(truncated) as { error?: { message?: unknown }; message?: unknown };
+    const msg = parsed.error?.message ?? parsed.message;
     if (typeof msg === 'string') return msg.slice(0, MAX_ERROR_BODY);
-  } catch { /* not JSON — return truncated plain text */ }
+  } catch {
+    /* not JSON — return truncated plain text */
+  }
   return truncated;
 }
 
@@ -62,15 +65,17 @@ export class LLMClient {
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
-      messages = messages.map(m =>
-        m.role === 'system' ? { ...m, role: 'user' as const } : m
-      );
+      messages = messages.map((m) => (m.role === 'system' ? { ...m, role: 'user' as const } : m));
     }
 
     const body: Record<string, unknown> = {
       model,
       messages,
       stream: true,
+      // OpenAI-compatible providers (OpenAI, OpenRouter, LiteLLM, vLLM) only emit
+      // usage on the SSE stream when this flag is set. Without it, the final chunk
+      // has finish_reason but no token counts — costs cannot be computed downstream.
+      stream_options: { include_usage: true },
       ...reasoningArgs,
     };
 
@@ -83,10 +88,11 @@ export class LLMClient {
       else body.max_tokens = params.maxTokens;
     }
 
-    const response = await retry(
-      () => this.fetchAPI('/chat/completions', body, params.signal),
-      { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
-    );
+    const response = await retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
+      maxRetries: 3,
+      initialDelay: 1000,
+      isRetryable: (e) => e instanceof RetryableError,
+    });
 
     yield* this.parseSSEStream(response, params.signal);
   }
@@ -97,9 +103,7 @@ export class LLMClient {
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
-      messages = messages.map(m =>
-        m.role === 'system' ? { ...m, role: 'user' as const } : m
-      );
+      messages = messages.map((m) => (m.role === 'system' ? { ...m, role: 'user' as const } : m));
     }
 
     const body: Record<string, unknown> = {
@@ -118,25 +122,30 @@ export class LLMClient {
       else body.max_tokens = params.maxTokens;
     }
 
-    const response = await retry(
-      () => this.fetchAPI('/chat/completions', body, params.signal),
-      { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
-    );
+    const response = await retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
+      maxRetries: 3,
+      initialDelay: 1000,
+      isRetryable: (e) => e instanceof RetryableError,
+    });
 
-    type ChatJson = {
-      choices: Array<{
+    interface ChatJson {
+      choices: {
         message: { content?: string; tool_calls?: LLMToolCall[] };
         finish_reason: string;
-      }>;
+      }[];
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-    };
+    }
     let json: ChatJson;
     try {
-      json = await response.json() as ChatJson;
+      json = (await response.json()) as ChatJson;
     } catch (e) {
       // Ensure body is fully consumed so the HTTP connection is returned to the pool
-      await response.body?.cancel().catch(() => {});
-      throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`);
+      await response.body?.cancel().catch(() => {
+        /* swallow — already in error path */
+      });
+      throw new Error(
+        `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
 
     const choice = json.choices[0]!;
@@ -156,26 +165,37 @@ export class LLMClient {
 
   async embed(texts: string[], model?: string): Promise<number[][]> {
     const response = await retry(
-      () => this.fetchAPI('/embeddings', {
-        model: model ?? this.model,
-        input: texts,
-      }),
+      () =>
+        this.fetchAPI('/embeddings', {
+          model: model ?? this.model,
+          input: texts,
+        }),
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
     );
 
-    type EmbedJson = { data: Array<{ embedding: number[] }> };
+    interface EmbedJson {
+      data: { embedding: number[] }[];
+    }
     let json: EmbedJson;
     try {
-      json = await response.json() as EmbedJson;
+      json = (await response.json()) as EmbedJson;
     } catch (e) {
-      await response.body?.cancel().catch(() => {});
-      throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`);
+      await response.body?.cancel().catch(() => {
+        /* swallow — already in error path */
+      });
+      throw new Error(
+        `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
 
-    return json.data.map(d => d.embedding);
+    return json.data.map((d) => d.embedding);
   }
 
-  private async fetchAPI(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  private async fetchAPI(
+    path: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     // Always apply a default timeout; compose with the caller-provided signal if any.
     const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
     if (signal) signals.push(signal);
@@ -185,7 +205,7 @@ export class LLMClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
       signal: effectiveSignal,
@@ -211,26 +231,41 @@ export class LLMClient {
     return response;
   }
 
-  private async *parseSSEStream(response: Response, signal?: AbortSignal): AsyncIterableIterator<StreamChunk> {
+  private async *parseSSEStream(
+    response: Response,
+    signal?: AbortSignal,
+  ): AsyncIterableIterator<StreamChunk> {
     const body = response.body;
     if (!body) throw new Error('Response body is null');
 
-    const reader = body.getReader();
+    const reader = (body as ReadableStream<Uint8Array>).getReader();
     const decoder = new TextDecoder();
     let buffer = '';
 
     // Accumulate tool calls incrementally
     const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
 
+    // Defer the `done` event until end-of-stream. With stream_options.include_usage,
+    // OpenAI-compatible providers send usage in a SEPARATE chunk (with empty choices)
+    // AFTER the chunk that carried finish_reason. If we emitted `done` on
+    // finish_reason like before, we'd race ahead of the usage chunk and lose it.
+    let pendingFinishReason: string | undefined;
+    let pendingUsage: TokenUsage | undefined;
+    let donePending = false;
+
     // Propagate abort to the reader so a hanging read() is unblocked immediately.
-    const abortHandler = (): void => { void reader.cancel().catch(() => {}); };
+    const abortHandler = (): void => {
+      void reader.cancel().catch(() => {
+        /* swallow — abort path */
+      });
+    };
     if (signal) {
       if (signal.aborted) abortHandler();
       else signal.addEventListener('abort', abortHandler, { once: true });
     }
 
     try {
-      while (true) {
+      streamLoop: while (true) {
         if (signal?.aborted) break;
 
         const { done, value } = await reader.read();
@@ -252,7 +287,7 @@ export class LLMClient {
           const data = trimmed.slice(6);
 
           if (data === '[DONE]') {
-            return;
+            break streamLoop;
           }
 
           let parsed: SSEPayload;
@@ -260,6 +295,16 @@ export class LLMClient {
             parsed = JSON.parse(data) as SSEPayload;
           } catch {
             continue;
+          }
+
+          // Capture usage from any chunk — when stream_options.include_usage is set
+          // it usually arrives on its own chunk with choices=[].
+          if (parsed.usage) {
+            pendingUsage = {
+              inputTokens: parsed.usage.prompt_tokens,
+              outputTokens: parsed.usage.completion_tokens,
+              totalTokens: parsed.usage.total_tokens,
+            };
           }
 
           const choice = parsed.choices?.[0];
@@ -296,23 +341,18 @@ export class LLMClient {
             }
           }
 
-          // Done
           if (choice.finish_reason) {
-            // Emit accumulated tool calls
-            for (const tc of toolCalls.values()) {
-              yield { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments };
-            }
-
-            const usage: TokenUsage | undefined = parsed.usage ? {
-              inputTokens: parsed.usage.prompt_tokens,
-              outputTokens: parsed.usage.completion_tokens,
-              totalTokens: parsed.usage.total_tokens,
-            } : undefined;
-
-            yield { type: 'done', finishReason: choice.finish_reason, usage };
-            return;
+            pendingFinishReason = choice.finish_reason;
+            donePending = true;
           }
         }
+      }
+
+      if (donePending) {
+        for (const tc of toolCalls.values()) {
+          yield { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments };
+        }
+        yield { type: 'done', finishReason: pendingFinishReason ?? 'stop', usage: pendingUsage };
       }
     } finally {
       if (signal) signal.removeEventListener('abort', abortHandler);
@@ -332,18 +372,18 @@ class RetryableError extends Error {
 }
 
 interface SSEPayload {
-  choices?: Array<{
+  choices?: {
     delta?: {
       content?: string;
       reasoning?: string;
-      tool_calls?: Array<{
+      tool_calls?: {
         index: number;
         id?: string;
         function?: { name?: string; arguments?: string };
-      }>;
+      }[];
     };
     finish_reason?: string;
-  }>;
+  }[];
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;

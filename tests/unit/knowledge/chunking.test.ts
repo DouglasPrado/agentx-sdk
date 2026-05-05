@@ -15,7 +15,8 @@ describe('chunkText', () => {
   });
 
   it('should split on paragraph boundaries when possible', () => {
-    const text = 'First paragraph about topic A.\n\nSecond paragraph about topic B.\n\nThird paragraph about topic C.';
+    const text =
+      'First paragraph about topic A.\n\nSecond paragraph about topic B.\n\nThird paragraph about topic C.';
     const chunks = chunkText(text, { chunkSize: 50, chunkOverlap: 5 });
     expect(chunks.length).toBeGreaterThanOrEqual(2);
   });

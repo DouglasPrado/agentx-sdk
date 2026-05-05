@@ -32,23 +32,32 @@ function createMockClient(chunks: StreamChunk[][]): LLMClient {
 
 describe('Stop Hooks', () => {
   it('should run stop hooks when model produces final text (no tool calls)', async () => {
-    const hookExecute = vi.fn().mockResolvedValue({ blockingErrors: [], preventContinuation: false });
+    const hookExecute = vi
+      .fn()
+      .mockResolvedValue({ blockingErrors: [], preventContinuation: false });
     const hook: StopHook = { name: 'test-hook', execute: hookExecute };
 
-    const client = createMockClient([[
-      { type: 'content', data: 'Done!' },
-      { type: 'done', finishReason: 'stop', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'content', data: 'Done!' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        stopHooks: [hook],
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      stopHooks: [hook],
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');
@@ -61,20 +70,27 @@ describe('Stop Hooks', () => {
       execute: vi.fn().mockResolvedValue({ blockingErrors: [], preventContinuation: true }),
     };
 
-    const client = createMockClient([[
-      { type: 'content', data: 'text' },
-      { type: 'done', finishReason: 'stop', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'content', data: 'text' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        stopHooks: [hook],
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      stopHooks: [hook],
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop_hook');
@@ -83,8 +99,12 @@ describe('Stop Hooks', () => {
   it('should inject blocking errors and continue the loop', async () => {
     const hook: StopHook = {
       name: 'blocking-hook',
-      execute: vi.fn()
-        .mockResolvedValueOnce({ blockingErrors: ['Validation failed: missing field X'], preventContinuation: false })
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({
+          blockingErrors: ['Validation failed: missing field X'],
+          preventContinuation: false,
+        })
         .mockResolvedValueOnce({ blockingErrors: [], preventContinuation: false }),
     };
 
@@ -92,24 +112,33 @@ describe('Stop Hooks', () => {
       // First: model responds
       [
         { type: 'content', data: 'First attempt' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
       ],
       // Second: model responds after receiving blocking error
       [
         { type: 'content', data: 'Fixed!' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        },
       ],
     ]);
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        stopHooks: [hook],
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      stopHooks: [hook],
+    });
 
     const { events, terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');
@@ -118,22 +147,32 @@ describe('Stop Hooks', () => {
     expect(hook.execute).toHaveBeenCalledTimes(2);
 
     // Should have recovery event for stop hook
-    const recoveryEvents = events.filter(e => e.type === 'recovery');
+    const recoveryEvents = events.filter((e) => e.type === 'recovery');
     expect(recoveryEvents.length).toBeGreaterThan(0);
   });
 
   it('should not run stop hooks when model makes tool calls', async () => {
-    const hookExecute = vi.fn().mockResolvedValue({ blockingErrors: [], preventContinuation: false });
+    const hookExecute = vi
+      .fn()
+      .mockResolvedValue({ blockingErrors: [], preventContinuation: false });
     const hook: StopHook = { name: 'test-hook', execute: hookExecute };
 
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'c1', name: 'tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
       ],
       [
         { type: 'content', data: 'Done after tool' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        },
       ],
     ]);
 
@@ -145,14 +184,15 @@ describe('Stop Hooks', () => {
       execute: vi.fn().mockResolvedValue('ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        stopHooks: [hook],
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      stopHooks: [hook],
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');

@@ -15,9 +15,14 @@ export function chunkText(text: string, options: ChunkingOptions): string[] {
   return recursiveSplit(text, separators, chunkSize, chunkOverlap);
 }
 
-function recursiveSplit(text: string, separators: string[], chunkSize: number, overlap: number): string[] {
+function recursiveSplit(
+  text: string,
+  separators: string[],
+  chunkSize: number,
+  overlap: number,
+): string[] {
   const chunks: string[] = [];
-  const separator = separators.find(s => s === '' || text.includes(s)) ?? '';
+  const separator = separators.find((s) => s === '' || text.includes(s)) ?? '';
 
   const parts = separator ? text.split(separator) : [...text];
   let current = '';
