@@ -42,7 +42,7 @@ export function createEmbeddingResponse(vectors: number[][]): Response {
 // Chunk builders — build common SSE payloads without string-concat mistakes
 // ---------------------------------------------------------------------------
 
-export interface TextChunkOptions {
+interface TextChunkOptions {
   content: string;
   finishReason?: 'stop' | 'tool_calls';
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -62,7 +62,7 @@ export function textResponseFrames(opts: TextChunkOptions): string[] {
   return frames;
 }
 
-export interface ToolCallChunkOptions {
+interface ToolCallChunkOptions {
   toolCallId: string;
   name: string;
   arguments: string;
@@ -111,9 +111,9 @@ export function toolCallFrames(opts: ToolCallChunkOptions): string[] {
 // Scripted fetch router
 // ---------------------------------------------------------------------------
 
-export type FetchTurnResponse = Response | (() => Response | Promise<Response>);
+type FetchTurnResponse = Response | (() => Response | Promise<Response>);
 
-export interface FetchScript {
+interface FetchScript {
   /** Chat completions responses, consumed in order across turns. */
   chat?: FetchTurnResponse[];
   /** Embeddings responses, consumed in order. Falls back to zero vectors. */
@@ -122,7 +122,7 @@ export interface FetchScript {
   fallback?: (url: string) => Response | Promise<Response>;
 }
 
-export interface ScriptedFetchMock {
+interface ScriptedFetchMock {
   mock: Mock;
   /** Request bodies captured per chat turn (parsed JSON). */
   chatRequests: Record<string, unknown>[];

@@ -14,11 +14,11 @@ import type { LLMMessage } from '../../llm/message-types.js';
 const HEAD_RATIO = 0.7;
 const TAIL_RATIO = 0.2;
 
-export interface ToolResultBudgetOptions {
+interface ToolResultBudgetOptions {
   maxTotalToolResultChars: number;
 }
 
-export interface ToolResultBudgetResult {
+interface ToolResultBudgetResult {
   messages: LLMMessage[];
   truncatedCount: number;
 }
