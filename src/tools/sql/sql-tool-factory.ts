@@ -184,6 +184,8 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
 
         return JSON.stringify(result.rows, null, 2);
       } catch (err: unknown) {
+        // Return a generic message to the LLM — raw DB errors may contain sensitive
+        // table/column names (CWE-209). Full error details go to server logs only.
         const pgCode = (err as { code?: string }).code;
         const genericMessage = pgCode
           ? `Query execution failed (error code: ${pgCode})`

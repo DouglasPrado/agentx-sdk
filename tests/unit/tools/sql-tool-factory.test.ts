@@ -204,8 +204,51 @@ describe('createSqlTools', () => {
       const result = await run!.execute(
         { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
         AbortSignal.timeout(5000),
+      ) as { content: string; isError: boolean };
+      expect(result.isError).toBe(true);
+      expect(result.content).toMatch(/Query execution failed/);
+    });
+
+    // --- issue #79: erro bruto do banco não deve vazar ao LLM ---
+
+    it('does not leak raw DB error message to LLM (#79)', async () => {
+      const sensitiveError = new Error(
+        'column "customer_ssn" of relation "kyc_data" violates not-null constraint',
       );
+      const pool: SqlQueryRunner = { query: vi.fn().mockRejectedValue(sensitiveError) };
+      const [, run] = createSqlTools({ pool, queries: sampleQueries });
+      const result = await run!.execute(
+        { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
+        AbortSignal.timeout(5000),
+      ) as { content: string; isError: boolean };
+
+      expect(result.isError).toBe(true);
+      // Sensitive column/table names must not appear in the LLM-facing message
+      expect(result.content).not.toContain('customer_ssn');
+      expect(result.content).not.toContain('kyc_data');
+      expect(result.content).toMatch(/Query execution failed/);
+    });
+
+    it('includes PostgreSQL error code in generic message when available (#79)', async () => {
+      const pgError = Object.assign(
+        new Error('duplicate key value violates unique constraint "users_email_key"'),
+        { code: '23505' },
+      );
+      const pool: SqlQueryRunner = { query: vi.fn().mockRejectedValue(pgError) };
+      const [, run] = createSqlTools({ pool, queries: sampleQueries });
+      const result = await run!.execute(
+        { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
+        AbortSignal.timeout(5000),
+      ) as { content: string; isError: boolean };
+
+      expect(result.isError).toBe(true);
+      // Error code is safe to include — it carries no structural info
+      expect(result.content).toContain('23505');
+      // Raw constraint name must NOT appear
+      expect(result.content).not.toContain('users_email_key');
       expect(result).toEqual(expect.objectContaining({ isError: true }));
     });
+
+    // --- end issue #79 ---
   });
 });
