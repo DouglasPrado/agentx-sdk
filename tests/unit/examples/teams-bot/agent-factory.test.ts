@@ -150,4 +150,33 @@ describe('Agent Pool (agent-factory)', () => {
     const second = await getAgent('conv-1');
     expect(second).not.toBe(first);
   });
+
+  describe('log injection prevention (#91)', () => {
+    it('sanitizes newline in conversationId before logging', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const maliciousId = 'conv-1\n[FAKE] Admin password: admin123';
+      await getAgent(maliciousId);
+      const allLogs = logSpy.mock.calls.flat().join('\n');
+      expect(allLogs).not.toMatch(/\n\[FAKE\]/);
+      logSpy.mockRestore();
+    });
+
+    it('sanitizes ANSI escape sequences in conversationId before logging', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const maliciousId = 'conv-2\x1b[31mRED_TEXT\x1b[0m';
+      await getAgent(maliciousId);
+      const allLogs = logSpy.mock.calls.flat().join('');
+      expect(allLogs).not.toContain('\x1b[31m');
+      logSpy.mockRestore();
+    });
+
+    it('sanitizes carriage return in conversationId before logging', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const maliciousId = 'conv-3\r[INJECTED]';
+      await getAgent(maliciousId);
+      const allLogs = logSpy.mock.calls.flat().join('');
+      expect(allLogs).not.toContain('\r');
+      logSpy.mockRestore();
+    });
+  });
 });
