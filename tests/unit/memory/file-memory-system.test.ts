@@ -368,3 +368,58 @@ describe('FileMemorySystem — concurrent writes (withWriteLock)', () => {
     }
   });
 });
+
+describe('FileMemorySystem — path traversal in readMemory/deleteMemory (#86)', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-pt-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('readMemory — rejects path traversal via ../', async () => {
+    const result = await system.readMemory('../../etc/passwd');
+    expect(result).toBeNull();
+  });
+
+  it('readMemory — rejects null byte in filename', async () => {
+    const result = await system.readMemory('valid\x00../../etc/shadow');
+    expect(result).toBeNull();
+  });
+
+  it('readMemory — rejects URL-encoded traversal', async () => {
+    const result = await system.readMemory('%2e%2e%2fetc%2fpasswd');
+    expect(result).toBeNull();
+  });
+
+  it('readMemory — still reads a valid file within the memory dir', async () => {
+    await system.saveMemory({ name: 'safe', description: 'ok', type: 'user', content: 'body' });
+    const result = await system.readMemory('safe.md');
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('body');
+  });
+
+  it('deleteMemory — rejects path traversal via ../', async () => {
+    const result = await system.deleteMemory('../../important.txt');
+    expect(result).toBe(false);
+  });
+
+  it('deleteMemory — rejects null byte in filename', async () => {
+    const result = await system.deleteMemory('valid\x00../../tmp/evil');
+    expect(result).toBe(false);
+  });
+
+  it('deleteMemory — still deletes a valid file within the memory dir', async () => {
+    await system.saveMemory({ name: 'todelete', description: 'ok', type: 'user', content: 'c' });
+    const deleted = await system.deleteMemory('todelete.md');
+    expect(deleted).toBe(true);
+  });
+});
