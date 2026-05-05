@@ -7,7 +7,7 @@ function mockFetchForChat(assistantResponse: string) {
     `data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n`,
   ].join('');
 
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const urlStr = typeof url === 'string' ? url : url.toString();
 
     // Embedding calls
@@ -16,17 +16,22 @@ function mockFetchForChat(assistantResponse: string) {
     }
 
     // Chat completion — check if this is a memory extraction call
-    const init = arguments[1] as RequestInit | undefined;
     const body = init?.body ? JSON.parse(init.body as string) : {};
 
     // If messages contain extraction instructions, return extracted memories
-    const hasExtractionPrompt = body.messages?.some((m: { content: string }) =>
-      typeof m.content === 'string' && m.content.includes('Analyze this conversation')
+    const hasExtractionPrompt = body.messages?.some(
+      (m: { content: string }) =>
+        typeof m.content === 'string' && m.content.includes('Analyze this conversation'),
     );
 
     if (hasExtractionPrompt) {
       const extractionResponse = JSON.stringify([
-        { name: 'Dark Mode Preference', description: 'User prefers dark mode', type: 'user', content: 'User prefers dark mode' },
+        {
+          name: 'Dark Mode Preference',
+          description: 'User prefers dark mode',
+          type: 'user',
+          content: 'User prefers dark mode',
+        },
       ]);
       return new Response(
         JSON.stringify({
@@ -38,8 +43,9 @@ function mockFetchForChat(assistantResponse: string) {
     }
 
     // Memory relevance selection call (json_object response format)
-    const hasRelevancePrompt = body.messages?.some((m: { content: string }) =>
-      typeof m.content === 'string' && m.content.includes('Available memories')
+    const hasRelevancePrompt = body.messages?.some(
+      (m: { content: string }) =>
+        typeof m.content === 'string' && m.content.includes('Available memories'),
     );
 
     if (hasRelevancePrompt) {
@@ -100,7 +106,7 @@ describe('Memory Extraction (file-based)', () => {
     await agent.chat('Remember that I prefer dark mode');
 
     // Give async extraction time to complete
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
 
     await agent.destroy();
   });

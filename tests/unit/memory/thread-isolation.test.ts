@@ -37,12 +37,15 @@ describe('Memory Thread Isolation', () => {
   });
 
   it('should save memory to thread subdirectory', async () => {
-    const filename = await system.saveMemory({
-      name: 'User Name',
-      description: 'User is Douglas',
-      type: 'user',
-      content: 'The user is called Douglas.',
-    }, 'telegram-123');
+    const filename = await system.saveMemory(
+      {
+        name: 'User Name',
+        description: 'User is Douglas',
+        type: 'user',
+        content: 'The user is called Douglas.',
+      },
+      'telegram-123',
+    );
 
     // File should exist in thread subdir
     const threadDir = join(tempDir, 'threads', 'telegram-123');
@@ -73,36 +76,45 @@ describe('Memory Thread Isolation', () => {
     });
 
     // Save thread-A memory
-    await system.saveMemory({
-      name: 'Thread A Fact',
-      description: 'A fact for thread A',
-      type: 'user',
-      content: 'Thread A user.',
-    }, 'thread-a');
+    await system.saveMemory(
+      {
+        name: 'Thread A Fact',
+        description: 'A fact for thread A',
+        type: 'user',
+        content: 'Thread A user.',
+      },
+      'thread-a',
+    );
 
     // Save thread-B memory
-    await system.saveMemory({
-      name: 'Thread B Fact',
-      description: 'A fact for thread B',
-      type: 'user',
-      content: 'Thread B user.',
-    }, 'thread-b');
+    await system.saveMemory(
+      {
+        name: 'Thread B Fact',
+        description: 'A fact for thread B',
+        type: 'user',
+        content: 'Thread B user.',
+      },
+      'thread-b',
+    );
 
     // Scan for thread-A should see global + thread-A, NOT thread-B
     const memoriesA = await system.scanMemories(undefined, 'thread-a');
-    const names = memoriesA.map(m => m.name);
+    const names = memoriesA.map((m) => m.name);
     expect(names).toContain('Global Fact');
     expect(names).toContain('Thread A Fact');
     expect(names).not.toContain('Thread B Fact');
   });
 
   it('should read memory from thread directory', async () => {
-    await system.saveMemory({
-      name: 'Private',
-      description: 'Private memory',
-      type: 'user',
-      content: 'Secret info.',
-    }, 'thread-x');
+    await system.saveMemory(
+      {
+        name: 'Private',
+        description: 'Private memory',
+        type: 'user',
+        content: 'Secret info.',
+      },
+      'thread-x',
+    );
 
     const memory = await system.readMemory('private.md', 'thread-x');
     expect(memory).not.toBeNull();
@@ -110,12 +122,15 @@ describe('Memory Thread Isolation', () => {
   });
 
   it('should delete memory from thread directory', async () => {
-    const filename = await system.saveMemory({
-      name: 'To Delete',
-      description: 'Will be deleted',
-      type: 'feedback',
-      content: 'temp.',
-    }, 'thread-del');
+    const filename = await system.saveMemory(
+      {
+        name: 'To Delete',
+        description: 'Will be deleted',
+        type: 'feedback',
+        content: 'temp.',
+      },
+      'thread-del',
+    );
 
     const deleted = await system.deleteMemory(filename, 'thread-del');
     expect(deleted).toBe(true);
@@ -132,12 +147,15 @@ describe('Memory Thread Isolation', () => {
       content: 'g',
     });
 
-    await system.saveMemory({
-      name: 'Thread Mem',
-      description: 'Thread specific',
-      type: 'user',
-      content: 't',
-    }, 'thread-idx');
+    await system.saveMemory(
+      {
+        name: 'Thread Mem',
+        description: 'Thread specific',
+        type: 'user',
+        content: 't',
+      },
+      'thread-idx',
+    );
 
     // Global MEMORY.md should have global entry
     const globalIndex = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
@@ -145,20 +163,26 @@ describe('Memory Thread Isolation', () => {
     expect(globalIndex).not.toContain('thread-mem.md');
 
     // Thread MEMORY.md should have thread entry
-    const threadIndex = await readFile(join(tempDir, 'threads', 'thread-idx', 'MEMORY.md'), 'utf-8');
+    const threadIndex = await readFile(
+      join(tempDir, 'threads', 'thread-idx', 'MEMORY.md'),
+      'utf-8',
+    );
     expect(threadIndex).toContain('thread-mem.md');
   });
 
   it('should check hasWritesSince for specific thread', async () => {
     const before = Date.now();
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
 
-    await system.saveMemory({
-      name: 'Recent',
-      description: 'recent',
-      type: 'user',
-      content: 'r',
-    }, 'thread-hw');
+    await system.saveMemory(
+      {
+        name: 'Recent',
+        description: 'recent',
+        type: 'user',
+        content: 'r',
+      },
+      'thread-hw',
+    );
 
     const has = await system.hasWritesSince(before, 'thread-hw');
     expect(has).toBe(true);
@@ -170,7 +194,10 @@ describe('Memory Thread Isolation', () => {
 
   it('should build context prompt merging global + thread MEMORY.md', async () => {
     await system.saveMemory({ name: 'G', description: 'global', type: 'project', content: 'g' });
-    await system.saveMemory({ name: 'T', description: 'thread', type: 'user', content: 't' }, 'thread-ctx');
+    await system.saveMemory(
+      { name: 'T', description: 'thread', type: 'user', content: 't' },
+      'thread-ctx',
+    );
 
     const prompt = await system.buildContextPrompt('thread-ctx');
     expect(prompt).toContain('global');

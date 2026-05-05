@@ -29,7 +29,14 @@ import {
   MAX_ENTRYPOINT_BYTES,
   parseMemoryType,
 } from './memory-types.js';
-import { resolveMemoryDir, ensureMemoryDir, sanitizeFilename, sanitizeFrontmatterValue, validateThreadId, validateMemoryPath } from './memory-paths.js';
+import {
+  resolveMemoryDir,
+  ensureMemoryDir,
+  sanitizeFilename,
+  sanitizeFrontmatterValue,
+  validateThreadId,
+  validateMemoryPath,
+} from './memory-paths.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
 import { selectRelevantMemories } from './memory-relevance.js';
 import { memoryFreshnessNote } from './memory-age.js';
@@ -112,7 +119,11 @@ export class FileMemorySystem {
     await writeFile(filePath, fileContent, 'utf-8');
     await this.addToIndex(filename, input.description, threadId);
 
-    this.logger.debug('Memory saved', { filename, type: input.type, threadId: threadId ?? 'global' });
+    this.logger.debug('Memory saved', {
+      filename,
+      type: input.type,
+      threadId: threadId ?? 'global',
+    });
     return filename;
   }
 
@@ -130,7 +141,7 @@ export class FileMemorySystem {
       const fileStat = await stat(filePath);
       const frontmatter = parseFrontmatter(content);
 
-      const bodyMatch = content.match(/^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/);
+      const bodyMatch = /^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/.exec(content);
       const body = bodyMatch?.[1]?.trim() ?? content;
 
       return {
@@ -179,8 +190,8 @@ export class FileMemorySystem {
 
     // Merge: thread memories first (higher priority), then global
     // Dedupe by filename (thread wins)
-    const seen = new Set(threadMemories.map(m => m.filename));
-    const merged = [...threadMemories, ...globalMemories.filter(m => !seen.has(m.filename))];
+    const seen = new Set(threadMemories.map((m) => m.filename));
+    const merged = [...threadMemories, ...globalMemories.filter((m) => !seen.has(m.filename))];
     return merged;
   }
 
@@ -198,12 +209,12 @@ export class FileMemorySystem {
     if (memories.length === 0) return [];
 
     const filtered = excludeFilenames?.size
-      ? memories.filter(m => !excludeFilenames.has(m.filename))
+      ? memories.filter((m) => !excludeFilenames.has(m.filename))
       : memories;
     if (filtered.length === 0) return [];
 
     const manifest = formatMemoryManifest(filtered);
-    const validFilenames = new Set(filtered.map(m => m.filename));
+    const validFilenames = new Set(filtered.map((m) => m.filename));
 
     const selectedFilenames = await selectRelevantMemories(
       query,
@@ -217,7 +228,7 @@ export class FileMemorySystem {
     for (const filename of selectedFilenames) {
       // Try thread dir first, then global
       const memory = threadId
-        ? (await this.readMemory(filename, threadId) ?? await this.readMemory(filename))
+        ? ((await this.readMemory(filename, threadId)) ?? (await this.readMemory(filename)))
         : await this.readMemory(filename);
       if (memory) results.push(memory);
     }
@@ -236,14 +247,21 @@ export class FileMemorySystem {
     try {
       const globalContent = await readFile(join(this.memoryDir, ENTRYPOINT_NAME), 'utf-8');
       if (globalContent.trim()) parts.push(globalContent.trim());
-    } catch { /* no global index */ }
+    } catch {
+      /* no global index */
+    }
 
     // Thread MEMORY.md
     if (threadId) {
       try {
-        const threadContent = await readFile(join(this.resolveDir(threadId), ENTRYPOINT_NAME), 'utf-8');
+        const threadContent = await readFile(
+          join(this.resolveDir(threadId), ENTRYPOINT_NAME),
+          'utf-8',
+        );
         if (threadContent.trim()) parts.push(threadContent.trim());
-      } catch { /* no thread index */ }
+      } catch {
+        /* no thread index */
+      }
     }
 
     if (parts.length === 0) return '';
@@ -273,15 +291,16 @@ export class FileMemorySystem {
     }
 
     const allMemories = await this.scanMemories(signal, threadId);
-    const pinnedHeaders = allMemories.filter(m => m.pinned);
-    const pinnedFilenames = new Set(pinnedHeaders.map(m => m.filename));
+    const pinnedHeaders = allMemories.filter((m) => m.pinned);
+    const pinnedFilenames = new Set(pinnedHeaders.map((m) => m.filename));
 
     const pinnedFiles: MemoryFile[] = [];
     for (const header of pinnedHeaders) {
       // Pinned memories can live in either thread or global dir. Try thread first
       // when threadId is set (mirrors findRelevant's lookup order).
       const mem = threadId
-        ? (await this.readMemory(header.filename, threadId) ?? await this.readMemory(header.filename))
+        ? ((await this.readMemory(header.filename, threadId)) ??
+          (await this.readMemory(header.filename)))
         : await this.readMemory(header.filename);
       if (mem) pinnedFiles.push(mem);
     }
@@ -329,14 +348,20 @@ export class FileMemorySystem {
 
   // --- Private helpers ---
 
-  private async addToIndex(filename: string, description: string, threadId?: string): Promise<void> {
+  private async addToIndex(
+    filename: string,
+    description: string,
+    threadId?: string,
+  ): Promise<void> {
     await this.withWriteLock(async () => {
       const dir = this.resolveDir(threadId);
       const entrypoint = join(dir, ENTRYPOINT_NAME);
       let existing = '';
       try {
         existing = await readFile(entrypoint, 'utf-8');
-      } catch { /* File doesn't exist yet */ }
+      } catch {
+        /* File doesn't exist yet */
+      }
 
       if (existing.includes(`(${filename})`)) return;
 
@@ -353,15 +378,24 @@ export class FileMemorySystem {
       const entrypoint = join(dir, ENTRYPOINT_NAME);
       try {
         const content = await readFile(entrypoint, 'utf-8');
-        const lines = content.split('\n').filter(line => !line.includes(`(${filename})`));
+        const lines = content.split('\n').filter((line) => !line.includes(`(${filename})`));
         await writeFile(entrypoint, lines.join('\n'), 'utf-8');
-      } catch { /* Index doesn't exist */ }
+      } catch {
+        /* Index doesn't exist */
+      }
     });
   }
 
   private withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.lockChain.then(() => fn());
-    this.lockChain = result.then(() => {}, () => {});
+    this.lockChain = result.then(
+      () => {
+        /* settled — chain continues */
+      },
+      () => {
+        /* swallow — error already handled by caller */
+      },
+    );
     return result;
   }
 }

@@ -77,7 +77,9 @@ describe('memory-prompts', () => {
       expect(instructions).toContain('Before recommending from memory');
       expect(instructions).toContain('check the file exists');
       expect(instructions).toContain('grep for it');
-      expect(instructions).toContain('"The memory says X exists" is not the same as "X exists now."');
+      expect(instructions).toContain(
+        '"The memory says X exists" is not the same as "X exists now."',
+      );
     });
 
     it('should include how to save (two-step)', () => {

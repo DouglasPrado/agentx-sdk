@@ -18,11 +18,11 @@ describe('SQLiteDatabase', () => {
     db = new SQLiteDatabase(':memory:');
     db.initialize();
 
-    const tables = db.db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    ).all() as Array<{ name: string }>;
+    const tables = db.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all() as { name: string }[];
 
-    const tableNames = tables.map(t => t.name);
+    const tableNames = tables.map((t) => t.name);
     expect(tableNames).toContain('memories');
     expect(tableNames).toContain('memories_fts');
     expect(tableNames).toContain('vectors');
@@ -33,7 +33,7 @@ describe('SQLiteDatabase', () => {
     db = new SQLiteDatabase(':memory:');
     db.initialize();
 
-    const result = db.db.pragma('journal_mode') as Array<{ journal_mode: string }>;
+    const result = db.db.pragma('journal_mode') as { journal_mode: string }[];
     // In-memory databases may use 'memory' mode instead of WAL, but file-based will use WAL
     expect(result[0]!.journal_mode).toBeDefined();
   });
@@ -42,11 +42,11 @@ describe('SQLiteDatabase', () => {
     db = new SQLiteDatabase(':memory:');
     db.initialize();
 
-    const indices = db.db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='conversations'"
-    ).all() as Array<{ name: string }>;
+    const indices = db.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='conversations'")
+      .all() as { name: string }[];
 
-    const indexNames = indices.map(i => i.name);
+    const indexNames = indices.map((i) => i.name);
     expect(indexNames).toContain('idx_conversations_thread');
     expect(indexNames).toContain('idx_conversations_pinned');
   });
@@ -55,11 +55,11 @@ describe('SQLiteDatabase', () => {
     db = new SQLiteDatabase(':memory:');
     db.initialize();
 
-    const indices = db.db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'"
-    ).all() as Array<{ name: string }>;
+    const indices = db.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'")
+      .all() as { name: string }[];
 
-    const indexNames = indices.map(i => i.name);
+    const indexNames = indices.map((i) => i.name);
     expect(indexNames).toContain('idx_memories_scope');
     expect(indexNames).toContain('idx_memories_thread');
     expect(indexNames).toContain('idx_memories_confidence');

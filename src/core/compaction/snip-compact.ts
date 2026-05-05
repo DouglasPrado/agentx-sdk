@@ -39,9 +39,10 @@ export function snipCompact(
   for (let i = 0; i < messages.length; i++) {
     if (messages[i]!.role !== 'system') nonSystemIndices.push(i);
   }
-  const tailStartIdx = nonSystemIndices.length <= tailProtection
-    ? 0
-    : nonSystemIndices[nonSystemIndices.length - tailProtection]!;
+  const tailStartIdx =
+    nonSystemIndices.length <= tailProtection
+      ? 0
+      : nonSystemIndices[nonSystemIndices.length - tailProtection]!;
 
   // Collect tool_call ids that are referenced by any assistant in the conversation,
   // plus tool_call_id references inside the tail window. Early tool results outside

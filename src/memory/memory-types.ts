@@ -17,7 +17,7 @@ export type MemoryType = (typeof MEMORY_TYPES)[number];
  */
 export function parseMemoryType(raw: unknown): MemoryType | undefined {
   if (typeof raw !== 'string') return undefined;
-  return MEMORY_TYPES.find(t => t === raw);
+  return MEMORY_TYPES.find((t) => t === raw);
 }
 
 /** Header from scanning a memory file (frontmatter only, no body) */

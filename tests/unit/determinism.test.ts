@@ -39,8 +39,8 @@ describe('Deterministic Mode (ENT-010)', () => {
     await agent.chat('test');
 
     // Check that the fetch was called with seed in the body
-    const chatCall = fetchSpy.mock.calls.find(c => {
-      const urlStr = typeof c[0] === 'string' ? c[0] : c[0]!.toString();
+    const chatCall = fetchSpy.mock.calls.find((c) => {
+      const urlStr = typeof c[0] === 'string' ? c[0] : c[0].toString();
       return urlStr.includes('/chat/completions');
     });
     expect(chatCall).toBeDefined();

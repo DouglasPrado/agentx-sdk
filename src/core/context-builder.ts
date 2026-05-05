@@ -29,7 +29,8 @@ export function buildContext(options: {
   reserveTokens: number;
   maxPinnedMessages: number;
 }): ContextBuildResult {
-  const { systemPrompt, injections, history, maxTokens, reserveTokens, maxPinnedMessages } = options;
+  const { systemPrompt, injections, history, maxTokens, reserveTokens, maxPinnedMessages } =
+    options;
   const budget = maxTokens - reserveTokens;
   let used = 0;
   const messages: LLMMessage[] = [];
@@ -55,14 +56,16 @@ export function buildContext(options: {
   }
 
   // 3. History — pinned messages always included, then recent messages
-  const pinned = history.filter(m => m.pinned).slice(0, maxPinnedMessages);
-  const unpinned = history.filter(m => !m.pinned);
+  const pinned = history.filter((m) => m.pinned).slice(0, maxPinnedMessages);
+  const unpinned = history.filter((m) => !m.pinned);
 
   // Include pinned first. Track how many did not fit so the caller can surface
   // a warning instead of silently losing critical context.
   let droppedPinnedCount = 0;
   for (const msg of pinned) {
-    const tokens = estimateTokens(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
+    const tokens = estimateTokens(
+      typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+    );
     if (used + tokens <= budget) {
       messages.push(chatMessageToLLM(msg));
       used += tokens;
@@ -75,7 +78,9 @@ export function buildContext(options: {
   const unpinnedReversed = [...unpinned].reverse();
   const unpinnedToInclude: LLMMessage[] = [];
   for (const msg of unpinnedReversed) {
-    const tokens = estimateTokens(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content));
+    const tokens = estimateTokens(
+      typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+    );
     if (used + tokens <= budget) {
       unpinnedToInclude.unshift(chatMessageToLLM(msg));
       used += tokens;
@@ -129,7 +134,7 @@ function chatMessageToLLM(msg: ChatMessage): LLMMessage {
   };
 
   if (msg.toolCalls) {
-    result.tool_calls = msg.toolCalls.map(tc => ({
+    result.tool_calls = msg.toolCalls.map((tc) => ({
       id: tc.id,
       type: 'function' as const,
       function: { name: tc.function.name, arguments: tc.function.arguments },
@@ -149,9 +154,12 @@ function chatMessageToLLM(msg: ChatMessage): LLMMessage {
 }
 
 function contentPartsToLLM(parts: ContentPart[]): string {
-  return parts.map(p => {
-    if (p.type === 'text') return p.text;
-    if (p.type === 'image_url' && p.image_url?.url) return `[image: ${p.image_url.url}]`;
-    return '';
-  }).filter(Boolean).join('');
+  return parts
+    .map((p) => {
+      if (p.type === 'text') return p.text;
+      if (p.type === 'image_url' && p.image_url?.url) return `[image: ${p.image_url.url}]`;
+      return '';
+    })
+    .filter(Boolean)
+    .join('');
 }

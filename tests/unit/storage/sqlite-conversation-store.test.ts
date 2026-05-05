@@ -62,7 +62,9 @@ describe('SQLiteConversationStore', () => {
     const toolMsg: ChatMessage = {
       role: 'assistant',
       content: '',
-      toolCalls: [{ id: 'tc1', type: 'function', function: { name: 'weather', arguments: '{"city":"NYC"}' } }],
+      toolCalls: [
+        { id: 'tc1', type: 'function', function: { name: 'weather', arguments: '{"city":"NYC"}' } },
+      ],
       createdAt: Date.now(),
     };
     store.appendMessage(toolMsg, 'thread-1');
@@ -86,10 +88,14 @@ describe('SQLiteConversationStore', () => {
 
   it('should throw on corrupted tool_calls JSON (not silently discard)', () => {
     // Simulates a row written by a partial write, migration error, or manual DB edit.
-    database.db.prepare(`
+    database.db
+      .prepare(
+        `
       INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run('t-corrupt', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
+    `,
+      )
+      .run('t-corrupt', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
 
     // Must throw with context (row id + thread id) so operators can diagnose the issue.
     expect(() => store.listThread('t-corrupt')).toThrow(/tool_calls|Corrupted/i);
@@ -97,10 +103,14 @@ describe('SQLiteConversationStore', () => {
 
   it('should warn via console.warn when tool_calls JSON is corrupt (issue #25)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    database.db.prepare(`
+    database.db
+      .prepare(
+        `
       INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run('t-corrupt-warn', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
+    `,
+      )
+      .run('t-corrupt-warn', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
 
     // Corrupted tool_calls also throws (see test above) — assert both warn AND throw.
     expect(() => store.listThread('t-corrupt-warn')).toThrow(/tool_calls|Corrupted/i);
@@ -119,10 +129,14 @@ describe('SQLiteConversationStore', () => {
   it('should throw on invalid role value from database (issue #5)', () => {
     // If the SQLite file is manually edited or corrupted, an invalid role must be
     // caught at the storage boundary — not propagated silently to the LLM layer.
-    database.db.prepare(`
+    database.db
+      .prepare(
+        `
       INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run('t-badrole', 'INVALID_ROLE', 'hello', null, null, 0, Date.now());
+    `,
+      )
+      .run('t-badrole', 'INVALID_ROLE', 'hello', null, null, 0, Date.now());
 
     expect(() => store.listThread('t-badrole')).toThrow(/Invalid message role/);
   });
@@ -144,16 +158,25 @@ describe('SQLiteConversationStore', () => {
       level: 'silent',
       debug: () => {},
       info: () => {},
-      warn: (msg: string) => { warnMessages.push(msg); },
+      warn: (msg: string) => {
+        warnMessages.push(msg);
+      },
       error: () => {},
       child: () => customLogger,
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const storeWithLogger = new (SQLiteConversationStore as any)(database, customLogger) as SQLiteConversationStore;
-    database.db.prepare(`
+
+    const storeWithLogger = new (SQLiteConversationStore as any)(
+      database,
+      customLogger,
+    ) as SQLiteConversationStore;
+    database.db
+      .prepare(
+        `
       INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run('t-custom-logger', 'assistant', '""', 'NOT_VALID_JSON', null, 0, Date.now());
+    `,
+      )
+      .run('t-custom-logger', 'assistant', '""', 'NOT_VALID_JSON', null, 0, Date.now());
 
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Corrupted tool_calls also throws (issue #25) — the warn call must

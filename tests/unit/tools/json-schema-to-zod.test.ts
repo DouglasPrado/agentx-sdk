@@ -19,8 +19,12 @@ describe('jsonSchemaToZod (deep)', () => {
       required: ['name'],
     });
 
-    expect(schema.parse({ name: 'John', age: 30, score: 9.5, active: true }))
-      .toEqual({ name: 'John', age: 30, score: 9.5, active: true });
+    expect(schema.parse({ name: 'John', age: 30, score: 9.5, active: true })).toEqual({
+      name: 'John',
+      age: 30,
+      score: 9.5,
+      active: true,
+    });
 
     // name is required
     expect(() => schema.parse({ age: 30 })).toThrow();
@@ -90,7 +94,12 @@ describe('jsonSchemaToZod (deep)', () => {
       },
     });
 
-    const result = schema.parse({ users: [{ name: 'A', age: 1 }, { name: 'B', age: 2 }] });
+    const result = schema.parse({
+      users: [
+        { name: 'A', age: 1 },
+        { name: 'B', age: 2 },
+      ],
+    });
     expect(result.users).toHaveLength(2);
   });
 
@@ -123,10 +132,7 @@ describe('jsonSchemaToZod (deep)', () => {
       type: 'object',
       properties: {
         value: {
-          anyOf: [
-            { type: 'string' },
-            { type: 'number' },
-          ],
+          anyOf: [{ type: 'string' }, { type: 'number' }],
         },
       },
     });
@@ -167,7 +173,7 @@ describe('jsonSchemaToZod (deep)', () => {
       current = { type: 'object', properties: { nested: current } };
     }
 
-    const schema = jsonSchemaToZod(current as any);
+    const schema = jsonSchemaToZod(current);
     // Should produce a valid schema (deep nesting falls back to z.unknown)
     expect(schema).toBeDefined();
   });

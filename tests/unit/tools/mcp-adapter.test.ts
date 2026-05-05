@@ -108,15 +108,14 @@ describe('MCPAdapter', () => {
         transport: 'sse',
         url: 'http://localhost:3001/sse',
         headers: {
-          'Authorization': 'Bearer my-token',
+          Authorization: 'Bearer my-token',
           'X-Custom': 'value',
         },
       });
 
-      expect(mockSSETransport).toHaveBeenCalledWith(
-        expect.any(URL),
-        { requestInit: { headers: { 'Authorization': 'Bearer my-token', 'X-Custom': 'value' } } },
-      );
+      expect(mockSSETransport).toHaveBeenCalledWith(expect.any(URL), {
+        requestInit: { headers: { Authorization: 'Bearer my-token', 'X-Custom': 'value' } },
+      });
     });
 
     it('should not pass requestInit when no headers', async () => {
@@ -126,10 +125,7 @@ describe('MCPAdapter', () => {
         url: 'http://localhost:3001/sse',
       });
 
-      expect(mockSSETransport).toHaveBeenCalledWith(
-        expect.any(URL),
-        { requestInit: undefined },
-      );
+      expect(mockSSETransport).toHaveBeenCalledWith(expect.any(URL), { requestInit: undefined });
     });
 
     it('should namespace tool names with mcp__{server}__{tool}', async () => {
@@ -147,7 +143,7 @@ describe('MCPAdapter', () => {
       await adapter.connect({ name: 'dup', transport: 'stdio', command: 'node' });
 
       await expect(
-        adapter.connect({ name: 'dup', transport: 'stdio', command: 'node' })
+        adapter.connect({ name: 'dup', transport: 'stdio', command: 'node' }),
       ).rejects.toThrow('already connected');
     });
   });
@@ -177,7 +173,10 @@ describe('MCPAdapter', () => {
 
       // Simulate executing the registered tool
       const readFile = tools[0]!;
-      const result = await readFile.execute({ path: '/tmp/test.txt' }, new AbortController().signal);
+      const result = await readFile.execute(
+        { path: '/tmp/test.txt' },
+        new AbortController().signal,
+      );
 
       expect(mockClient.callTool).toHaveBeenCalledWith(
         { name: 'read_file', arguments: { path: '/tmp/test.txt' } },
@@ -189,8 +188,11 @@ describe('MCPAdapter', () => {
 
     it('should timeout slow tool calls', async () => {
       // Simulate a tool that takes too long
-      mockClient.callTool.mockImplementationOnce(() =>
-        new Promise((resolve) => setTimeout(() => resolve({ content: [{ type: 'text', text: 'late' }] }), 5000))
+      mockClient.callTool.mockImplementationOnce(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ content: [{ type: 'text', text: 'late' }] }), 5000),
+          ),
       );
 
       const tools = await adapter.connect({
@@ -200,10 +202,15 @@ describe('MCPAdapter', () => {
         timeout: 100, // 100ms timeout
       });
 
-      const result = await tools[0]!.execute({ path: '/tmp/test.txt' }, new AbortController().signal);
+      const result = await tools[0]!.execute(
+        { path: '/tmp/test.txt' },
+        new AbortController().signal,
+      );
       // Should return an error due to timeout, not hang forever
       expect(typeof result === 'object' && 'isError' in result && result.isError).toBe(true);
-      expect(typeof result === 'object' && 'content' in result && (result.content as string)).toContain('error');
+      expect(typeof result === 'object' && 'content' in result && result.content).toContain(
+        'error',
+      );
     }, 10_000);
 
     it('should handle tool execution errors with isolateErrors', async () => {
@@ -322,17 +329,25 @@ describe('MCPAdapter', () => {
       const result = await tools[0]!.execute({}, new AbortController().signal);
 
       expect(typeof result === 'object' && 'isError' in result && result.isError).toBe(true);
-      expect(typeof result === 'object' && 'content' in result && result.content).toContain('Something went wrong');
+      expect(typeof result === 'object' && 'content' in result && result.content).toContain(
+        'Something went wrong',
+      );
     });
 
     it('should handle empty content with isError', async () => {
       mockClient.callTool.mockResolvedValueOnce({ content: [], isError: true });
 
-      const tools = await adapter.connect({ name: 'empty-err', transport: 'stdio', command: 'node' });
+      const tools = await adapter.connect({
+        name: 'empty-err',
+        transport: 'stdio',
+        command: 'node',
+      });
       const result = await tools[0]!.execute({}, new AbortController().signal);
 
       expect(typeof result === 'object' && 'isError' in result && result.isError).toBe(true);
-      expect(typeof result === 'object' && 'content' in result && result.content).toBe('MCP tool returned an error');
+      expect(typeof result === 'object' && 'content' in result && result.content).toBe(
+        'MCP tool returned an error',
+      );
     });
 
     it('should return fallback message for empty successful content', async () => {
@@ -449,7 +464,11 @@ describe('MCPAdapter', () => {
         ],
       });
 
-      const tools = await adapter.connect({ name: 'annotated', transport: 'stdio', command: 'node' });
+      const tools = await adapter.connect({
+        name: 'annotated',
+        transport: 'stdio',
+        command: 'node',
+      });
 
       expect(tools[0]!.isReadOnly).toBe(true);
       expect(tools[0]!.isDestructive).toBe(false);
@@ -465,7 +484,11 @@ describe('MCPAdapter', () => {
         tools: [{ name: 'plain', inputSchema: { type: 'object', properties: {} } }],
       });
 
-      const tools = await adapter.connect({ name: 'no-annot', transport: 'stdio', command: 'node' });
+      const tools = await adapter.connect({
+        name: 'no-annot',
+        transport: 'stdio',
+        command: 'node',
+      });
 
       expect(tools[0]!.isReadOnly).toBe(false);
       expect(tools[0]!.isDestructive).toBe(false);
@@ -479,7 +502,9 @@ describe('MCPAdapter', () => {
         { uri: 'file:///a.txt', name: 'a.txt', mimeType: 'text/plain' },
         { uri: 'file:///b.md', name: 'b.md' },
       ];
-      (mockClient as Record<string, unknown>).listResources = vi.fn().mockResolvedValue({ resources: mockResources });
+      (mockClient as Record<string, unknown>).listResources = vi
+        .fn()
+        .mockResolvedValue({ resources: mockResources });
 
       await adapter.connect({ name: 'res-srv', transport: 'stdio', command: 'node' });
       const resources = await adapter.listResources('res-srv');
@@ -503,7 +528,9 @@ describe('MCPAdapter', () => {
     });
 
     it('should return empty on listResources error', async () => {
-      (mockClient as Record<string, unknown>).listResources = vi.fn().mockRejectedValue(new Error('fail'));
+      (mockClient as Record<string, unknown>).listResources = vi
+        .fn()
+        .mockRejectedValue(new Error('fail'));
 
       await adapter.connect({ name: 'err-res', transport: 'stdio', command: 'node' });
       const result = await adapter.listResources('err-res');
@@ -547,7 +574,9 @@ describe('MCPAdapter', () => {
 
     it('should throw when server does not support resources', async () => {
       await adapter.connect({ name: 'no-sup', transport: 'stdio', command: 'node' });
-      await expect(adapter.readResource('no-sup', 'file:///x')).rejects.toThrow('does not support resources');
+      await expect(adapter.readResource('no-sup', 'file:///x')).rejects.toThrow(
+        'does not support resources',
+      );
     });
   });
 
@@ -724,38 +753,40 @@ describe('MCPAdapter', () => {
   describe('Zod validation in readResource / getPrompt / listResources (issue #28)', () => {
     it('readResource should throw clear error when server returns invalid shape', async () => {
       (mockClient as Record<string, unknown>).readResource = vi.fn().mockResolvedValue({
-        notContents: 'unexpected',  // missing required `contents` array
+        notContents: 'unexpected', // missing required `contents` array
       });
 
       await adapter.connect({ name: 'bad-read', transport: 'stdio', command: 'node' });
 
-      await expect(adapter.readResource('bad-read', 'file:///x.txt'))
-        .rejects.toThrow(/invalid.*shape|invalid resource/i);
+      await expect(adapter.readResource('bad-read', 'file:///x.txt')).rejects.toThrow(
+        /invalid.*shape|invalid resource/i,
+      );
 
       delete (mockClient as Record<string, unknown>).readResource;
     });
 
     it('getPrompt should throw clear error when server returns invalid shape', async () => {
       (mockClient as Record<string, unknown>).getPrompt = vi.fn().mockResolvedValue({
-        notMessages: 'unexpected',  // missing required `messages` array
+        notMessages: 'unexpected', // missing required `messages` array
       });
 
       await adapter.connect({ name: 'bad-prompt', transport: 'stdio', command: 'node' });
 
-      await expect(adapter.getPrompt('bad-prompt', 'p'))
-        .rejects.toThrow(/invalid.*shape|invalid prompt/i);
+      await expect(adapter.getPrompt('bad-prompt', 'p')).rejects.toThrow(
+        /invalid.*shape|invalid prompt/i,
+      );
 
       delete (mockClient as Record<string, unknown>).getPrompt;
     });
 
     it('listResources should return empty when server returns invalid shape', async () => {
       (mockClient as Record<string, unknown>).listResources = vi.fn().mockResolvedValue({
-        notResources: 'unexpected',  // missing required `resources` array
+        notResources: 'unexpected', // missing required `resources` array
       });
 
       await adapter.connect({ name: 'bad-list', transport: 'stdio', command: 'node' });
       const result = await adapter.listResources('bad-list');
-      expect(result).toEqual([]);  // graceful fallback for list operation
+      expect(result).toEqual([]); // graceful fallback for list operation
 
       delete (mockClient as Record<string, unknown>).listResources;
     });
@@ -768,45 +799,49 @@ describe('MCPAdapter', () => {
     // `import()` plus the mocked client.connect — that interaction is
     // non-deterministic under fake timers across machines. The retry hides
     // that flake; the underlying race protection isn't affected by it.
-    it('concurrent healthCheck fires should not start multiple reconnect attempts', { retry: 10 }, async () => {
-      // Regression test: if healthCheck fires while a reconnect is in progress,
-      // only ONE reconnect process should be active (status window elimination).
-      vi.useFakeTimers();
+    it(
+      'concurrent healthCheck fires should not start multiple reconnect attempts',
+      { retry: 10 },
+      async () => {
+        // Regression test: if healthCheck fires while a reconnect is in progress,
+        // only ONE reconnect process should be active (status window elimination).
+        vi.useFakeTimers();
 
-      let reconnectConnectCalls = 0;
-      mockClient.listTools
-        .mockResolvedValueOnce({ tools: [] }) // initial connect
-        .mockRejectedValue(new Error('conn lost')); // all health checks fail
-      mockClient.connect
-        .mockResolvedValueOnce(undefined) // initial connect succeeds
-        .mockImplementation(async () => {
-          reconnectConnectCalls++;
+        let reconnectConnectCalls = 0;
+        mockClient.listTools
+          .mockResolvedValueOnce({ tools: [] }) // initial connect
+          .mockRejectedValue(new Error('conn lost')); // all health checks fail
+        mockClient.connect
+          .mockResolvedValueOnce(undefined) // initial connect succeeds
+          .mockImplementation(async () => {
+            reconnectConnectCalls++;
+          });
+
+        await adapter.connect({
+          name: 'hc-race',
+          transport: 'stdio',
+          command: 'node',
+          healthCheckInterval: 100,
+          maxRetries: 1, // one reconnect attempt per reconnect cycle
         });
 
-      await adapter.connect({
-        name: 'hc-race',
-        transport: 'stdio',
-        command: 'node',
-        healthCheckInterval: 100,
-        maxRetries: 1, // one reconnect attempt per reconnect cycle
-      });
+        // Advance 200ms: healthCheck fires at 100ms and 200ms.
+        // Both fail → buggy code starts TWO reconnect processes;
+        // fixed code starts ONE (second healthCheck returns early).
+        await vi.advanceTimersByTimeAsync(200);
 
-      // Advance 200ms: healthCheck fires at 100ms and 200ms.
-      // Both fail → buggy code starts TWO reconnect processes;
-      // fixed code starts ONE (second healthCheck returns early).
-      await vi.advanceTimersByTimeAsync(200);
+        // Advance past reconnect delays: first attempt delay=1000ms (starts at 100ms, fires at 1100ms);
+        // a second reconnect (if started at 200ms) fires at 1200ms.
+        await vi.advanceTimersByTimeAsync(2000);
 
-      // Advance past reconnect delays: first attempt delay=1000ms (starts at 100ms, fires at 1100ms);
-      // a second reconnect (if started at 200ms) fires at 1200ms.
-      await vi.advanceTimersByTimeAsync(2000);
+        // Fixed code: exactly 1 reconnect connect call (one process, one attempt).
+        // Buggy code: 2 reconnect connect calls (two concurrent processes, one attempt each).
+        expect(reconnectConnectCalls).toBe(1);
 
-      // Fixed code: exactly 1 reconnect connect call (one process, one attempt).
-      // Buggy code: 2 reconnect connect calls (two concurrent processes, one attempt each).
-      expect(reconnectConnectCalls).toBe(1);
-
-      vi.useRealTimers();
-      await adapter.disconnectAll();
-    });
+        vi.useRealTimers();
+        await adapter.disconnectAll();
+      },
+    );
 
     it('healthCheck while reconnecting should skip (status stays reconnecting)', async () => {
       // After the first healthCheck failure, status should go to 'reconnecting'.
@@ -818,7 +853,9 @@ describe('MCPAdapter', () => {
         .mockRejectedValue(new Error('conn lost'));
       mockClient.connect
         .mockResolvedValueOnce(undefined) // initial
-        .mockImplementation(async () => { /* reconnect — completes */ });
+        .mockImplementation(async () => {
+          /* reconnect — completes */
+        });
 
       await adapter.connect({
         name: 'hc-status',
@@ -837,7 +874,7 @@ describe('MCPAdapter', () => {
       await vi.advanceTimersByTimeAsync(100);
 
       // After the second fire, status must still be 'reconnecting' (not 'error')
-      const status = adapter.getHealth().servers.find(s => s.name === 'hc-status')?.status;
+      const status = adapter.getHealth().servers.find((s) => s.name === 'hc-status')?.status;
       expect(status).toBe('reconnecting');
 
       vi.useRealTimers();
@@ -848,7 +885,9 @@ describe('MCPAdapter', () => {
   describe('namespace collision (issue #2)', () => {
     it('should sanitize __ in serverName to prevent namespace collision', async () => {
       mockClient.listTools.mockResolvedValueOnce({
-        tools: [{ name: 'baz', description: 'tool', inputSchema: { type: 'object', properties: {} } }],
+        tools: [
+          { name: 'baz', description: 'tool', inputSchema: { type: 'object', properties: {} } },
+        ],
       });
 
       // server "foo__bar" + tool "baz" must NOT produce same name as server "foo" + tool "bar__baz"
@@ -865,7 +904,13 @@ describe('MCPAdapter', () => {
 
     it('should sanitize __ in toolName to prevent namespace collision', async () => {
       mockClient.listTools.mockResolvedValueOnce({
-        tools: [{ name: 'bar__baz', description: 'tool', inputSchema: { type: 'object', properties: {} } }],
+        tools: [
+          {
+            name: 'bar__baz',
+            description: 'tool',
+            inputSchema: { type: 'object', properties: {} },
+          },
+        ],
       });
 
       const tools = await adapter.connect({

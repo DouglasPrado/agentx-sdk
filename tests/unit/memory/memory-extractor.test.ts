@@ -112,11 +112,7 @@ describe('memory-extractor', () => {
         content: 'Some content.',
       });
 
-      await extractMemories(
-        'user: hello\nassistant: hi',
-        system,
-        mockFork as ForkFn,
-      );
+      await extractMemories('user: hello\nassistant: hi', system, mockFork as ForkFn);
 
       const [prompt] = mockFork.mock.calls[0];
       expect(prompt).toContain('existing-memory.md');
@@ -124,11 +120,7 @@ describe('memory-extractor', () => {
     });
 
     it('runs fork in background mode', async () => {
-      await extractMemories(
-        'user: test\nassistant: ok',
-        system,
-        mockFork as ForkFn,
-      );
+      await extractMemories('user: test\nassistant: ok', system, mockFork as ForkFn);
 
       const [, options] = mockFork.mock.calls[0];
       expect(options.background).toBe(true);
@@ -148,24 +140,22 @@ describe('memory-extractor', () => {
       const failingFork = vi.fn().mockRejectedValue(new Error('fork failed'));
 
       // Should not throw
-      await extractMemories(
-        'user: test\nassistant: ok',
-        system,
-        failingFork as ForkFn,
-      );
+      await extractMemories('user: test\nassistant: ok', system, failingFork as ForkFn);
     });
 
     it('logs error via logger when fork fails', async () => {
       const debugSpy = vi.fn();
-      const testLogger = { debug: debugSpy, info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+      const testLogger = {
+        debug: debugSpy,
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      } as unknown as Logger;
       const failingFork = vi.fn().mockRejectedValue(new Error('network error'));
 
-      await extractMemories(
-        'user: test\nassistant: ok',
-        system,
-        failingFork as ForkFn,
-        { logger: testLogger },
-      );
+      await extractMemories('user: test\nassistant: ok', system, failingFork as ForkFn, {
+        logger: testLogger,
+      });
 
       expect(debugSpy).toHaveBeenCalledWith(
         'Memory extraction failed',
@@ -174,12 +164,9 @@ describe('memory-extractor', () => {
     });
 
     it('passes threadId to memory tools when provided', async () => {
-      await extractMemories(
-        'user: test\nassistant: ok',
-        system,
-        mockFork as ForkFn,
-        { threadId: 'thread-42' },
-      );
+      await extractMemories('user: test\nassistant: ok', system, mockFork as ForkFn, {
+        threadId: 'thread-42',
+      });
 
       expect(mockFork).toHaveBeenCalledOnce();
     });
@@ -198,11 +185,7 @@ describe('memory-extractor', () => {
     // --- issue #48: indirect prompt injection via conversation history ---
 
     it('wraps conversation text with data delimiters to prevent prompt injection (issue #48)', async () => {
-      await extractMemories(
-        'user: remember this\nassistant: ok',
-        system,
-        mockFork as ForkFn,
-      );
+      await extractMemories('user: remember this\nassistant: ok', system, mockFork as ForkFn);
 
       const [prompt] = mockFork.mock.calls[0];
       // The prompt must include clear delimiters marking the conversation as DATA, not instructions
@@ -224,11 +207,7 @@ describe('memory-extractor', () => {
     });
 
     it('prompt instructs LLM that conversation is data, not instructions (issue #48)', async () => {
-      await extractMemories(
-        'user: test\nassistant: ok',
-        system,
-        mockFork as ForkFn,
-      );
+      await extractMemories('user: test\nassistant: ok', system, mockFork as ForkFn);
 
       const [prompt] = mockFork.mock.calls[0];
       // Must contain a label/note that the enclosed text is input data, not instructions

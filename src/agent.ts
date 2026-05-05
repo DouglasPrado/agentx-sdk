@@ -1,12 +1,13 @@
 import type { AgentConfig, AgentConfigInput, MCPConnectionConfigInput } from './config/config.js';
 import { AgentConfigSchema } from './config/config.js';
-import type { AgentEvent, AgentEndEvent } from './contracts/entities/agent-event.js';
+import type { AgentEvent } from './contracts/entities/agent-event.js';
 import type { AgentTool } from './contracts/entities/agent-tool.js';
 import type { AgentSkill } from './contracts/entities/agent-skill.js';
+import type { ChatMessage } from './contracts/entities/chat-message.js';
 import type { KnowledgeDocument, RetrievedKnowledge } from './contracts/entities/knowledge.js';
 import type { TokenUsage } from './contracts/entities/token-usage.js';
 import type { ContentPart } from './contracts/entities/content-part.js';
-import type { MessageRole } from './contracts/enums/index.js';
+import type { MemoryFile } from './memory/memory-types.js';
 import type { ContextInjection } from './core/context-builder.js';
 import type { Terminal } from './core/loop-types.js';
 import { LLMClient } from './llm/llm-client.js';
@@ -88,7 +89,7 @@ export class Agent {
     } else {
       this.logger.warn(
         'knowledge.enabled=false: conversation history will not persist across restarts. ' +
-        'Pass conversation.store explicitly to enable persistence without knowledge.',
+          'Pass conversation.store explicitly to enable persistence without knowledge.',
       );
       this.conversations = new ConversationManager();
     }
@@ -97,9 +98,10 @@ export class Agent {
     const embApiKey = config.embedding?.apiKey ?? config.apiKey;
     const embBaseUrl = config.embedding?.baseUrl ?? config.baseUrl;
     const embModel = config.embedding?.model ?? config.embeddingModel;
-    const embeddingClient = (embApiKey !== config.apiKey || embBaseUrl !== config.baseUrl)
-      ? new LLMClient({ apiKey: embApiKey, model: embModel, baseUrl: embBaseUrl })
-      : this.client;
+    const embeddingClient =
+      embApiKey !== config.apiKey || embBaseUrl !== config.baseUrl
+        ? new LLMClient({ apiKey: embApiKey, model: embModel, baseUrl: embBaseUrl })
+        : this.client;
     this.embeddingService = new EmbeddingService(embeddingClient, { model: embModel });
 
     // Memory subsystem (file-based)
@@ -114,7 +116,7 @@ export class Agent {
         this.logger,
       );
       // Ensure memory directory exists (fire-and-forget)
-      void this.fileMemorySystem.ensureDir().catch(err => {
+      void this.fileMemorySystem.ensureDir().catch((err) => {
         this.logger.warn('Memory directory initialization failed — persistent memory disabled', {
           memoryDir: config.memory?.memoryDir,
           error: String(err),
@@ -143,7 +145,7 @@ export class Agent {
 
     // Auto-load skills from directory (fire-and-forget)
     if (config.skills?.skillsDir) {
-      void this.skillManager.loadFromDirectory(config.skills.skillsDir).catch(err => {
+      void this.skillManager.loadFromDirectory(config.skills.skillsDir).catch((err) => {
         this.logger.warn('Skills directory loading failed — skills unavailable', {
           skillsDir: config.skills?.skillsDir,
           error: String(err),
@@ -166,22 +168,32 @@ export class Agent {
    * Streaming API — primary interface. Returns AsyncIterableIterator<AgentEvent>.
    * Uses AsyncGenerator pattern: the react loop yields events directly.
    */
-  async *stream(input: string | ContentPart[], options?: ChatOptions): AsyncIterableIterator<AgentEvent> {
+  async *stream(
+    input: string | ContentPart[],
+    options?: ChatOptions,
+  ): AsyncIterableIterator<AgentEvent> {
     if (this.destroyed) throw new Error('Agent is destroyed');
 
     const threadId = options?.threadId ?? 'default';
-    if (!validateThreadId(threadId)) throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
+    if (!validateThreadId(threadId))
+      throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
     const model = options?.model ?? this.config.model;
     const ctx = createExecutionContext(threadId, model);
 
     // Add user message
-    const userContent = typeof input === 'string' ? input : input.map(p => p.type === 'text' ? p.text : '[image]').join('');
-    await this.conversations.withThread(threadId, async () => {
-      this.conversations.appendMessage({
-        role: 'user',
-        content: input,
-        createdAt: Date.now(),
-      }, threadId);
+    const userContent =
+      typeof input === 'string'
+        ? input
+        : input.map((p) => (p.type === 'text' ? p.text : '[image]')).join('');
+    await this.conversations.withThread(threadId, () => {
+      this.conversations.appendMessage(
+        {
+          role: 'user',
+          content: input,
+          createdAt: Date.now(),
+        },
+        threadId,
+      );
     });
 
     // Start memory relevance prefetch (non-blocking, thread-scoped)
@@ -190,7 +202,11 @@ export class Agent {
       : undefined;
 
     // Build context (memory prefetch resolves in parallel)
-    const { injections, skillToolNames } = await this.buildInjectionsWithSkills(userContent, threadId, memoryPrefetch);
+    const { injections, skillToolNames } = await this.buildInjectionsWithSkills(
+      userContent,
+      threadId,
+      memoryPrefetch,
+    );
 
     // Register SkillTool so the model can invoke skills mid-loop
     let skillToolRegistered = false;
@@ -264,14 +280,16 @@ export class Agent {
     yield { type: 'agent_start', traceId: ctx.traceId, threadId, model };
 
     // Emit skill_activated events for matched skills
-    for (const inj of injections.filter(i => i.source.startsWith('skill:') && i.source !== 'skill:listing')) {
+    for (const inj of injections.filter(
+      (i) => i.source.startsWith('skill:') && i.source !== 'skill:listing',
+    )) {
       yield { type: 'skill_activated', skillName: inj.source.replace('skill:', '') };
     }
 
     // Intercept events from the generator for persistence tracking
     let assistantText = '';
-    const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
-    const pendingToolResults: Array<{ toolCallId: string; content: string }> = [];
+    const pendingToolCalls: { id: string; name: string; arguments: string }[] = [];
+    const pendingToolResults: { toolCallId: string; content: string }[] = [];
 
     const loopGen = executeReactLoop(contextResult.messages, {
       client: this.client,
@@ -280,10 +298,12 @@ export class Agent {
       maxIterations: this.config.maxIterations,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,
       onToolError: this.config.onToolError,
-      costPolicy: this.config.costPolicy ? {
-        maxTokensPerExecution: this.config.costPolicy.maxTokensPerExecution,
-        onLimitReached: this.config.costPolicy.onLimitReached,
-      } : undefined,
+      costPolicy: this.config.costPolicy
+        ? {
+            maxTokensPerExecution: this.config.costPolicy.maxTokensPerExecution,
+            onLimitReached: this.config.costPolicy.onLimitReached,
+          }
+        : undefined,
       signal: options?.signal,
       // Compaction & Recovery
       maxContextTokens: this.config.maxContextTokens,
@@ -329,13 +349,20 @@ export class Agent {
     } catch (error) {
       // Persist partial text on unexpected error
       if (assistantText) {
-        this.conversations.appendMessage({
-          role: 'assistant',
-          content: assistantText,
-          createdAt: Date.now(),
-        }, threadId);
+        this.conversations.appendMessage(
+          {
+            role: 'assistant',
+            content: assistantText,
+            createdAt: Date.now(),
+          },
+          threadId,
+        );
       }
-      yield { type: 'error', error: error instanceof Error ? error : new Error(String(error)), recoverable: false };
+      yield {
+        type: 'error',
+        error: error instanceof Error ? error : new Error(String(error)),
+        recoverable: false,
+      };
       yield {
         type: 'agent_end',
         traceId: ctx.traceId,
@@ -350,35 +377,46 @@ export class Agent {
     const now = Date.now();
 
     if (pendingToolCalls.length > 0) {
-      this.conversations.appendMessage({
-        role: 'assistant',
-        content: '',
-        toolCalls: pendingToolCalls.map(tc => ({
-          id: tc.id,
-          type: 'function' as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
-        createdAt: now - 2,
-      }, threadId);
+      this.conversations.appendMessage(
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: pendingToolCalls.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+          createdAt: now - 2,
+        },
+        threadId,
+      );
 
       for (const tr of pendingToolResults) {
-        const isSkillTool = pendingToolCalls.some(tc => tc.id === tr.toolCallId && tc.name === SKILL_TOOL_NAME);
-        this.conversations.appendMessage({
-          role: 'tool' as MessageRole,
-          content: tr.content,
-          toolCallId: tr.toolCallId,
-          pinned: isSkillTool || undefined,
-          createdAt: now - 1,
-        }, threadId);
+        const isSkillTool = pendingToolCalls.some(
+          (tc) => tc.id === tr.toolCallId && tc.name === SKILL_TOOL_NAME,
+        );
+        this.conversations.appendMessage(
+          {
+            role: 'tool',
+            content: tr.content,
+            toolCallId: tr.toolCallId,
+            pinned: isSkillTool || undefined,
+            createdAt: now - 1,
+          },
+          threadId,
+        );
       }
     }
 
     if (assistantText) {
-      this.conversations.appendMessage({
-        role: 'assistant',
-        content: assistantText,
-        createdAt: now,
-      }, threadId);
+      this.conversations.appendMessage(
+        {
+          role: 'assistant',
+          content: assistantText,
+          createdAt: now,
+        },
+        threadId,
+      );
     }
 
     // Accumulate cost
@@ -399,7 +437,7 @@ export class Agent {
       type: 'agent_end',
       traceId: ctx.traceId,
       usage: terminal.usage,
-      reason: terminal.reason as AgentEndEvent['reason'],
+      reason: terminal.reason,
       duration: Date.now() - ctx.startedAt,
     };
 
@@ -435,10 +473,12 @@ export class Agent {
           }
           const history = conversations.getHistory(threadId);
           const recentMessages = history.slice(-10);
-          const conversationText = recentMessages.map(m => {
-            const text = typeof m.content === 'string' ? m.content : '[multimodal]';
-            return `${m.role}: ${text}`;
-          }).join('\n');
+          const conversationText = recentMessages
+            .map((m) => {
+              const text = typeof m.content === 'string' ? m.content : '[multimodal]';
+              return `${m.role}: ${text}`;
+            })
+            .join('\n');
           await extractMemories(conversationText, memSystem, forkFn, { threadId, logger });
         } catch (err) {
           logger.debug('Memory extraction failed', { error: String(err) });
@@ -448,7 +488,7 @@ export class Agent {
 
     // Run registered turn-end hooks
     if (this.turnEndHooks.length > 0) {
-      void runTurnEndHooks(this.turnEndHooks, turnEndContext).catch(err => {
+      void runTurnEndHooks(this.turnEndHooks, turnEndContext).catch((err) => {
         this.logger.debug('Turn-end hooks failed', { error: String(err) });
       });
     }
@@ -523,7 +563,7 @@ export class Agent {
       systemPrompt?: string;
       model?: string;
       /** Tools available to the forked agent. If omitted, fork has no tools. */
-      tools?: import('./contracts/entities/agent-tool.js').AgentTool[];
+      tools?: AgentTool[];
       /** If true, runs in background and returns a Promise (fire-and-forget). Default: false (blocking). */
       background?: boolean;
     },
@@ -558,7 +598,7 @@ export class Agent {
     };
 
     if (options?.background) {
-      void run().catch(err => {
+      void run().catch((err) => {
         this.logger.debug('Background fork failed', { error: String(err) });
       });
       return ''; // fire-and-forget — returns immediately
@@ -572,7 +612,7 @@ export class Agent {
     return getModelContextWindow(this.config.model, this.config.maxContextTokens);
   }
 
-  getHistory(threadId?: string): import('./contracts/entities/chat-message.js').ChatMessage[] {
+  getHistory(threadId?: string): ChatMessage[] {
     return this.conversations.getHistory(threadId ?? 'default');
   }
 
@@ -621,18 +661,28 @@ export class Agent {
     return this.mcpAdapter.getHealth();
   }
 
-  async remember(content: string, type: 'user' | 'feedback' | 'project' | 'reference' = 'user', threadId?: string): Promise<string> {
+  async remember(
+    content: string,
+    type: 'user' | 'feedback' | 'project' | 'reference' = 'user',
+    threadId?: string,
+  ): Promise<string> {
     if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
-    const name = content.slice(0, 40).replace(/[^a-zA-Z0-9\s]/g, '').trim();
-    return this.fileMemorySystem.saveMemory({
-      name: name || 'memory',
-      description: content.slice(0, 100),
-      type,
-      content,
-    }, threadId);
+    const name = content
+      .slice(0, 40)
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .trim();
+    return this.fileMemorySystem.saveMemory(
+      {
+        name: name || 'memory',
+        description: content.slice(0, 100),
+        type,
+        content,
+      },
+      threadId,
+    );
   }
 
-  async recall(query: string, threadId?: string): Promise<import('./memory/memory-types.js').MemoryFile[]> {
+  async recall(query: string, threadId?: string): Promise<MemoryFile[]> {
     if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
     return this.fileMemorySystem.findRelevant(query, undefined, undefined, threadId);
   }
@@ -692,23 +742,24 @@ export class Agent {
    * Returns a promise that resolves with relevant MemoryFiles.
    * Races against a timeout so it never blocks the response indefinitely.
    */
-  private startMemoryPrefetch(
-    userInput: string,
-    threadId?: string,
-  ): Promise<import('./memory/memory-types.js').MemoryFile[]> {
+  private startMemoryPrefetch(userInput: string, threadId?: string): Promise<MemoryFile[]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Agent.MEMORY_PREFETCH_TIMEOUT);
 
-    return this.fileMemorySystem!
-      .findRelevant(userInput, controller.signal, this.surfacedMemories, threadId)
-      .catch(() => [] as import('./memory/memory-types.js').MemoryFile[])
+    return this.fileMemorySystem!.findRelevant(
+      userInput,
+      controller.signal,
+      this.surfacedMemories,
+      threadId,
+    )
+      .catch(() => [] as MemoryFile[])
       .finally(() => clearTimeout(timeout));
   }
 
   private async buildInjectionsWithSkills(
     userInput: string,
     threadId: string,
-    memoryPrefetch?: Promise<import('./memory/memory-types.js').MemoryFile[]>,
+    memoryPrefetch?: Promise<MemoryFile[]>,
   ): Promise<{ injections: ContextInjection[]; skillToolNames: string[] }> {
     const injections: ContextInjection[] = [];
 
@@ -719,13 +770,13 @@ export class Agent {
 
       for (const skill of matchedSkills) {
         // Resolve instructions (dynamic getPrompt or static with arg substitution)
-        const rawArgs = skill.triggerPrefix && userInput.startsWith(skill.triggerPrefix)
-          ? userInput.slice(skill.triggerPrefix.length).trim()
-          : skill.aliases?.reduce((acc, alias) => {
-              const prefix = alias.startsWith('/') ? alias : `/${alias}`;
-              return userInput.startsWith(prefix) ? userInput.slice(prefix.length).trim() : acc;
-            }, '')
-          ?? '';
+        const rawArgs =
+          skill.triggerPrefix && userInput.startsWith(skill.triggerPrefix)
+            ? userInput.slice(skill.triggerPrefix.length).trim()
+            : (skill.aliases?.reduce((acc, alias) => {
+                const prefix = alias.startsWith('/') ? alias : `/${alias}`;
+                return userInput.startsWith(prefix) ? userInput.slice(prefix.length).trim() : acc;
+              }, '') ?? '');
 
         const resolved = await this.skillManager.resolveInstructions(skill, rawArgs, {
           threadId,
@@ -769,9 +820,14 @@ export class Agent {
       try {
         const results = await this.knowledgeManager.search(userInput);
         if (results.length > 0) {
-          const content = results.map(r => r.content).join('\n\n');
+          const content = results.map((r) => r.content).join('\n\n');
           const tokens = estimateTokens(content);
-          injections.push({ source: 'knowledge', priority: 6, content: `Relevant knowledge:\n${content}`, tokens });
+          injections.push({
+            source: 'knowledge',
+            priority: 6,
+            content: `Relevant knowledge:\n${content}`,
+            tokens,
+          });
         }
       } catch {
         // Knowledge search failed — continue without it
@@ -797,25 +853,42 @@ export class Agent {
         // Behavioral instructions (types, when to save, verification rules)
         const instructions = this.fileMemorySystem.getMemoryInstructions();
         const instrTokens = estimateTokens(instructions);
-        injections.push({ source: 'memory:instructions', priority: 2, content: instructions, tokens: instrTokens });
+        injections.push({
+          source: 'memory:instructions',
+          priority: 2,
+          content: instructions,
+          tokens: instrTokens,
+        });
 
         // MEMORY.md index content
         const indexContent = await this.fileMemorySystem.buildContextPrompt(threadId);
         if (indexContent) {
           const tokens = estimateTokens(indexContent);
-          injections.push({ source: 'memory:index', priority: 3, content: `## MEMORY.md\n${indexContent}`, tokens });
+          injections.push({
+            source: 'memory:index',
+            priority: 3,
+            content: `## MEMORY.md\n${indexContent}`,
+            tokens,
+          });
         }
 
         // LLM-selected relevant memories (from prefetch — already running in parallel)
         const relevant = memoryPrefetch ? await memoryPrefetch : [];
         if (relevant.length > 0) {
-          const content = relevant.map(m => {
-            const freshness = memoryFreshnessNote(m.mtimeMs);
-            const header = m.name ?? m.filename;
-            return `- ${header}:${freshness ? ` ${freshness}` : ''} ${m.content}`;
-          }).join('\n');
+          const content = relevant
+            .map((m) => {
+              const freshness = memoryFreshnessNote(m.mtimeMs);
+              const header = m.name ?? m.filename;
+              return `- ${header}:${freshness ? ` ${freshness}` : ''} ${m.content}`;
+            })
+            .join('\n');
           const tokens = estimateTokens(content);
-          injections.push({ source: 'memory:relevant', priority: 4, content: `Relevant memories:\n${content}`, tokens });
+          injections.push({
+            source: 'memory:relevant',
+            priority: 4,
+            content: `Relevant memories:\n${content}`,
+            tokens,
+          });
 
           // Track surfaced filenames to avoid re-injection in subsequent turns
           for (const m of relevant) {

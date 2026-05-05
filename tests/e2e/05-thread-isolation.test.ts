@@ -19,16 +19,20 @@ describe('E2E 05 — thread isolation', () => {
   it('keeps history isolated between threads on the same agent', async () => {
     scriptFetch({
       chat: [
-        createSSEResponse(textResponseFrames({
-          content: 'reply-A',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
-        })),
-        createSSEResponse(textResponseFrames({
-          content: 'reply-B',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
-        })),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'reply-A',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
+          }),
+        ),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'reply-B',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
+          }),
+        ),
       ],
     });
 
@@ -40,27 +44,31 @@ describe('E2E 05 — thread isolation', () => {
     const t1 = handle.agent.getHistory('t1');
     const t2 = handle.agent.getHistory('t2');
 
-    expect(t1.map(m => m.content)).toEqual(['message-A', 'reply-A']);
-    expect(t2.map(m => m.content)).toEqual(['message-B', 'reply-B']);
+    expect(t1.map((m) => m.content)).toEqual(['message-A', 'reply-A']);
+    expect(t2.map((m) => m.content)).toEqual(['message-B', 'reply-B']);
 
     // No cross-contamination
-    expect(t1.every(m => !String(m.content).includes('B'))).toBe(true);
-    expect(t2.every(m => !String(m.content).includes('A'))).toBe(true);
+    expect(t1.every((m) => !String(m.content).includes('B'))).toBe(true);
+    expect(t2.every((m) => !String(m.content).includes('A'))).toBe(true);
   });
 
   it('serializes concurrent streams on the same thread (no interleaving)', async () => {
     scriptFetch({
       chat: [
-        createSSEResponse(textResponseFrames({
-          content: 'first',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
-        })),
-        createSSEResponse(textResponseFrames({
-          content: 'second',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
-        })),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'first',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
+          }),
+        ),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'second',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 5, completion_tokens: 1, total_tokens: 6 },
+          }),
+        ),
       ],
     });
 
@@ -78,7 +86,7 @@ describe('E2E 05 — thread isolation', () => {
 
     // History preserves causal order: user-a precedes user-b after serialization
     const history = handle.agent.getHistory('same');
-    const userMsgs = history.filter(m => m.role === 'user').map(m => m.content);
+    const userMsgs = history.filter((m) => m.role === 'user').map((m) => m.content);
     expect(userMsgs).toHaveLength(2);
     expect(userMsgs).toContain('a');
     expect(userMsgs).toContain('b');
@@ -89,7 +97,9 @@ describe('E2E 05 — thread isolation', () => {
     handle = await createTempAgent({ memory: { enabled: false }, knowledge: { enabled: false } });
 
     await expect(async () => {
-      for await (const _ of handle.agent.stream('x', { threadId: '../../../etc' })) { /* no-op */ }
+      for await (const _ of handle.agent.stream('x', { threadId: '../../../etc' })) {
+        /* no-op */
+      }
     }).rejects.toThrow(/invalid threadid/i);
   });
 });

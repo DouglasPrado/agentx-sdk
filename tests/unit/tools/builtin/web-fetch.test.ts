@@ -4,7 +4,9 @@ import { createWebFetchTool, type DnsResolver } from '../../../../src/tools/buil
 describe('builtin/web-fetch', () => {
   const signal = new AbortController().signal;
 
-  afterEach(() => { vi.restoreAllMocks(); });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('should return AgentTool with correct metadata', () => {
     const tool = createWebFetchTool();
@@ -115,7 +117,12 @@ describe('builtin/web-fetch', () => {
     const tool = createWebFetchTool();
 
     it('blocks localhost and loopback addresses', async () => {
-      for (const url of ['http://localhost/', 'http://127.0.0.1:6379', 'http://[::1]/', 'http://0.0.0.0/']) {
+      for (const url of [
+        'http://localhost/',
+        'http://127.0.0.1:6379',
+        'http://[::1]/',
+        'http://0.0.0.0/',
+      ]) {
         const result = await tool.execute({ url }, signal);
         const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
         expect(parsed.isError, `should block ${url}`).toBe(true);
@@ -123,7 +130,10 @@ describe('builtin/web-fetch', () => {
     });
 
     it('blocks cloud metadata endpoints', async () => {
-      const result = await tool.execute({ url: 'http://169.254.169.254/latest/meta-data/' }, signal);
+      const result = await tool.execute(
+        { url: 'http://169.254.169.254/latest/meta-data/' },
+        signal,
+      );
       const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
       expect(parsed.isError).toBe(true);
     });

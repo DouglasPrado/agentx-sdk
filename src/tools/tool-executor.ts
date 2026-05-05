@@ -1,4 +1,4 @@
-import { ZodError, type ZodSchema } from 'zod';
+import { ZodError } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
@@ -63,21 +63,26 @@ export class ToolExecutor {
   }
 
   getToolDefinitions(): ToolDefinition[] {
-    return this.listTools().map(tool => ({
+    return this.listTools().map((tool) => ({
       type: 'function',
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: zodToJsonSchema(tool.parameters as ZodSchema, { target: 'openApi3' }) as Record<string, unknown>,
+        parameters: zodToJsonSchema(tool.parameters, { target: 'openApi3' }),
       },
     }));
   }
 
-  async execute(name: string, args: unknown, signalOrOptions?: AbortSignal | ExecuteOptions): Promise<AgentToolResult> {
+  async execute(
+    name: string,
+    args: unknown,
+    signalOrOptions?: AbortSignal | ExecuteOptions,
+  ): Promise<AgentToolResult> {
     // Normalize options (backward compatible — accepts bare AbortSignal)
-    const opts: ExecuteOptions = signalOrOptions instanceof AbortSignal
-      ? { signal: signalOrOptions }
-      : signalOrOptions ?? {};
+    const opts: ExecuteOptions =
+      signalOrOptions instanceof AbortSignal
+        ? { signal: signalOrOptions }
+        : (signalOrOptions ?? {});
 
     const tool = this.tools.get(name);
     if (!tool) {
@@ -87,10 +92,13 @@ export class ToolExecutor {
     // 1. Zod schema validation
     let validatedArgs: unknown;
     try {
-      validatedArgs = (tool.parameters as ZodSchema).parse(args);
+      validatedArgs = tool.parameters.parse(args);
     } catch (error) {
       if (error instanceof ZodError) {
-        return { content: `Validation error: ${error.errors.map(e => e.message).join(', ')}`, isError: true };
+        return {
+          content: `Validation error: ${error.errors.map((e) => e.message).join(', ')}`,
+          isError: true,
+        };
       }
       return { content: `Validation error: ${String(error)}`, isError: true };
     }
@@ -106,7 +114,10 @@ export class ToolExecutor {
           return { content: `Validation error: ${validationError}`, isError: true };
         }
       } catch (error) {
-        return { content: `Validation error: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+        return {
+          content: `Validation error: ${error instanceof Error ? error.message : String(error)}`,
+          isError: true,
+        };
       }
     }
 
@@ -119,8 +130,9 @@ export class ToolExecutor {
     const execSignal = this.buildSignal(tool, opts.signal);
 
     // 5. Build progress callback
-    const onProgress: ToolProgressCallback | undefined = opts.onProgress
-      ?? (opts.toolCallId && this.hooks.onToolProgress
+    const onProgress: ToolProgressCallback | undefined =
+      opts.onProgress ??
+      (opts.toolCallId && this.hooks.onToolProgress
         ? (data) => this.hooks.onToolProgress!(name, opts.toolCallId!, data)
         : undefined);
 
@@ -129,7 +141,10 @@ export class ToolExecutor {
     try {
       result = await this.executeWithRetry(tool, validatedArgs, execSignal, onProgress);
     } catch (error) {
-      result = { content: `Tool error: ${error instanceof Error ? error.message : String(error)}`, isError: true };
+      result = {
+        content: `Tool error: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
     }
 
     // 7. Result truncation
@@ -155,11 +170,14 @@ export class ToolExecutor {
     return result;
   }
 
-  async executeParallel(calls: ToolCallRequest[], signal?: AbortSignal): Promise<AgentToolResult[]> {
+  async executeParallel(
+    calls: ToolCallRequest[],
+    signal?: AbortSignal,
+  ): Promise<AgentToolResult[]> {
     const callsWithId = calls.map((c, i) => ({ id: String(i), name: c.name, args: c.args }));
     const results = await this.executePartitioned(callsWithId, signal);
     results.sort((a, b) => Number(a.id) - Number(b.id));
-    return results.map(r => r.result);
+    return results.map((r) => r.result);
   }
 
   /**
@@ -169,13 +187,13 @@ export class ToolExecutor {
    * - Results are returned in the original call order
    */
   async executePartitioned(
-    calls: Array<{ id: string; name: string; args: unknown }>,
+    calls: { id: string; name: string; args: unknown }[],
     signal?: AbortSignal,
-  ): Promise<Array<{ id: string; result: AgentToolResult }>> {
-    const results: Array<{ id: string; result: AgentToolResult }> = [];
+  ): Promise<{ id: string; result: AgentToolResult }[]> {
+    const results: { id: string; result: AgentToolResult }[] = [];
 
     // Partition into batches of consecutive safe/unsafe tools
-    const batches: Array<{ calls: typeof calls; concurrent: boolean }> = [];
+    const batches: { calls: typeof calls; concurrent: boolean }[] = [];
     let currentBatch: typeof calls = [];
     let currentConcurrent = false;
 
@@ -259,13 +277,14 @@ export class ToolExecutor {
       return execFn();
     }
 
-    const isRetryable = typeof tool.retryable === 'function'
-      ? tool.retryable
-      : (error: unknown) => {
-          // Don't retry abort errors
-          if (error instanceof DOMException && error.name === 'AbortError') return false;
-          return true;
-        };
+    const isRetryable =
+      typeof tool.retryable === 'function'
+        ? tool.retryable
+        : (error: unknown) => {
+            // Don't retry abort errors
+            if (error instanceof DOMException && error.name === 'AbortError') return false;
+            return true;
+          };
 
     return retry(execFn, {
       maxRetries: tool.maxRetries ?? 2,

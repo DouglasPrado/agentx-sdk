@@ -73,7 +73,7 @@ describe('buildContext', () => {
       maxPinnedMessages: 20,
     });
 
-    const allContent = result.messages.map(m => m.content).join(' ');
+    const allContent = result.messages.map((m) => m.content).join(' ');
     expect(allContent).toContain('pinned message');
   });
 
@@ -95,7 +95,9 @@ describe('buildContext', () => {
   });
 
   it('should trim oldest unpinned messages when budget is tight', () => {
-    const history = Array.from({ length: 50 }, (_, i) => msg('user', `message number ${i} with some content`));
+    const history = Array.from({ length: 50 }, (_, i) =>
+      msg('user', `message number ${i} with some content`),
+    );
 
     const result = buildContext({
       injections: [],
@@ -165,7 +167,7 @@ describe('buildContext', () => {
     });
 
     const content = result.messages[0]!.content as string;
-    const reminderCount = (content.match(/<system-reminder>/g) || []).length;
+    const reminderCount = (content.match(/<system-reminder>/g) ?? []).length;
     expect(reminderCount).toBe(2);
   });
 
@@ -188,7 +190,7 @@ describe('buildContext', () => {
     });
 
     // Two consecutive user messages should be merged into one
-    const userMessages = result.messages.filter(m => m.role === 'user');
+    const userMessages = result.messages.filter((m) => m.role === 'user');
     const firstUser = userMessages[0]!.content as string;
     expect(firstUser).toContain('first');
     expect(firstUser).toContain('second');
@@ -200,8 +202,20 @@ describe('buildContext', () => {
     // A skill tool result is stored in SQLite with pinned=true.
     // When loaded back and converted to LLMMessage, _pinned must be set so that
     // autocompact / snipCompact honour it in resumed sessions.
-    const pinnedTool: ChatMessage = { role: 'tool', content: 'skill output', pinned: true, toolCallId: 'tc1', createdAt: 1 };
-    const unpinnedTool: ChatMessage = { role: 'tool', content: 'regular output', pinned: false, toolCallId: 'tc2', createdAt: 2 };
+    const pinnedTool: ChatMessage = {
+      role: 'tool',
+      content: 'skill output',
+      pinned: true,
+      toolCallId: 'tc1',
+      createdAt: 1,
+    };
+    const unpinnedTool: ChatMessage = {
+      role: 'tool',
+      content: 'regular output',
+      pinned: false,
+      toolCallId: 'tc2',
+      createdAt: 2,
+    };
 
     const result = buildContext({
       systemPrompt: '',
@@ -212,8 +226,8 @@ describe('buildContext', () => {
       maxPinnedMessages: 20,
     });
 
-    const llmPinned = result.messages.find(m => m.tool_call_id === 'tc1');
-    const llmUnpinned = result.messages.find(m => m.tool_call_id === 'tc2');
+    const llmPinned = result.messages.find((m) => m.tool_call_id === 'tc1');
+    const llmUnpinned = result.messages.find((m) => m.tool_call_id === 'tc2');
 
     expect(llmPinned).toBeDefined();
     expect((llmPinned as unknown as Record<string, unknown>)._pinned).toBe(true);

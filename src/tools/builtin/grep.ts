@@ -18,7 +18,11 @@ async function collectFiles(dir: string, globPattern?: string): Promise<string[]
   const results: string[] = [];
   async function walk(d: string): Promise<void> {
     let entries;
-    try { entries = await readdir(d, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
       const full = join(d, entry.name);
@@ -40,13 +44,19 @@ async function collectFiles(dir: string, globPattern?: string): Promise<string[]
 export function createGrepTool(workingDir?: string): AgentTool {
   return {
     name: 'Grep',
-    description: 'Search file contents using regex. Returns matching lines with file paths and line numbers.',
+    description:
+      'Search file contents using regex. Returns matching lines with file paths and line numbers.',
     parameters: GrepParams,
     isConcurrencySafe: true,
     isReadOnly: true,
 
     async execute(rawArgs: unknown, signal: AbortSignal) {
-      const { pattern, path: searchPath, glob: globFilter, max_results } = rawArgs as z.infer<typeof GrepParams>;
+      const {
+        pattern,
+        path: searchPath,
+        glob: globFilter,
+        max_results,
+      } = rawArgs as z.infer<typeof GrepParams>;
 
       if (workingDir && searchPath) {
         try {
@@ -56,7 +66,11 @@ export function createGrepTool(workingDir?: string): AgentTool {
         }
       }
 
-      const baseDir = searchPath || workingDir || process.cwd();
+      const baseDir = searchPath?.trim()
+        ? searchPath
+        : workingDir?.trim()
+          ? workingDir
+          : process.cwd();
       const maxResults = max_results ?? DEFAULT_MAX_RESULTS;
 
       // Reject patterns that can cause catastrophic backtracking (ReDoS).

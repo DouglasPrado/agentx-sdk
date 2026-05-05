@@ -55,10 +55,12 @@ describe('SkillManager', () => {
   // --- Alias matching ---
 
   it('should match by alias', async () => {
-    manager.register(createSkill({
-      name: 'code-review',
-      aliases: ['review', 'cr'],
-    }));
+    manager.register(
+      createSkill({
+        name: 'code-review',
+        aliases: ['review', 'cr'],
+      }),
+    );
 
     const matches = await manager.match('/review this', { threadId: 't1' });
     expect(matches).toHaveLength(1);
@@ -66,10 +68,12 @@ describe('SkillManager', () => {
   });
 
   it('should match alias with / prefix already included', async () => {
-    manager.register(createSkill({
-      name: 'code-review',
-      aliases: ['/cr'],
-    }));
+    manager.register(
+      createSkill({
+        name: 'code-review',
+        aliases: ['/cr'],
+      }),
+    );
 
     const matches = await manager.match('/cr file.ts', { threadId: 't1' });
     expect(matches).toHaveLength(1);
@@ -78,10 +82,12 @@ describe('SkillManager', () => {
   // --- Custom match ---
 
   it('should match by custom match function', async () => {
-    manager.register(createSkill({
-      name: 'code',
-      match: (input) => input.includes('write code'),
-    }));
+    manager.register(
+      createSkill({
+        name: 'code',
+        match: (input) => input.includes('write code'),
+      }),
+    );
 
     const matches = await manager.match('please write code for me', { threadId: 't1' });
     expect(matches).toHaveLength(1);
@@ -91,32 +97,40 @@ describe('SkillManager', () => {
   // --- Priority ---
 
   it('should prioritize prefix over custom', async () => {
-    manager.register(createSkill({
-      name: 'prefix-skill',
-      triggerPrefix: '/test',
-      priority: 1,
-    }));
-    manager.register(createSkill({
-      name: 'custom-skill',
-      match: () => true,
-      priority: 10,
-    }));
+    manager.register(
+      createSkill({
+        name: 'prefix-skill',
+        triggerPrefix: '/test',
+        priority: 1,
+      }),
+    );
+    manager.register(
+      createSkill({
+        name: 'custom-skill',
+        match: () => true,
+        priority: 10,
+      }),
+    );
 
     const matches = await manager.match('/test something', { threadId: 't1' });
     expect(matches[0]!.name).toBe('prefix-skill');
   });
 
   it('should prioritize prefix over alias', async () => {
-    manager.register(createSkill({
-      name: 'exact',
-      triggerPrefix: '/review',
-      priority: 1,
-    }));
-    manager.register(createSkill({
-      name: 'aliased',
-      aliases: ['review'],
-      priority: 10,
-    }));
+    manager.register(
+      createSkill({
+        name: 'exact',
+        triggerPrefix: '/review',
+        priority: 1,
+      }),
+    );
+    manager.register(
+      createSkill({
+        name: 'aliased',
+        aliases: ['review'],
+        priority: 10,
+      }),
+    );
 
     const matches = await manager.match('/review code', { threadId: 't1' });
     expect(matches[0]!.name).toBe('exact');
@@ -133,15 +147,19 @@ describe('SkillManager', () => {
   // --- Exclusive ---
 
   it('should respect exclusive mode', async () => {
-    manager.register(createSkill({
-      name: 'exclusive-skill',
-      triggerPrefix: '/focus',
-      exclusive: true,
-    }));
-    manager.register(createSkill({
-      name: 'other-skill',
-      match: () => true,
-    }));
+    manager.register(
+      createSkill({
+        name: 'exclusive-skill',
+        triggerPrefix: '/focus',
+        exclusive: true,
+      }),
+    );
+    manager.register(
+      createSkill({
+        name: 'other-skill',
+        match: () => true,
+      }),
+    );
 
     const matches = await manager.match('/focus on task', { threadId: 't1' });
     expect(matches).toHaveLength(1);
@@ -163,15 +181,19 @@ describe('SkillManager', () => {
   // --- isEnabled filter ---
 
   it('should filter out disabled skills', async () => {
-    manager.register(createSkill({
-      name: 'disabled',
-      match: () => true,
-      isEnabled: () => false,
-    }));
-    manager.register(createSkill({
-      name: 'enabled',
-      match: () => true,
-    }));
+    manager.register(
+      createSkill({
+        name: 'disabled',
+        match: () => true,
+        isEnabled: () => false,
+      }),
+    );
+    manager.register(
+      createSkill({
+        name: 'enabled',
+        match: () => true,
+      }),
+    );
 
     const matches = await manager.match('any', { threadId: 't1' });
     expect(matches).toHaveLength(1);
@@ -207,11 +229,13 @@ describe('SkillManager', () => {
   // --- Conditional path activation ---
 
   it('should hold skills with paths as conditional', () => {
-    manager.register(createSkill({
-      name: 'ts-only',
-      paths: ['src/**/*.ts'],
-      match: () => true,
-    }));
+    manager.register(
+      createSkill({
+        name: 'ts-only',
+        paths: ['src/**/*.ts'],
+        match: () => true,
+      }),
+    );
 
     // Not in listSkills (pending conditional)
     expect(manager.listSkills()).toHaveLength(0);
@@ -219,11 +243,13 @@ describe('SkillManager', () => {
   });
 
   it('should activate conditional skills when paths match', () => {
-    manager.register(createSkill({
-      name: 'ts-only',
-      paths: ['src/**/*.ts'],
-      match: () => true,
-    }));
+    manager.register(
+      createSkill({
+        name: 'ts-only',
+        paths: ['src/**/*.ts'],
+        match: () => true,
+      }),
+    );
 
     const activated = manager.activateForPaths(['src/agent.ts']);
     expect(activated).toEqual(['ts-only']);
@@ -231,10 +257,12 @@ describe('SkillManager', () => {
   });
 
   it('should not activate for non-matching paths', () => {
-    manager.register(createSkill({
-      name: 'ts-only',
-      paths: ['src/**/*.ts'],
-    }));
+    manager.register(
+      createSkill({
+        name: 'ts-only',
+        paths: ['src/**/*.ts'],
+      }),
+    );
 
     const activated = manager.activateForPaths(['docs/readme.md']);
     expect(activated).toEqual([]);
@@ -242,11 +270,13 @@ describe('SkillManager', () => {
   });
 
   it('should match activated conditional skills', async () => {
-    manager.register(createSkill({
-      name: 'ts-review',
-      paths: ['src/**/*.ts'],
-      match: () => true,
-    }));
+    manager.register(
+      createSkill({
+        name: 'ts-review',
+        paths: ['src/**/*.ts'],
+        match: () => true,
+      }),
+    );
 
     manager.activateForPaths(['src/agent.ts']);
 
@@ -260,7 +290,8 @@ describe('SkillManager', () => {
   it('should resolve static instructions', async () => {
     const skill = createSkill({ instructions: 'Do this thing' });
     const result = await manager.resolveInstructions(skill, '', {
-      threadId: 't1', traceId: 'tr1',
+      threadId: 't1',
+      traceId: 'tr1',
     });
     expect(result).toBe('Do this thing');
   });
@@ -271,7 +302,8 @@ describe('SkillManager', () => {
       getPrompt: async (args) => `Dynamic: ${args}`,
     });
     const result = await manager.resolveInstructions(skill, 'hello', {
-      threadId: 't1', traceId: 'tr1',
+      threadId: 't1',
+      traceId: 'tr1',
     });
     expect(result).toBe('Dynamic: hello');
   });
@@ -282,7 +314,8 @@ describe('SkillManager', () => {
       argNames: ['file'],
     });
     const result = await manager.resolveInstructions(skill, 'main.ts', {
-      threadId: 't1', traceId: 'tr1',
+      threadId: 't1',
+      traceId: 'tr1',
     });
     expect(result).toBe('Review main.ts');
   });
@@ -290,16 +323,20 @@ describe('SkillManager', () => {
   // --- Budget-aware listing ---
 
   it('should build skill listing', () => {
-    manager.register(createSkill({
-      name: 'review',
-      description: 'Code review',
-      triggerPrefix: '/review',
-    }));
-    manager.register(createSkill({
-      name: 'translate',
-      description: 'Translation',
-      whenToUse: 'When user needs text translated',
-    }));
+    manager.register(
+      createSkill({
+        name: 'review',
+        description: 'Code review',
+        triggerPrefix: '/review',
+      }),
+    );
+    manager.register(
+      createSkill({
+        name: 'translate',
+        description: 'Translation',
+        whenToUse: 'When user needs text translated',
+      }),
+    );
 
     const listing = manager.buildSkillListing(1000);
     expect(listing).toContain('/review');
@@ -309,11 +346,13 @@ describe('SkillManager', () => {
 
   it('should respect budget limit', () => {
     for (let i = 0; i < 20; i++) {
-      manager.register(createSkill({
-        name: `skill-${i}`,
-        description: 'A '.repeat(50) + `skill ${i}`,
-        match: () => true,
-      }));
+      manager.register(
+        createSkill({
+          name: `skill-${i}`,
+          description: 'A '.repeat(50) + `skill ${i}`,
+          match: () => true,
+        }),
+      );
     }
 
     const listing = manager.buildSkillListing(200);
@@ -323,17 +362,21 @@ describe('SkillManager', () => {
   });
 
   it('should exclude modelInvocable=false skills from listing', () => {
-    manager.register(createSkill({
-      name: 'hidden',
-      description: 'Hidden skill',
-      modelInvocable: false,
-      match: () => true,
-    }));
-    manager.register(createSkill({
-      name: 'visible',
-      description: 'Visible skill',
-      match: () => true,
-    }));
+    manager.register(
+      createSkill({
+        name: 'hidden',
+        description: 'Hidden skill',
+        modelInvocable: false,
+        match: () => true,
+      }),
+    );
+    manager.register(
+      createSkill({
+        name: 'visible',
+        description: 'Visible skill',
+        match: () => true,
+      }),
+    );
 
     const listing = manager.buildSkillListing(1000);
     expect(listing).not.toContain('hidden');
@@ -352,11 +395,13 @@ describe('SkillManager', () => {
 
   describe('sticky sessions', () => {
     it('should persist sticky skill across turns', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: true,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: true,
+        }),
+      );
 
       // Turn 1: match by prefix → activates sticky
       const turn1 = await manager.match('/wizard start', { threadId: 't1' });
@@ -375,11 +420,13 @@ describe('SkillManager', () => {
     });
 
     it('should isolate sticky sessions per thread', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: true,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: true,
+        }),
+      );
 
       // Activate in thread t1
       await manager.match('/wizard start', { threadId: 't1' });
@@ -394,11 +441,13 @@ describe('SkillManager', () => {
     });
 
     it('should expire sticky after N turns', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: 3,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: 3,
+        }),
+      );
 
       // Turn 1: activates sticky (turnsRemaining=3), then decremented to 2
       await manager.match('/wizard start', { threadId: 't1' });
@@ -417,11 +466,13 @@ describe('SkillManager', () => {
     });
 
     it('should clear sticky skills for a thread', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: true,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: true,
+        }),
+      );
 
       await manager.match('/wizard start', { threadId: 't1' });
       manager.clearStickySkills('t1');
@@ -431,11 +482,13 @@ describe('SkillManager', () => {
     });
 
     it('should clear all sticky sessions', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: true,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: true,
+        }),
+      );
 
       await manager.match('/wizard start', { threadId: 't1' });
       await manager.match('/wizard start', { threadId: 't2' });
@@ -449,11 +502,13 @@ describe('SkillManager', () => {
     });
 
     it('should not duplicate sticky match when prefix also matches', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: true,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: true,
+        }),
+      );
 
       // Activate
       await manager.match('/wizard start', { threadId: 't1' });
@@ -464,16 +519,20 @@ describe('SkillManager', () => {
     });
 
     it('should respect exclusive with sticky', async () => {
-      manager.register(createSkill({
-        name: 'wizard',
-        triggerPrefix: '/wizard',
-        sticky: true,
-        exclusive: true,
-      }));
-      manager.register(createSkill({
-        name: 'other',
-        match: () => true,
-      }));
+      manager.register(
+        createSkill({
+          name: 'wizard',
+          triggerPrefix: '/wizard',
+          sticky: true,
+          exclusive: true,
+        }),
+      );
+      manager.register(
+        createSkill({
+          name: 'other',
+          match: () => true,
+        }),
+      );
 
       await manager.match('/wizard start', { threadId: 't1' });
 
@@ -500,13 +559,16 @@ describe('SkillManager', () => {
     it('should load skills from directory', async () => {
       const skillDir = join(tempDir, 'review');
       await mkdir(skillDir);
-      await writeFile(join(skillDir, 'SKILL.md'), `---
+      await writeFile(
+        join(skillDir, 'SKILL.md'),
+        `---
 name: review
 description: Code review
 triggerPrefix: /review
 ---
 
-Review code carefully.`);
+Review code carefully.`,
+      );
 
       const count = await manager.loadFromDirectory(tempDir);
       expect(count).toBe(1);
@@ -517,13 +579,16 @@ Review code carefully.`);
     it('should load conditional skills separately', async () => {
       const skillDir = join(tempDir, 'ts-review');
       await mkdir(skillDir);
-      await writeFile(join(skillDir, 'SKILL.md'), `---
+      await writeFile(
+        join(skillDir, 'SKILL.md'),
+        `---
 name: ts-review
 description: TypeScript review
 paths: [src/**/*.ts]
 ---
 
-Review TS code.`);
+Review TS code.`,
+      );
 
       await manager.loadFromDirectory(tempDir);
       expect(manager.listSkills()).toHaveLength(0); // conditional, not yet activated

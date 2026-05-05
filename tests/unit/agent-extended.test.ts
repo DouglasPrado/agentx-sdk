@@ -8,7 +8,11 @@ describe('Agent — extended API (divergence fixes)', () => {
   });
 
   it('removeTool() should unregister a tool', () => {
-    const agent = Agent.create({ apiKey: 'test-key', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
     agent.addTool({
       name: 'temp',
       description: 'temporary',
@@ -21,7 +25,11 @@ describe('Agent — extended API (divergence fixes)', () => {
   });
 
   it('removeTool() should return false for unknown tool', () => {
-    const agent = Agent.create({ apiKey: 'test-key', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
     expect(agent.removeTool('nonexistent')).toBe(false);
   });
 
@@ -47,7 +55,11 @@ describe('Agent — extended API (divergence fixes)', () => {
       );
     });
 
-    const agent = Agent.create({ apiKey: 'test-key', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
     await agent.chat('Hello');
 
     const history = agent.getHistory();
@@ -57,21 +69,32 @@ describe('Agent — extended API (divergence fixes)', () => {
   });
 
   it('connectMCP() should attempt connection (errors without valid server)', async () => {
-    const agent = Agent.create({ apiKey: 'test-key', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
     // Without a valid command, stdio transport will fail
-    await expect(agent.connectMCP({ name: 'test', transport: 'stdio', command: '__nonexistent__' })).rejects.toThrow();
+    await expect(
+      agent.connectMCP({ name: 'test', transport: 'stdio', command: '__nonexistent__' }),
+    ).rejects.toThrow();
   });
 
   it('disconnectMCP() should throw for unknown server', async () => {
-    const agent = Agent.create({ apiKey: 'test-key', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
     await expect(agent.disconnectMCP('nonexistent')).rejects.toThrow('not found');
   });
 
   it('getUsage() should track session-level cost across multiple calls', async () => {
-    const makeSSE = (tokens: number) => [
-      `data: {"choices":[{"delta":{"content":"ok"},"index":0}]}\n\n`,
-      `data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":${tokens},"completion_tokens":${tokens},"total_tokens":${tokens * 2}}}\n\n`,
-    ].join('');
+    const makeSSE = (tokens: number) =>
+      [
+        `data: {"choices":[{"delta":{"content":"ok"},"index":0}]}\n\n`,
+        `data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":${tokens},"completion_tokens":${tokens},"total_tokens":${tokens * 2}}}\n\n`,
+      ].join('');
 
     let callCount = 0;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
@@ -91,7 +114,11 @@ describe('Agent — extended API (divergence fixes)', () => {
       );
     });
 
-    const agent = Agent.create({ apiKey: 'test-key', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
 
     await agent.chat('first');
     await agent.chat('second');
@@ -127,7 +154,11 @@ describe('Agent — extended API (divergence fixes)', () => {
 
     // Verify at the LLMClient level that responseFormat is accepted
     const { LLMClient } = await import('../../src/llm/llm-client.js');
-    const client = new LLMClient({ apiKey: 'test', model: 'test/model', baseUrl: 'https://api.test.com/v1' });
+    const client = new LLMClient({
+      apiKey: 'test',
+      model: 'test/model',
+      baseUrl: 'https://api.test.com/v1',
+    });
 
     const chunks = [];
     for await (const chunk of client.streamChat({
@@ -140,11 +171,11 @@ describe('Agent — extended API (divergence fixes)', () => {
     expect(chunks.length).toBeGreaterThan(0);
 
     // Verify responseFormat was sent in the body
-    const chatCall = fetchSpy.mock.calls.find(c => {
+    const chatCall = fetchSpy.mock.calls.find((c) => {
       const u = typeof c[0] === 'string' ? c[0] : '';
       return u.includes('/chat/completions');
     });
-    const body = JSON.parse((chatCall![1] as RequestInit).body as string);
+    const body = JSON.parse(chatCall![1]!.body as string);
     expect(body.response_format).toEqual({ type: 'json_object' });
   });
 
@@ -171,16 +202,29 @@ describe('Agent — extended API (divergence fixes)', () => {
       fetchCall++;
       const data = fetchCall === 1 ? round1 : round2;
       return new Response(
-        new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(data)); c.close(); } }),
+        new ReadableStream({
+          start(c) {
+            c.enqueue(new TextEncoder().encode(data));
+            c.close();
+          },
+        }),
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
       );
     });
 
     // Custom store to observe what gets persisted
-    const appended: Array<{ role: string; content: string; pinned?: boolean; toolCallId?: string }> = [];
+    const appended: { role: string; content: string; pinned?: boolean; toolCallId?: string }[] = [];
     const customStore = {
-      appendMessage(msg: { role: string; content: string; pinned?: boolean; toolCallId?: string }, _threadId: string) {
-        appended.push({ role: msg.role, content: String(msg.content), pinned: msg.pinned, toolCallId: msg.toolCallId });
+      appendMessage(
+        msg: { role: string; content: string; pinned?: boolean; toolCallId?: string },
+        _threadId: string,
+      ) {
+        appended.push({
+          role: msg.role,
+          content: String(msg.content),
+          pinned: msg.pinned,
+          toolCallId: msg.toolCallId,
+        });
       },
       listThread: () => [],
       listPinned: () => [],
@@ -198,7 +242,7 @@ describe('Agent — extended API (divergence fixes)', () => {
 
     await agent.chat('invoke skill');
 
-    const toolResult = appended.find(m => m.role === 'tool' && m.toolCallId === 'tc-skill-1');
+    const toolResult = appended.find((m) => m.role === 'tool' && m.toolCallId === 'tc-skill-1');
     expect(toolResult).toBeDefined();
     // Skill tool results MUST be saved as pinned so they survive compaction in resumed sessions
     expect(toolResult!.pinned).toBe(true);

@@ -16,16 +16,20 @@ export class SQLiteVectorStore implements VectorStore {
   }
 
   upsert(chunk: KnowledgeChunk): void {
-    this.database.db.prepare(`
+    this.database.db
+      .prepare(
+        `
       INSERT OR REPLACE INTO vectors (id, content, embedding, metadata, created_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run(
-      chunk.id,
-      chunk.content,
-      Buffer.from(chunk.embedding.buffer),
-      chunk.metadata ? JSON.stringify(chunk.metadata) : null,
-      chunk.createdAt,
-    );
+    `,
+      )
+      .run(
+        chunk.id,
+        chunk.content,
+        Buffer.from(chunk.embedding.buffer),
+        chunk.metadata ? JSON.stringify(chunk.metadata) : null,
+        chunk.createdAt,
+      );
   }
 
   /** Atomic batch insert: rolls back all rows if any single insert fails. */
@@ -50,17 +54,21 @@ export class SQLiteVectorStore implements VectorStore {
   }
 
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[] {
-    const rows = this.database.db.prepare(
-      'SELECT * FROM vectors ORDER BY created_at DESC LIMIT ?'
-    ).all(MAX_SCAN) as VectorRow[];
+    const rows = this.database.db
+      .prepare('SELECT * FROM vectors ORDER BY created_at DESC LIMIT ?')
+      .all(MAX_SCAN) as VectorRow[];
 
-    const scored = rows.map(row => {
-      const embedding = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4);
+    const scored = rows.map((row) => {
+      const embedding = new Float32Array(
+        row.embedding.buffer,
+        row.embedding.byteOffset,
+        row.embedding.byteLength / 4,
+      );
       return {
         id: row.id,
         content: row.content,
         score: cosineSimilarity(queryEmbedding, embedding),
-        metadata: row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : undefined,
+        metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : undefined,
       };
     });
 
@@ -74,22 +82,30 @@ export class SQLiteVectorStore implements VectorStore {
 
   listAll(): KnowledgeChunk[] {
     const rows = this.database.db.prepare('SELECT * FROM vectors').all() as VectorRow[];
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       content: row.content,
-      embedding: new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4),
-      metadata: row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : undefined,
+      embedding: new Float32Array(
+        row.embedding.buffer,
+        row.embedding.byteOffset,
+        row.embedding.byteLength / 4,
+      ),
+      metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : undefined,
       createdAt: row.created_at,
     }));
   }
 
   deleteBySource(sourceId: string): void {
-    this.database.db.prepare("DELETE FROM vectors WHERE json_extract(metadata, '$.sourceId') = ?").run(sourceId);
+    this.database.db
+      .prepare("DELETE FROM vectors WHERE json_extract(metadata, '$.sourceId') = ?")
+      .run(sourceId);
   }
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0, normA = 0, normB = 0;
+  let dot = 0,
+    normA = 0,
+    normB = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i]! * b[i]!;
     normA += a[i]! * a[i]!;

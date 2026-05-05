@@ -11,6 +11,8 @@
  * - Limited to 5 iterations to prevent rabbit holes
  */
 
+import type { AgentTool } from '../contracts/entities/agent-tool.js';
+import type { Logger } from '../utils/logger.js';
 import type { FileMemorySystem } from './file-memory-system.js';
 import { formatMemoryManifest } from './memory-scanner.js';
 import { buildForkedExtractionPrompt } from './memory-prompts.js';
@@ -33,7 +35,7 @@ const EXPLICIT_TRIGGERS = [
  */
 export function hasExplicitTrigger(message: string): boolean {
   const lower = message.toLowerCase();
-  return EXPLICIT_TRIGGERS.some(t => lower.includes(t));
+  return EXPLICIT_TRIGGERS.some((t) => lower.includes(t));
 }
 
 /**
@@ -57,14 +59,15 @@ export function shouldExtract(
  * Interface for the fork function — avoids circular import with Agent.
  * Matches the signature of Agent.fork().
  */
-export interface ForkFn {
-  (prompt: string, options?: {
+export type ForkFn = (
+  prompt: string,
+  options?: {
     systemPrompt?: string;
     model?: string;
-    tools?: import('../contracts/entities/agent-tool.js').AgentTool[];
+    tools?: AgentTool[];
     background?: boolean;
-  }): Promise<string>;
-}
+  },
+) => Promise<string>;
 
 /**
  * Extract memories from conversation using a forked agent with memory tools.
@@ -82,7 +85,7 @@ export async function extractMemories(
   conversationText: string,
   memorySystem: FileMemorySystem,
   fork: ForkFn,
-  options?: { model?: string; threadId?: string; logger?: import('../utils/logger.js').Logger },
+  options?: { model?: string; threadId?: string; logger?: Logger },
 ): Promise<void> {
   if (!conversationText.trim()) return;
 
@@ -92,7 +95,9 @@ export async function extractMemories(
     const existingManifest = formatMemoryManifest(existingMemories);
 
     // Count approximate messages for the prompt
-    const messageCount = conversationText.split('\n').filter(l => l.match(/^(user|assistant|tool):/)).length;
+    const messageCount = conversationText
+      .split('\n')
+      .filter((l) => /^(user|assistant|tool):/.exec(l)).length;
 
     // Delimiters isolate conversation text from instructions to mitigate prompt injection.
     const CONV_BEGIN = '---CONVERSATION-DATA-BEGIN---';
@@ -111,7 +116,8 @@ export async function extractMemories(
 
     // Fork a subagent with memory tools — background, fire-and-forget
     await fork(prompt, {
-      systemPrompt: 'You are a memory extraction subagent. Use your memory tools to save, update, or delete memories based on the conversation provided. Be efficient — minimize tool calls.',
+      systemPrompt:
+        'You are a memory extraction subagent. Use your memory tools to save, update, or delete memories based on the conversation provided. Be efficient — minimize tool calls.',
       model: options?.model,
       tools,
       background: true,

@@ -15,17 +15,19 @@ function createTool(overrides: Partial<AgentTool> = {}): AgentTool {
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise(r => setTimeout(r, ms));
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 describe('StreamingToolExecutor', () => {
   it('should execute a tool added during streaming', async () => {
     const executor = new ToolExecutor();
-    executor.register(createTool({
-      name: 'search',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockResolvedValue('found it'),
-    }));
+    executor.register(
+      createTool({
+        name: 'search',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockResolvedValue('found it'),
+      }),
+    );
 
     const streaming = new StreamingToolExecutor(executor);
 
@@ -46,27 +48,31 @@ describe('StreamingToolExecutor', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'read_a',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('a:start');
-        await delay(50);
-        order.push('a:end');
-        return 'a';
+    executor.register(
+      createTool({
+        name: 'read_a',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('a:start');
+          await delay(50);
+          order.push('a:end');
+          return 'a';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'read_b',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('b:start');
-        await delay(50);
-        order.push('b:end');
-        return 'b';
+    executor.register(
+      createTool({
+        name: 'read_b',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('b:start');
+          await delay(50);
+          order.push('b:end');
+          return 'b';
+        }),
       }),
-    }));
+    );
 
     const streaming = new StreamingToolExecutor(executor);
 
@@ -80,7 +86,7 @@ describe('StreamingToolExecutor', () => {
     expect(order).toContain('b:start');
 
     // Get remaining results after streaming ends
-    const results: Array<{ id: string; result: { content: string } }> = [];
+    const results: { id: string; result: { content: string } }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -94,29 +100,33 @@ describe('StreamingToolExecutor', () => {
   it('should return results in order even if later tool finishes first', async () => {
     const executor = new ToolExecutor();
 
-    executor.register(createTool({
-      name: 'slow',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        await delay(80);
-        return 'slow_result';
+    executor.register(
+      createTool({
+        name: 'slow',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          await delay(80);
+          return 'slow_result';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'fast',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        await delay(10);
-        return 'fast_result';
+    executor.register(
+      createTool({
+        name: 'fast',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          await delay(10);
+          return 'fast_result';
+        }),
       }),
-    }));
+    );
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c1', 'slow', '{"input":"x"}');
     streaming.addTool('c2', 'fast', '{"input":"y"}');
 
-    const results: Array<{ id: string; result: { content: string } }> = [];
+    const results: { id: string; result: { content: string } }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -131,23 +141,27 @@ describe('StreamingToolExecutor', () => {
   it('should handle tool execution errors without breaking other tools', async () => {
     const executor = new ToolExecutor();
 
-    executor.register(createTool({
-      name: 'bad_tool',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockRejectedValue(new Error('boom')),
-    }));
+    executor.register(
+      createTool({
+        name: 'bad_tool',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockRejectedValue(new Error('boom')),
+      }),
+    );
 
-    executor.register(createTool({
-      name: 'good_tool',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockResolvedValue('ok'),
-    }));
+    executor.register(
+      createTool({
+        name: 'good_tool',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockResolvedValue('ok'),
+      }),
+    );
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c1', 'bad_tool', '{"input":"x"}');
     streaming.addTool('c2', 'good_tool', '{"input":"y"}');
 
-    const results: Array<{ id: string; result: { content: string; isError?: boolean } }> = [];
+    const results: { id: string; result: { content: string; isError?: boolean } }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -160,16 +174,18 @@ describe('StreamingToolExecutor', () => {
 
   it('should respect AbortSignal', async () => {
     const executor = new ToolExecutor();
-    executor.register(createTool({
-      name: 'long_task',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async (_args: unknown, signal: AbortSignal) => {
-        if (signal.aborted) throw new Error('Aborted');
-        await delay(200);
-        if (signal.aborted) throw new Error('Aborted');
-        return 'done';
+    executor.register(
+      createTool({
+        name: 'long_task',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async (_args: unknown, signal: AbortSignal) => {
+          if (signal.aborted) throw new Error('Aborted');
+          await delay(200);
+          if (signal.aborted) throw new Error('Aborted');
+          return 'done';
+        }),
       }),
-    }));
+    );
 
     const controller = new AbortController();
     const streaming = new StreamingToolExecutor(executor, controller.signal);
@@ -179,7 +195,7 @@ describe('StreamingToolExecutor', () => {
     await delay(20);
     controller.abort();
 
-    const results: Array<{ id: string; result: { content: string; isError?: boolean } }> = [];
+    const results: { id: string; result: { content: string; isError?: boolean } }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -192,33 +208,37 @@ describe('StreamingToolExecutor', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'write_a',
-      isConcurrencySafe: false,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('a:start');
-        await delay(30);
-        order.push('a:end');
-        return 'a';
+    executor.register(
+      createTool({
+        name: 'write_a',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('a:start');
+          await delay(30);
+          order.push('a:end');
+          return 'a';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'write_b',
-      isConcurrencySafe: false,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('b:start');
-        await delay(30);
-        order.push('b:end');
-        return 'b';
+    executor.register(
+      createTool({
+        name: 'write_b',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('b:start');
+          await delay(30);
+          order.push('b:end');
+          return 'b';
+        }),
       }),
-    }));
+    );
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c1', 'write_a', '{"input":"x"}');
     streaming.addTool('c2', 'write_b', '{"input":"y"}');
 
-    const results: Array<{ id: string }> = [];
+    const results: { id: string }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -234,33 +254,37 @@ describe('StreamingToolExecutor', () => {
     const executor = new ToolExecutor();
     const order: string[] = [];
 
-    executor.register(createTool({
-      name: 'write',
-      isConcurrencySafe: false,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('write:start');
-        await delay(40);
-        order.push('write:end');
-        return 'w';
+    executor.register(
+      createTool({
+        name: 'write',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('write:start');
+          await delay(40);
+          order.push('write:end');
+          return 'w';
+        }),
       }),
-    }));
+    );
 
-    executor.register(createTool({
-      name: 'read',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        order.push('read:start');
-        await delay(10);
-        order.push('read:end');
-        return 'r';
+    executor.register(
+      createTool({
+        name: 'read',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('read:start');
+          await delay(10);
+          order.push('read:end');
+          return 'r';
+        }),
       }),
-    }));
+    );
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c1', 'write', '{"input":"x"}');
     streaming.addTool('c2', 'read', '{"input":"y"}');
 
-    const results: Array<{ id: string }> = [];
+    const results: { id: string }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -273,15 +297,17 @@ describe('StreamingToolExecutor', () => {
   it('should return error result for malformed JSON args instead of using {} (#61)', async () => {
     const executor = new ToolExecutor();
     const mockExecute = vi.fn().mockResolvedValue('should not be called');
-    executor.register(createTool({
-      name: 'my_tool',
-      execute: mockExecute,
-    }));
+    executor.register(
+      createTool({
+        name: 'my_tool',
+        execute: mockExecute,
+      }),
+    );
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c_bad', 'my_tool', '{invalid json{{');
 
-    const results: Array<{ id: string; result: { content: string; isError?: boolean } }> = [];
+    const results: { id: string; result: { content: string; isError?: boolean } }[] = [];
     for await (const r of streaming.getRemainingResults()) {
       results.push(r);
     }
@@ -299,18 +325,20 @@ describe('StreamingToolExecutor', () => {
     const executor = new ToolExecutor();
     const receivedArgs: unknown[] = [];
 
-    executor.register(createTool({
-      name: 'probe',
-      parameters: z.object({ input: z.string() }),
-      isConcurrencySafe: (args: unknown) => {
-        receivedArgs.push(args);
-        return true;
-      },
-      execute: vi.fn().mockImplementation((args: unknown) => {
-        receivedArgs.push(args);
-        return Promise.resolve('ok');
+    executor.register(
+      createTool({
+        name: 'probe',
+        parameters: z.object({ input: z.string() }),
+        isConcurrencySafe: (args: unknown) => {
+          receivedArgs.push(args);
+          return true;
+        },
+        execute: vi.fn().mockImplementation((args: unknown) => {
+          receivedArgs.push(args);
+          return Promise.resolve('ok');
+        }),
       }),
-    }));
+    );
 
     let parseCount = 0;
     const origParse = JSON.parse;
@@ -321,7 +349,9 @@ describe('StreamingToolExecutor', () => {
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c1', 'probe', '{"input":"hello"}');
-    for await (const _ of streaming.getRemainingResults()) { /* drain */ }
+    for await (const _ of streaming.getRemainingResults()) {
+      /* drain */
+    }
 
     vi.restoreAllMocks();
 
@@ -344,8 +374,15 @@ describe('StreamingToolExecutor', () => {
 
     // Simulate invariant violation: status='completed' but result/duration not set
     (streaming as unknown as { tools: unknown[] }).tools.push({
-      id: 'broken', name: 'test', args: '{}', parsedArgs: {},
-      isSafe: false, status: 'completed', result: undefined, duration: undefined, progressEvents: [],
+      id: 'broken',
+      name: 'test',
+      args: '{}',
+      parsedArgs: {},
+      isSafe: false,
+      status: 'completed',
+      result: undefined,
+      duration: undefined,
+      progressEvents: [],
     });
 
     const results = [...streaming.getCompletedResults()];
@@ -355,14 +392,16 @@ describe('StreamingToolExecutor', () => {
 
   it('getCompletedResults should be non-blocking and yield only finished tools', async () => {
     const executor = new ToolExecutor();
-    executor.register(createTool({
-      name: 'slow',
-      isConcurrencySafe: true,
-      execute: vi.fn().mockImplementation(async () => {
-        await delay(100);
-        return 'slow';
+    executor.register(
+      createTool({
+        name: 'slow',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          await delay(100);
+          return 'slow';
+        }),
       }),
-    }));
+    );
 
     const streaming = new StreamingToolExecutor(executor);
     streaming.addTool('c1', 'slow', '{"input":"x"}');

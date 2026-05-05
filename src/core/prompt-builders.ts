@@ -43,10 +43,16 @@ export function buildToolUsagePrompt(tools: AgentTool[]): string {
   lines.push('');
   lines.push('## Tool Usage Guidelines');
   lines.push('');
-  lines.push('- Call tools when you need data or need to perform actions — do not guess or make up answers when a tool can provide the real answer.');
-  lines.push('- If multiple independent pieces of information are needed, call multiple tools in parallel for efficiency.');
+  lines.push(
+    '- Call tools when you need data or need to perform actions — do not guess or make up answers when a tool can provide the real answer.',
+  );
+  lines.push(
+    '- If multiple independent pieces of information are needed, call multiple tools in parallel for efficiency.',
+  );
   lines.push('- If one tool call depends on the result of another, call them sequentially.');
-  lines.push('- When a tool returns an error, analyze the error message and adjust your approach — do not retry the exact same call blindly.');
+  lines.push(
+    '- When a tool returns an error, analyze the error message and adjust your approach — do not retry the exact same call blindly.',
+  );
 
   // Safety guidance for destructive tools
   if (destructive.length > 0) {
@@ -55,19 +61,23 @@ export function buildToolUsagePrompt(tools: AgentTool[]): string {
     lines.push('');
     lines.push('The following tools perform irreversible operations. Use them carefully:');
     for (const tool of destructive) {
-      lines.push(`- **${tool.name}** — confirm with the user before performing destructive actions unless explicitly instructed.`);
+      lines.push(
+        `- **${tool.name}** — confirm with the user before performing destructive actions unless explicitly instructed.`,
+      );
     }
   }
 
   // Concurrency hints
-  const safeConcurrent = tools.filter(t =>
+  const safeConcurrent = tools.filter((t) =>
     typeof t.isConcurrencySafe === 'function' ? false : t.isConcurrencySafe === true,
   );
   if (safeConcurrent.length > 0 && safeConcurrent.length < tools.length) {
     lines.push('');
     lines.push('## Concurrency');
     lines.push('');
-    lines.push(`The following tools are safe to call in parallel: ${safeConcurrent.map(t => t.name).join(', ')}. Other tools should be called one at a time.`);
+    lines.push(
+      `The following tools are safe to call in parallel: ${safeConcurrent.map((t) => t.name).join(', ')}. Other tools should be called one at a time.`,
+    );
   }
 
   return lines.join('\n');

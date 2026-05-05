@@ -48,7 +48,11 @@ describe('createSqlTools', () => {
   });
 
   it('respects toolNamePrefix', () => {
-    const tools = createSqlTools({ pool: makePool(), queries: sampleQueries, toolNamePrefix: 'pg_' });
+    const tools = createSqlTools({
+      pool: makePool(),
+      queries: sampleQueries,
+      toolNamePrefix: 'pg_',
+    });
     expect(tools[0]!.name).toBe('pg_search_queries');
     expect(tools[1]!.name).toBe('pg_run_query');
   });
@@ -176,7 +180,10 @@ describe('createSqlTools', () => {
         AbortSignal.timeout(5000),
       );
       expect(result).toEqual(
-        expect.objectContaining({ isError: true, content: expect.stringContaining('Invalid parameters') }),
+        expect.objectContaining({
+          isError: true,
+          content: expect.stringContaining('Invalid parameters'),
+        }),
       );
     });
 
@@ -198,9 +205,7 @@ describe('createSqlTools', () => {
         { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
         AbortSignal.timeout(5000),
       );
-      expect(result).toEqual(
-        expect.objectContaining({ isError: true }),
-      );
+      expect(result).toEqual(expect.objectContaining({ isError: true }));
     });
   });
 });

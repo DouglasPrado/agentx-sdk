@@ -43,14 +43,14 @@ export interface SkillFrontmatter {
  * Only handles simple key: value and key: [array] — no nested objects.
  */
 export function parseSkillFrontmatter(content: string): SkillFrontmatter {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  const match = /^---\s*\n([\s\S]*?)\n---/.exec(content);
   if (!match) return {};
 
   const yaml = match[1]!;
   const result: Record<string, unknown> = {};
 
   for (const line of yaml.split('\n').slice(0, FRONTMATTER_MAX_LINES)) {
-    const kv = line.match(/^(\w[\w-]*):\s*(.*)/);
+    const kv = /^(\w[\w-]*):\s*(.*)/.exec(line);
     if (!kv) continue;
 
     const key = kv[1]!;
@@ -58,7 +58,10 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
 
     // Parse inline arrays: [a, b, c]
     if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
-      value = value.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, ''));
+      value = value
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''));
     }
     // Parse booleans
     else if (value === 'true') value = true;
@@ -73,25 +76,26 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
 
   // Normalize kebab-case keys to camelCase
   const fm: SkillFrontmatter = {};
-  fm.name = str(result['name']);
-  fm.description = str(result['description']);
-  fm.whenToUse = str(result['whenToUse'] ?? result['when-to-use'] ?? result['when_to_use']);
-  fm.triggerPrefix = str(result['triggerPrefix'] ?? result['trigger-prefix']);
-  fm.aliases = arr(result['aliases']);
-  fm.argNames = arr(result['argNames'] ?? result['arg-names'] ?? result['arguments']);
-  fm.allowedTools = arr(result['allowedTools'] ?? result['allowed-tools']);
-  fm.model = str(result['model']);
-  fm.paths = arr(result['paths']);
-  fm.effort = typeof result['effort'] === 'number' ? result['effort'] : undefined;
-  fm.exclusive = typeof result['exclusive'] === 'boolean' ? result['exclusive'] : undefined;
-  fm.priority = typeof result['priority'] === 'number' ? result['priority'] : undefined;
-  fm.modelInvocable = typeof result['modelInvocable'] === 'boolean'
-    ? result['modelInvocable']
-    : typeof result['model-invocable'] === 'boolean'
-      ? (result['model-invocable'] as boolean)
-      : undefined;
+  fm.name = str(result.name);
+  fm.description = str(result.description);
+  fm.whenToUse = str(result.whenToUse ?? result['when-to-use'] ?? result.when_to_use);
+  fm.triggerPrefix = str(result.triggerPrefix ?? result['trigger-prefix']);
+  fm.aliases = arr(result.aliases);
+  fm.argNames = arr(result.argNames ?? result['arg-names'] ?? result.arguments);
+  fm.allowedTools = arr(result.allowedTools ?? result['allowed-tools']);
+  fm.model = str(result.model);
+  fm.paths = arr(result.paths);
+  fm.effort = typeof result.effort === 'number' ? result.effort : undefined;
+  fm.exclusive = typeof result.exclusive === 'boolean' ? result.exclusive : undefined;
+  fm.priority = typeof result.priority === 'number' ? result.priority : undefined;
+  fm.modelInvocable =
+    typeof result.modelInvocable === 'boolean'
+      ? result.modelInvocable
+      : typeof result['model-invocable'] === 'boolean'
+        ? result['model-invocable']
+        : undefined;
 
-  const ctx = str(result['context']);
+  const ctx = str(result.context);
   if (ctx === 'inline') fm.context = ctx;
 
   return fm;
@@ -101,7 +105,7 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
  * Extract body content (after frontmatter).
  */
 export function extractBody(content: string): string {
-  const match = content.match(/^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/);
+  const match = /^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/.exec(content);
   return match?.[1]?.trim() ?? content.trim();
 }
 
@@ -122,11 +126,11 @@ export async function loadSkillFile(filePath: string): Promise<AgentSkill | null
 
     const skillDir = dirname(filePath);
     const fallbackName = basename(skillDir);
-    const name = fm.name || fallbackName;
+    const name = fm.name?.trim() ? fm.name : fallbackName;
 
     const skill: AgentSkill = {
       name,
-      description: fm.description || name,
+      description: fm.description?.trim() ? fm.description : name,
       instructions: body,
       source: 'directory',
       skillDir,
@@ -213,7 +217,7 @@ function str(v: unknown): string | undefined {
 }
 
 function arr(v: unknown): string[] | undefined {
-  if (Array.isArray(v)) return v.filter(x => typeof x === 'string');
+  if (Array.isArray(v)) return v.filter((x) => typeof x === 'string');
   if (typeof v === 'string') return v.split(/\s+/).filter(Boolean);
   return undefined;
 }

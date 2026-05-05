@@ -55,7 +55,9 @@ export class StreamingToolExecutor {
       parsedArgs = JSON.parse(args);
     } catch (e) {
       this.tools.push({
-        id, name, args,
+        id,
+        name,
+        args,
         parsedArgs: {},
         isSafe: true,
         status: 'completed',
@@ -69,14 +71,22 @@ export class StreamingToolExecutor {
       return;
     }
 
-    const toolDef = this.executor.listTools().find(t => t.name === name);
+    const toolDef = this.executor.listTools().find((t) => t.name === name);
     const isSafe = toolDef
       ? typeof toolDef.isConcurrencySafe === 'function'
         ? toolDef.isConcurrencySafe(parsedArgs)
         : toolDef.isConcurrencySafe === true
       : false;
 
-    const tracked: TrackedTool = { id, name, args, parsedArgs, isSafe, status: 'queued', progressEvents: [] };
+    const tracked: TrackedTool = {
+      id,
+      name,
+      args,
+      parsedArgs,
+      isSafe,
+      status: 'queued',
+      progressEvents: [],
+    };
     this.tools.push(tracked);
     void this.processQueue();
   }
@@ -92,7 +102,9 @@ export class StreamingToolExecutor {
           // Defensive: an invariant violation upstream (status='completed' without
           // result/duration) shouldn't crash the whole stream. Mark as yielded so
           // we don't loop on it, log, and skip.
-          console.warn(`[streaming-tool-executor] tool "${tool.id}" completed without result/duration — skipping`);
+          console.warn(
+            `[streaming-tool-executor] tool "${tool.id}" completed without result/duration — skipping`,
+          );
           tool.status = 'yielded';
           continue;
         }
@@ -128,7 +140,9 @@ export class StreamingToolExecutor {
 
       if (tool.result === undefined || tool.duration === undefined) {
         // Same defensive skip as getCompletedResults — never crash the stream.
-        console.warn(`[streaming-tool-executor] tool "${tool.id}" finished without result/duration — skipping`);
+        console.warn(
+          `[streaming-tool-executor] tool "${tool.id}" finished without result/duration — skipping`,
+        );
         tool.status = 'yielded';
         continue;
       }
@@ -149,21 +163,21 @@ export class StreamingToolExecutor {
 
     try {
       while (true) {
-        const nextQueued = this.tools.find(t => t.status === 'queued');
+        const nextQueued = this.tools.find((t) => t.status === 'queued');
         if (!nextQueued) break;
 
-        const executing = this.tools.filter(t => t.status === 'executing');
+        const executing = this.tools.filter((t) => t.status === 'executing');
 
         if (nextQueued.isSafe) {
-          const hasUnsafeExecuting = executing.some(t => !t.isSafe);
+          const hasUnsafeExecuting = executing.some((t) => !t.isSafe);
           if (hasUnsafeExecuting) {
-            await Promise.all(executing.map(t => t.promise));
+            await Promise.all(executing.map((t) => t.promise).filter((p) => p !== undefined));
             continue;
           }
           this.startTool(nextQueued);
         } else {
           if (executing.length > 0) {
-            await Promise.all(executing.map(t => t.promise));
+            await Promise.all(executing.map((t) => t.promise).filter((p) => p !== undefined));
             continue;
           }
           this.startTool(nextQueued);

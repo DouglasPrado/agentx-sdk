@@ -24,14 +24,18 @@ export class InsufficientCreditsError extends Error {
 
 /** Classify an API error thrown from fetchAPI */
 export function classifyAPIError(error: unknown): unknown {
-  if (error instanceof PromptTooLongError || error instanceof OverloadedError || error instanceof InsufficientCreditsError) {
+  if (
+    error instanceof PromptTooLongError ||
+    error instanceof OverloadedError ||
+    error instanceof InsufficientCreditsError
+  ) {
     return error;
   }
   if (error instanceof Error) {
     const msg = error.message;
     // Match only the "LLM API error <status>:" prefix produced by fetchAPI,
     // so unrelated digits in request IDs or error strings don't trigger misclassification.
-    const match = msg.match(/LLM API error (\d+):/);
+    const match = /LLM API error (\d+):/.exec(msg);
     if (match) {
       const status = Number(match[1]);
       if (status === 402) return new InsufficientCreditsError(msg);

@@ -21,12 +21,18 @@ function validateFetchUrl(rawUrl: string): string | null {
   const host = parsed.hostname.toLowerCase();
 
   // Loopback and wildcard hostnames
-  if (host === 'localhost' || host === '0.0.0.0' || host === '::1' || host === '[::1]' || host === '::') {
+  if (
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    host === '[::1]' ||
+    host === '::'
+  ) {
     return `Blocked hostname: ${host}`;
   }
 
   // IPv4 literal checks (loopback, private ranges, link-local metadata)
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (ipv4) {
     const [a, b] = ipv4.slice(1).map(Number) as [number, number, number, number];
     if (a === 127) return 'Blocked loopback address';
@@ -45,7 +51,7 @@ function validateFetchUrl(rawUrl: string): string | null {
   // ULA (unique local): fc00::/7 (fc and fd prefixes)
   if (/^f[cd]/i.test(ipv6Bare)) return 'Blocked IPv6 private range (fc00::/7)';
   // IPv4-mapped: ::ffff:a.b.c.d — re-validate the embedded IPv4 address
-  const ipv4MappedMatch = ipv6Bare.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  const ipv4MappedMatch = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(ipv6Bare);
   if (ipv4MappedMatch) {
     const embeddedResult = validateFetchUrl(`http://${ipv4MappedMatch[1]}/`);
     if (embeddedResult) return `Blocked IPv4-mapped IPv6: ${embeddedResult}`;
@@ -55,7 +61,7 @@ function validateFetchUrl(rawUrl: string): string | null {
   // canonicalises ::ffff:10.0.0.1 to ::ffff:a00:1, so a dot-notation regex
   // alone leaves the SSRF guard wide open. Decode the two hex groups back
   // into the IPv4 octets and re-validate.
-  const ipv4MappedHex = ipv6Bare.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  const ipv4MappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(ipv6Bare);
   if (ipv4MappedHex) {
     const high = parseInt(ipv4MappedHex[1]!, 16);
     const low = parseInt(ipv4MappedHex[2]!, 16);
@@ -144,12 +150,14 @@ function stripHtml(html: string): string {
  * Read the response body via a streaming reader, stopping at MAX_BODY_BYTES.
  * This prevents OOM when a server returns a very large or infinite body.
  */
-async function readBodyWithLimit(response: Response): Promise<{ text: string; truncatedByBytes: boolean }> {
+async function readBodyWithLimit(
+  response: Response,
+): Promise<{ text: string; truncatedByBytes: boolean }> {
   if (!response.body) {
     return { text: '', truncatedByBytes: false };
   }
 
-  const reader = response.body.getReader();
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   let text = '';
   let bytesRead = 0;
@@ -187,7 +195,7 @@ export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): Age
   let resolverPromise: Promise<DnsResolver> | null = null;
   const getResolver = (): Promise<DnsResolver> => {
     if (options?.dnsResolver) return Promise.resolve(options.dnsResolver);
-    if (!resolverPromise) resolverPromise = defaultDnsResolver();
+    resolverPromise ??= defaultDnsResolver();
     return resolverPromise;
   };
 
@@ -216,7 +224,10 @@ export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): Age
 
         for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
           if (hop === MAX_REDIRECT_HOPS) {
-            return { content: `SSRF check: too many redirects (>${MAX_REDIRECT_HOPS})`, isError: true };
+            return {
+              content: `SSRF check: too many redirects (>${MAX_REDIRECT_HOPS})`,
+              isError: true,
+            };
           }
 
           response = await fetch(currentUrl, {
@@ -261,7 +272,9 @@ export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): Age
         if (truncatedByBytes) {
           text = text.slice(0, maxChars) + `\n\n[truncated — body size limit reached]`;
         } else if (text.length > maxChars) {
-          text = text.slice(0, maxChars) + `\n\n[truncated — ${text.length - maxChars} characters omitted]`;
+          text =
+            text.slice(0, maxChars) +
+            `\n\n[truncated — ${text.length - maxChars} characters omitted]`;
         }
 
         return text || '(empty response)';

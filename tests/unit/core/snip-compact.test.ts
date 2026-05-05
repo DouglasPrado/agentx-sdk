@@ -30,17 +30,19 @@ describe('snipCompact', () => {
     const messages: LLMMessage[] = [
       userMsg('q1'),
       assistantMsg('a1'),
-      toolMsg('old tool result', 'tc-old'),   // orphaned — no reference later
+      toolMsg('old tool result', 'tc-old'), // orphaned — no reference later
       userMsg('q2'),
       assistantMsg('a2'),
-      userMsg('q3'),                           // tail starts here
+      userMsg('q3'), // tail starts here
       assistantMsg('a3'),
     ];
 
     const result = snipCompact(messages, { tailProtection: 2 });
     // Should remove the orphaned tool result
     expect(result.snippedCount).toBeGreaterThan(0);
-    expect(result.messages.some(m => m.role === 'tool' && m.tool_call_id === 'tc-old')).toBe(false);
+    expect(result.messages.some((m) => m.role === 'tool' && m.tool_call_id === 'tc-old')).toBe(
+      false,
+    );
   });
 
   it('should preserve system messages', () => {
@@ -52,7 +54,7 @@ describe('snipCompact', () => {
     ];
 
     const result = snipCompact(messages, { tailProtection: 2 });
-    expect(result.messages.some(m => m.role === 'system')).toBe(true);
+    expect(result.messages.some((m) => m.role === 'system')).toBe(true);
   });
 
   it('should handle empty messages', () => {
@@ -71,7 +73,7 @@ describe('snipCompact', () => {
     ];
 
     const result = snipCompact(messages, { tailProtection: 2 });
-    expect(result.messages.some(m => m.content === 'summary')).toBe(true);
+    expect(result.messages.some((m) => m.content === 'summary')).toBe(true);
   });
 
   it('preserves original order (pinned tool result stays after its assistant tool_calls)', () => {
@@ -81,7 +83,9 @@ describe('snipCompact', () => {
     const assistantWithToolCalls: LLMMessage = {
       role: 'assistant',
       content: '',
-      tool_calls: [{ id: 'skill-1', type: 'function', function: { name: 'Skill', arguments: '{}' } }],
+      tool_calls: [
+        { id: 'skill-1', type: 'function', function: { name: 'Skill', arguments: '{}' } },
+      ],
     };
     const pinnedToolResult = {
       role: 'tool' as const,
@@ -98,10 +102,10 @@ describe('snipCompact', () => {
     ];
 
     const result = snipCompact(messages, { tailProtection: 10 });
-    expect(result.messages.map(m => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
+    expect(result.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
     // pinned tool result comes right after its assistant tool_calls
-    const assistantIdx = result.messages.findIndex(m => m.role === 'assistant' && !!m.tool_calls);
-    const toolIdx = result.messages.findIndex(m => m.role === 'tool');
+    const assistantIdx = result.messages.findIndex((m) => m.role === 'assistant' && !!m.tool_calls);
+    const toolIdx = result.messages.findIndex((m) => m.role === 'tool');
     expect(toolIdx).toBe(assistantIdx + 1);
   });
 
@@ -114,6 +118,6 @@ describe('snipCompact', () => {
       assistantMsg('a1'),
     ];
     const result = snipCompact(messages, { tailProtection: 10 });
-    expect(result.messages.map(m => m.content)).toEqual(['sys', 'u1', 'pinned-user', 'a1']);
+    expect(result.messages.map((m) => m.content)).toEqual(['sys', 'u1', 'pinned-user', 'a1']);
   });
 });

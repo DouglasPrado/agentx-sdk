@@ -21,7 +21,7 @@ function createCustomConversationStore(): ConversationStore {
       threads.get(threadId)!.push(msg);
     }),
     listThread: vi.fn((threadId: string) => threads.get(threadId) ?? []),
-    listPinned: vi.fn((threadId: string) => (threads.get(threadId) ?? []).filter(m => m.pinned)),
+    listPinned: vi.fn((threadId: string) => (threads.get(threadId) ?? []).filter((m) => m.pinned)),
     clearThread: vi.fn((threadId: string) => threads.delete(threadId)),
   };
 }
@@ -86,7 +86,8 @@ describe('Pluggable Stores (ENT-011)', () => {
   });
 
   it('should export stores and FileMemorySystem from index.ts', async () => {
-    const { SQLiteVectorStore, SQLiteDatabase, FileMemorySystem } = await import('../../../src/index.js');
+    const { SQLiteVectorStore, SQLiteDatabase, FileMemorySystem } =
+      await import('../../../src/index.js');
     expect(SQLiteVectorStore).toBeDefined();
     expect(SQLiteDatabase).toBeDefined();
     expect(FileMemorySystem).toBeDefined();

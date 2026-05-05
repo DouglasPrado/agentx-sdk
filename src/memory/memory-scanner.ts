@@ -21,7 +21,7 @@ const FRONTMATTER_MAX_LINES = 30;
  * characters in values (colons, braces, globs, etc).
  */
 export function parseFrontmatter(content: string): MemoryFrontmatter {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+  const match = /^---\s*\n([\s\S]*?)\n---/.exec(content);
   if (!match?.[1]) return {};
 
   const yaml = match[1];
@@ -67,9 +67,11 @@ export async function scanMemoryFiles(
     if (signal?.aborted) return [];
     const entries = await readdir(memoryDir, { recursive: true });
     const mdFiles = entries.filter(
-      f => f.endsWith('.md')
-        && basename(f) !== ENTRYPOINT_NAME
-        && !f.startsWith('threads/') && !f.startsWith('threads\\'),
+      (f) =>
+        f.endsWith('.md') &&
+        basename(f) !== ENTRYPOINT_NAME &&
+        !f.startsWith('threads/') &&
+        !f.startsWith('threads\\'),
     );
 
     const headerResults = await Promise.allSettled(
@@ -98,11 +100,8 @@ export async function scanMemoryFiles(
     );
 
     return headerResults
-      .filter(
-        (r): r is PromiseFulfilledResult<MemoryHeader> =>
-          r.status === 'fulfilled',
-      )
-      .map(r => r.value)
+      .filter((r): r is PromiseFulfilledResult<MemoryHeader> => r.status === 'fulfilled')
+      .map((r) => r.value)
       .sort((a, b) => b.mtimeMs - a.mtimeMs)
       .slice(0, MAX_MEMORY_FILES);
   } catch {
@@ -116,7 +115,7 @@ export async function scanMemoryFiles(
  */
 export function formatMemoryManifest(memories: MemoryHeader[]): string {
   return memories
-    .map(m => {
+    .map((m) => {
       const tag = m.type ? `[${m.type}] ` : '';
       const ts = new Date(m.mtimeMs).toISOString();
       return m.description
