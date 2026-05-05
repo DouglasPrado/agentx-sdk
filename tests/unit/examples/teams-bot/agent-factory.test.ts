@@ -65,9 +65,61 @@ import {
   _resetPool,
 } from '../../../../examples/teams-bot/src/agent-factory.js';
 
+// Ensure this exists after fix
+const { MAX_POOL_SIZE } = await import('../../../../examples/teams-bot/src/agent-factory.js');
+
 describe('Agent Pool (agent-factory)', () => {
   beforeEach(() => {
     _resetPool();
+  });
+
+  describe('pool size limit (#88)', () => {
+    beforeEach(() => {
+      _resetPool(3); // use small limit for testing
+    });
+
+    it('exports MAX_POOL_SIZE', () => {
+      expect(typeof MAX_POOL_SIZE).toBe('number');
+      expect(MAX_POOL_SIZE).toBeGreaterThan(0);
+    });
+
+    it('getPoolStats includes maxSize', async () => {
+      _resetPool(3);
+      const stats = getPoolStats();
+      expect(stats).toHaveProperty('maxSize');
+      expect(stats.maxSize).toBe(3);
+    });
+
+    it('evicts oldest agent when pool is at capacity', async () => {
+      _resetPool(3);
+      await getAgent('conv-a');
+      await getAgent('conv-b');
+      await getAgent('conv-c');
+      expect(getPoolStats().size).toBe(3);
+
+      // Adding a 4th should evict the oldest (conv-a)
+      await getAgent('conv-d');
+      const stats = getPoolStats();
+      expect(stats.size).toBe(3);
+      expect(stats.conversationIds).not.toContain('conv-a');
+      expect(stats.conversationIds).toContain('conv-d');
+    });
+
+    it('evicts by lastUsedAt (LRU) — most recently used survives', async () => {
+      _resetPool(2);
+      await getAgent('conv-old');
+      await getAgent('conv-new');
+      // Access conv-old to make it more recently used
+      await getAgent('conv-old');
+
+      // Adding a 3rd — conv-new is now the oldest (LRU)
+      await getAgent('conv-third');
+      const stats = getPoolStats();
+      expect(stats.size).toBe(2);
+      expect(stats.conversationIds).not.toContain('conv-new');
+      expect(stats.conversationIds).toContain('conv-old');
+      expect(stats.conversationIds).toContain('conv-third');
+    });
   });
 
   afterEach(async () => {
