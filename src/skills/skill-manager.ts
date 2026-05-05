@@ -3,6 +3,7 @@ import type { EmbeddingService } from '../knowledge/embedding-service.js';
 import { scanSkillFiles } from './skill-loader.js';
 import { substituteArgs } from './skill-args.js';
 import { matchAnyGlob } from './skill-glob.js';
+import { cosineSimilarity } from '../utils/vector-math.js';
 
 export interface SkillMatchResult {
   skill: AgentSkill;
@@ -178,7 +179,6 @@ export class SkillManager {
       if (skill.match?.(input, { threadId: context.threadId, recentMessages: 0 })) {
         matches.push({ skill, matchType: 'custom', score: 0.8 });
         matchedNames.add(skill.name);
-        continue;
       }
     }
 
@@ -398,17 +398,4 @@ export class SkillManager {
 
     return results;
   }
-}
-
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0,
-    normA = 0,
-    normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i]! * b[i]!;
-    normA += a[i]! * a[i]!;
-    normB += b[i]! * b[i]!;
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
 }

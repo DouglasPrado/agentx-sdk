@@ -1,6 +1,7 @@
 import type { VectorStore } from '../contracts/entities/stores.js';
 import type { KnowledgeChunk, RetrievedKnowledge } from '../contracts/entities/knowledge.js';
 import type { SQLiteDatabase } from '../storage/sqlite-database.js';
+import { cosineSimilarity } from '../utils/vector-math.js';
 
 /** Maximum rows scanned per search call to bound memory usage. */
 const MAX_SCAN = 10_000;
@@ -100,22 +101,6 @@ export class SQLiteVectorStore implements VectorStore {
       .prepare("DELETE FROM vectors WHERE json_extract(metadata, '$.sourceId') = ?")
       .run(sourceId);
   }
-}
-
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0,
-    normA = 0,
-    normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i]! * b[i]!;
-    normA += a[i]! * a[i]!;
-    normB += b[i]! * b[i]!;
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denom === 0) return 0;
-  // Clamp to [0, 1]: opposite-direction vectors are treated as "not similar"
-  // for RAG ranking purposes, matching the minScore config range.
-  return Math.max(0, Math.min(1, dot / denom));
 }
 
 interface VectorRow {

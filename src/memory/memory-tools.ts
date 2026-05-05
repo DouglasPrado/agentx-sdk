@@ -93,6 +93,23 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
     return (await validateMemoryPathResolved(candidate, memoryDir)) ?? null;
   };
 
+  /**
+   * Helper compartilhado por memory_read e memory_delete:
+   * extrai filename, valida formato e resolve symlinks. Retorna o caminho seguro ou um
+   * AgentToolResult de erro pronto pra retornar.
+   */
+  const resolveSafeFilePath = async (
+    rawArgs: unknown,
+  ): Promise<string | { content: string; isError: true }> => {
+    const { filename } = rawArgs as { filename: string };
+    const err = validateFilename(filename);
+    if (err) return { content: err, isError: true };
+
+    const safePath = await safeJoinResolved(filename);
+    if (!safePath) return { content: 'Invalid path', isError: true };
+    return safePath;
+  };
+
   const memoryList: AgentTool = {
     name: 'memory_list',
     description:
@@ -117,12 +134,10 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
     isConcurrencySafe: true,
     isReadOnly: true,
     execute: async (rawArgs) => {
+      const resolved = await resolveSafeFilePath(rawArgs);
+      if (typeof resolved !== 'string') return resolved;
+      const safePath = resolved;
       const { filename } = rawArgs as { filename: string };
-      const err = validateFilename(filename);
-      if (err) return { content: err, isError: true };
-
-      const safePath = await safeJoinResolved(filename);
-      if (!safePath) return { content: 'Invalid path', isError: true };
 
       try {
         const content = await readFile(safePath, 'utf-8');
@@ -229,12 +244,10 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
     }),
     isDestructive: true,
     execute: async (rawArgs) => {
+      const resolved = await resolveSafeFilePath(rawArgs);
+      if (typeof resolved !== 'string') return resolved;
+      const safePath = resolved;
       const { filename } = rawArgs as { filename: string };
-      const err = validateFilename(filename);
-      if (err) return { content: err, isError: true };
-
-      const safePath = await safeJoinResolved(filename);
-      if (!safePath) return { content: 'Invalid path', isError: true };
 
       try {
         await unlink(safePath);

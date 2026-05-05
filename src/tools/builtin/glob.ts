@@ -3,7 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { matchGlob } from '../../skills/skill-glob.js';
-import { assertSafePath } from './path-guard.js';
+import { resolveSearchDir } from './path-guard.js';
 
 const MAX_RESULTS = 100;
 
@@ -37,19 +37,12 @@ export function createGlobTool(workingDir?: string): AgentTool {
     async execute(rawArgs: unknown, _signal: AbortSignal) {
       const { pattern, path: searchPath } = rawArgs as z.infer<typeof GlobParams>;
 
-      if (workingDir && searchPath) {
-        try {
-          assertSafePath(searchPath, workingDir);
-        } catch (error) {
-          return { content: (error as Error).message, isError: true };
-        }
+      let baseDir: string;
+      try {
+        baseDir = resolveSearchDir(searchPath, workingDir);
+      } catch (error) {
+        return { content: (error as Error).message, isError: true };
       }
-
-      const baseDir = searchPath?.trim()
-        ? searchPath
-        : workingDir?.trim()
-          ? workingDir
-          : process.cwd();
 
       const allFiles: string[] = [];
       try {

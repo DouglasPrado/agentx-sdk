@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json.schemastore.org/jscpd",
+  "threshold": 1,
+  "minLines": 10,
+  "minTokens": 70,
+  "format": ["typescript"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/documentation/**",
+    "**/docs/**",
+    "**/examples/**",
+    "**/data/**",
+    "**/.agentx/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ],
+  "reporters": ["consoleFull"],
+  "absolute": false,
+  "gitignore": true
+}

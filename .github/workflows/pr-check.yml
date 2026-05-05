@@ -36,6 +36,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Detect duplication
+        run: pnpm lint:dup
+
       - name: Typecheck
         run: pnpm typecheck
 

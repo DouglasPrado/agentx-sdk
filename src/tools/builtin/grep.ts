@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { matchGlob } from '../../skills/skill-glob.js';
-import { assertSafePath } from './path-guard.js';
+import { resolveSearchDir } from './path-guard.js';
 
 const DEFAULT_MAX_RESULTS = 50;
 
@@ -58,19 +58,12 @@ export function createGrepTool(workingDir?: string): AgentTool {
         max_results,
       } = rawArgs as z.infer<typeof GrepParams>;
 
-      if (workingDir && searchPath) {
-        try {
-          assertSafePath(searchPath, workingDir);
-        } catch (error) {
-          return { content: (error as Error).message, isError: true };
-        }
+      let baseDir: string;
+      try {
+        baseDir = resolveSearchDir(searchPath, workingDir);
+      } catch (error) {
+        return { content: (error as Error).message, isError: true };
       }
-
-      const baseDir = searchPath?.trim()
-        ? searchPath
-        : workingDir?.trim()
-          ? workingDir
-          : process.cwd();
       const maxResults = max_results ?? DEFAULT_MAX_RESULTS;
 
       // Reject patterns that can cause catastrophic backtracking (ReDoS).
