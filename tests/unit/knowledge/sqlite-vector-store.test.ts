@@ -56,7 +56,8 @@ describe('SQLiteVectorStore', () => {
       store.upsert(
         createChunk({
           id: `c${i}`,
-          embedding: new Float32Array([Math.random(), Math.random(), 0, 0]),
+          // Deterministic distinct embeddings — values don't matter, only that there are 10.
+          embedding: new Float32Array([i / 10, ((i * 7) % 10) / 10, 0, 0]),
         }),
       );
     }
