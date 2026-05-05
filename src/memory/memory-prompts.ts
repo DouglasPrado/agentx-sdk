@@ -116,7 +116,7 @@ export const WHAT_NOT_TO_SAVE_SECTION: readonly string[] = [
 // When to access
 // ---------------------------------------------------------------------------
 
-export const MEMORY_DRIFT_CAVEAT =
+const MEMORY_DRIFT_CAVEAT =
   '- Memory records can become stale over time. Use memory as context for what was true at a given point in time. Before answering the user or building assumptions based solely on information in memory records, verify that the memory is still correct and up-to-date by reading the current state of the files or resources. If a recalled memory conflicts with current information, trust what you observe now — and update or remove the stale memory rather than acting on it.';
 
 export const WHEN_TO_ACCESS_SECTION: readonly string[] = [

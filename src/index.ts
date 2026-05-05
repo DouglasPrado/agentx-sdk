@@ -107,7 +107,42 @@ export type {
 
 // Utils
 export { createLogger } from './utils/logger.js';
-export type { Logger } from './utils/logger.js';
+export type { Logger, LoggerOptions } from './utils/logger.js';
 export { LRUCache } from './utils/cache.js';
+export type { CacheOptions } from './utils/cache.js';
 export { retry } from './utils/retry.js';
+export type { RetryOptions } from './utils/retry.js';
 export { estimateTokens } from './utils/token-counter.js';
+
+// Tool extension types — consumers implementing custom tools/hooks
+export type { ToolCallRequest, ToolHooks, ExecuteOptions } from './tools/tool-executor.js';
+export type { SkillToolContext } from './tools/skill-tool.js';
+export type { BashToolOptions } from './tools/builtin/bash.js';
+
+// Knowledge extension types
+export type { ChunkingOptions } from './knowledge/chunking.js';
+export type { KnowledgeManagerConfig } from './knowledge/knowledge-manager.js';
+
+// Skill extension types
+export type { SkillFrontmatter } from './skills/skill-loader.js';
+export type { SkillMatchResult } from './skills/skill-manager.js';
+
+// Core/loop types — for hooks, observability, and custom loop config
+export type { ReactLoopConfig, TokenBudgetConfig } from './core/react-loop.js';
+export type { StopHookContext, StopHookResult } from './core/stop-hooks.js';
+export type { TurnEndHooksResult } from './core/turn-end-hooks.js';
+export type { ToolExecutionResult, ToolProgressInfo } from './core/streaming-tool-executor.js';
+export type {
+  TerminalReason,
+  ContinueReason,
+  Continue,
+  AutoCompactTracking,
+} from './core/loop-types.js';
+export type { ContextBuildResult } from './core/context-builder.js';
+
+// Memory util
+export { getDefaultMemoryDir } from './memory/memory-paths.js';
+
+// Loop dependency injection (consumers extending or testing the loop)
+export { createProductionDeps } from './core/loop-deps.js';
+export type { LoopDeps } from './core/loop-deps.js';

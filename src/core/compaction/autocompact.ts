@@ -2,13 +2,13 @@ import type { LLMMessage } from '../../llm/message-types.js';
 import type { LLMClient } from '../../llm/llm-client.js';
 import { estimateTokens } from '../../utils/token-counter.js';
 
-export interface AutocompactOptions {
+interface AutocompactOptions {
   maxContextTokens: number;
   compactionThreshold: number; // 0.0-1.0, e.g. 0.8 = compact at 80% usage
   tailProtection: number; // Number of recent messages to always preserve
 }
 
-export interface AutocompactResult {
+interface AutocompactResult {
   messages: LLMMessage[];
   tokensFreed: number;
 }
