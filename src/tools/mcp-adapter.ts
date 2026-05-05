@@ -484,7 +484,6 @@ export class MCPAdapter {
       if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
     }
 
-    const requestInit: RequestInit | undefined = config.headers ? { headers: config.headers } : undefined;
     const requestInit: RequestInit | undefined = config.headers
       ? { headers: config.headers }
       : undefined;

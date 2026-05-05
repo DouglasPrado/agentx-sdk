@@ -17,12 +17,18 @@ export function validateSsrfUrl(rawUrl: string): string | null {
   const host = parsed.hostname.toLowerCase();
 
   // Loopback and wildcard hostnames
-  if (host === 'localhost' || host === '0.0.0.0' || host === '::1' || host === '[::1]' || host === '::') {
+  if (
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    host === '[::1]' ||
+    host === '::'
+  ) {
     return `Blocked hostname: ${host}`;
   }
 
   // IPv4 literal checks (loopback, private ranges, link-local metadata)
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (ipv4) {
     const [a, b] = ipv4.slice(1).map(Number) as [number, number, number, number];
     if (a === 127) return 'Blocked loopback address';
@@ -41,7 +47,7 @@ export function validateSsrfUrl(rawUrl: string): string | null {
   // ULA (unique local): fc00::/7 (fc and fd prefixes)
   if (/^f[cd]/i.test(ipv6Bare)) return 'Blocked IPv6 private range (fc00::/7)';
   // IPv4-mapped: ::ffff:a.b.c.d — re-validate the embedded IPv4 address
-  const ipv4MappedMatch = ipv6Bare.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  const ipv4MappedMatch = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(ipv6Bare);
   if (ipv4MappedMatch) {
     const embeddedResult = validateSsrfUrl(`http://${ipv4MappedMatch[1]}/`);
     if (embeddedResult) return `Blocked IPv4-mapped IPv6: ${embeddedResult}`;
@@ -49,7 +55,7 @@ export function validateSsrfUrl(rawUrl: string): string | null {
 
   // IPv4-mapped (compact hex form): ::ffff:HHHH:HHHH — Node.js URL parser
   // canonicalises ::ffff:10.0.0.1 to ::ffff:a00:1, so re-validate by decoding.
-  const ipv4MappedHex = ipv6Bare.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  const ipv4MappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(ipv6Bare);
   if (ipv4MappedHex) {
     const high = parseInt(ipv4MappedHex[1]!, 16);
     const low = parseInt(ipv4MappedHex[2]!, 16);
