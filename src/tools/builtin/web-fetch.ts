@@ -51,6 +51,22 @@ function validateFetchUrl(rawUrl: string): string | null {
     if (embeddedResult) return `Blocked IPv4-mapped IPv6: ${embeddedResult}`;
   }
 
+  // IPv4-mapped (compact hex form): ::ffff:HHHH:HHHH — Node.js' URL parser
+  // canonicalises ::ffff:10.0.0.1 to ::ffff:a00:1, so a dot-notation regex
+  // alone leaves the SSRF guard wide open. Decode the two hex groups back
+  // into the IPv4 octets and re-validate.
+  const ipv4MappedHex = ipv6Bare.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (ipv4MappedHex) {
+    const high = parseInt(ipv4MappedHex[1]!, 16);
+    const low = parseInt(ipv4MappedHex[2]!, 16);
+    const a = (high >> 8) & 0xff;
+    const b = high & 0xff;
+    const c = (low >> 8) & 0xff;
+    const d = low & 0xff;
+    const embeddedResult = validateFetchUrl(`http://${a}.${b}.${c}.${d}/`);
+    if (embeddedResult) return `Blocked IPv4-mapped IPv6 (compact form): ${embeddedResult}`;
+  }
+
   return null;
 }
 
@@ -138,18 +154,25 @@ async function readBodyWithLimit(response: Response): Promise<{ text: string; tr
   let text = '';
   let bytesRead = 0;
   let truncatedByBytes = false;
+  let lastChunkSize = 0;
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytesRead += value.byteLength;
-      text += decoder.decode(value, { stream: true });
-      if (bytesRead >= MAX_BODY_BYTES) {
-        await reader.cancel();
+      // Preemptive guard: a ReadableStream with HWM=1 (default) calls pull()
+      // synchronously after each read to refill the queue. If we wait until
+      // bytesRead >= MAX before cancelling, one extra chunk has already been
+      // pre-buffered by the source. Stop one chunk early — using lastChunkSize
+      // as the slack — so total bytes consumed by the source stay within MAX.
+      if (bytesRead + lastChunkSize >= MAX_BODY_BYTES) {
+        void reader.cancel();
         truncatedByBytes = true;
         break;
       }
+      const { done, value } = await reader.read();
+      if (done) break;
+      lastChunkSize = value.byteLength;
+      bytesRead += value.byteLength;
+      text += decoder.decode(value, { stream: true });
     }
     // Flush any remaining bytes in the decoder
     text += decoder.decode();
