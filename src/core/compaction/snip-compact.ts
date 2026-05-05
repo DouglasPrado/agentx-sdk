@@ -9,11 +9,11 @@
 
 import type { LLMMessage } from '../../llm/message-types.js';
 
-export interface SnipCompactOptions {
+interface SnipCompactOptions {
   tailProtection: number;
 }
 
-export interface SnipCompactResult {
+interface SnipCompactResult {
   messages: LLMMessage[];
   snippedCount: number;
 }

@@ -1,6 +1,6 @@
 import type { LLMMessage } from '../../llm/message-types.js';
 
-export interface MicrocompactOptions {
+interface MicrocompactOptions {
   maxToolResultChars: number;
   /** Per-tool max chars override, keyed by tool name. Takes precedence over default. */
   perToolMaxChars?: Map<string, number>;
@@ -8,7 +8,7 @@ export interface MicrocompactOptions {
   toolCallIdToName?: Map<string, string>;
 }
 
-export interface MicrocompactResult {
+interface MicrocompactResult {
   messages: LLMMessage[];
   truncatedCount: number;
 }
