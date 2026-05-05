@@ -50,4 +50,6 @@ jobs:
 
       - name: Validate commits
         if: github.event_name == 'pull_request'
-        run: pnpm commitlint --from origin/${{ github.base_ref }} --to HEAD
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: pnpm commitlint --from "origin/$BASE_REF" --to HEAD
