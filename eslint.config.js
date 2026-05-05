@@ -16,6 +16,8 @@ export default tseslint.config(
       'coverage/**',
       '.agentx/**',
       '.pnpm-store/**',
+      '.stryker-tmp/**',
+      'reports/**',
     ],
   },
   js.configs.recommended,
