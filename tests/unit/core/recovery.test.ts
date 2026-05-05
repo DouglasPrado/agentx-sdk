@@ -6,6 +6,7 @@ import type { StreamChunk } from '../../../src/llm/message-types.js';
 import type { AgentEvent } from '../../../src/contracts/entities/agent-event.js';
 import type { Terminal } from '../../../src/core/loop-types.js';
 import { PromptTooLongError, OverloadedError } from '../../../src/llm/errors.js';
+import { failingStream } from '../../test-helpers.js';
 
 async function consumeLoop(
   gen: AsyncGenerator<AgentEvent, Terminal>,
@@ -78,9 +79,7 @@ describe('Recovery Mechanisms', () => {
 
     it('should return prompt_too_long when compaction fails', async () => {
       const client = {
-        streamChat: vi.fn(async function* () {
-          throw new PromptTooLongError('Prompt too long');
-        }),
+        streamChat: vi.fn(() => failingStream(new PromptTooLongError('Prompt too long'))),
         chat: vi.fn().mockRejectedValue(new Error('Compaction also failed')),
       } as unknown as LLMClient;
 
@@ -269,9 +268,7 @@ describe('Recovery Mechanisms', () => {
 
     it('should fail normally when no fallback model configured', async () => {
       const client = {
-        streamChat: vi.fn(async function* () {
-          throw new OverloadedError('Model overloaded');
-        }),
+        streamChat: vi.fn(() => failingStream(new OverloadedError('Model overloaded'))),
       } as unknown as LLMClient;
 
       const executor = new ToolExecutor();

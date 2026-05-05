@@ -167,7 +167,7 @@ describe('buildContext', () => {
     });
 
     const content = result.messages[0]!.content as string;
-    const reminderCount = (content.match(/<system-reminder>/g) || []).length;
+    const reminderCount = (content.match(/<system-reminder>/g) ?? []).length;
     expect(reminderCount).toBe(2);
   });
 

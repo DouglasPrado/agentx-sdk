@@ -19,7 +19,7 @@ export class EmbeddingService {
   }
 
   async embed(texts: string[]): Promise<number[][]> {
-    const results: number[][] = new Array(texts.length);
+    const results: number[][] = new Array<number[]>(texts.length);
     const uncached: { index: number; text: string }[] = [];
 
     // Check cache

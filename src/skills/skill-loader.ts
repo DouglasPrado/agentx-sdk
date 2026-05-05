@@ -126,11 +126,11 @@ export async function loadSkillFile(filePath: string): Promise<AgentSkill | null
 
     const skillDir = dirname(filePath);
     const fallbackName = basename(skillDir);
-    const name = fm.name || fallbackName;
+    const name = fm.name?.trim() ? fm.name : fallbackName;
 
     const skill: AgentSkill = {
       name,
-      description: fm.description || name,
+      description: fm.description?.trim() ? fm.description : name,
       instructions: body,
       source: 'directory',
       skillDir,

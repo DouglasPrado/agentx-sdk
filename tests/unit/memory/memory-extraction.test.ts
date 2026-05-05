@@ -7,7 +7,7 @@ function mockFetchForChat(assistantResponse: string) {
     `data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n`,
   ].join('');
 
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const urlStr = typeof url === 'string' ? url : url.toString();
 
     // Embedding calls
@@ -16,7 +16,6 @@ function mockFetchForChat(assistantResponse: string) {
     }
 
     // Chat completion — check if this is a memory extraction call
-    const init = arguments[1] as RequestInit | undefined;
     const body = init?.body ? JSON.parse(init.body as string) : {};
 
     // If messages contain extraction instructions, return extracted memories

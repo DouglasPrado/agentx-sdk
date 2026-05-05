@@ -171,13 +171,13 @@ export class StreamingToolExecutor {
         if (nextQueued.isSafe) {
           const hasUnsafeExecuting = executing.some((t) => !t.isSafe);
           if (hasUnsafeExecuting) {
-            await Promise.all(executing.map((t) => t.promise));
+            await Promise.all(executing.map((t) => t.promise).filter((p) => p !== undefined));
             continue;
           }
           this.startTool(nextQueued);
         } else {
           if (executing.length > 0) {
-            await Promise.all(executing.map((t) => t.promise));
+            await Promise.all(executing.map((t) => t.promise).filter((p) => p !== undefined));
             continue;
           }
           this.startTool(nextQueued);

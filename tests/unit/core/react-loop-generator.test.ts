@@ -5,6 +5,7 @@ import type { LLMClient } from '../../../src/llm/llm-client.js';
 import type { StreamChunk } from '../../../src/llm/message-types.js';
 import type { AgentEvent } from '../../../src/contracts/entities/agent-event.js';
 import type { Terminal } from '../../../src/core/loop-types.js';
+import { failingStream } from '../../test-helpers.js';
 import { z } from 'zod';
 
 function createMockClient(chunks: StreamChunk[][]): LLMClient {
@@ -244,9 +245,9 @@ describe('executeReactLoop (AsyncGenerator)', () => {
   it('should handle consecutive errors and return error terminal', async () => {
     let callCount = 0;
     const client = {
-      streamChat: vi.fn(async function* () {
+      streamChat: vi.fn(() => {
         callCount++;
-        throw new Error(`API error ${callCount}`);
+        return failingStream(new Error(`API error ${callCount}`));
       }),
     } as unknown as LLMClient;
 

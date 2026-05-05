@@ -35,8 +35,12 @@ async function withIndexLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
   const prev = indexLocks.get(dir) ?? Promise.resolve();
   const result = prev.then(() => fn());
   const tail = result.then(
-    () => {},
-    () => {},
+    () => {
+      /* settled — chain continues */
+    },
+    () => {
+      /* swallow — error already handled by caller */
+    },
   );
   indexLocks.set(dir, tail);
   // Opportunistically drop completed locks so the Map doesn't grow unbounded

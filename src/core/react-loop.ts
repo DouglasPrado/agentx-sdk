@@ -445,7 +445,7 @@ export async function* executeReactLoop(
             const tc = toolCalls.find((c) => c.id === completed.id);
             if (tc) {
               try {
-                const parsed = JSON.parse(tc.arguments);
+                const parsed: unknown = JSON.parse(tc.arguments);
                 try {
                   const paths = toolDef.getFilePath(parsed);
                   if (paths) {

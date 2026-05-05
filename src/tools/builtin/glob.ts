@@ -45,7 +45,11 @@ export function createGlobTool(workingDir?: string): AgentTool {
         }
       }
 
-      const baseDir = searchPath || workingDir || process.cwd();
+      const baseDir = searchPath?.trim()
+        ? searchPath
+        : workingDir?.trim()
+          ? workingDir
+          : process.cwd();
 
       const allFiles: string[] = [];
       try {

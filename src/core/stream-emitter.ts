@@ -46,26 +46,26 @@ export class StreamEmitter {
    * Returns an AsyncIterableIterator for consuming events.
    */
   iterator(): AsyncIterableIterator<AgentEvent> {
-    const self = this;
-    return {
-      next(): Promise<IteratorResult<AgentEvent>> {
-        // Drain queue first
-        if (self.queue.length > 0) {
-          return Promise.resolve({ value: self.queue.shift()!, done: false });
-        }
+    const next = (): Promise<IteratorResult<AgentEvent>> => {
+      // Drain queue first
+      if (this.queue.length > 0) {
+        return Promise.resolve({ value: this.queue.shift()!, done: false });
+      }
 
-        if (self.done) {
-          return Promise.resolve({ value: undefined as unknown as AgentEvent, done: true });
-        }
+      if (this.done) {
+        return Promise.resolve({ value: undefined as unknown as AgentEvent, done: true });
+      }
 
-        // Wait for next emit
-        return new Promise((resolve) => {
-          self.resolve = resolve;
-        });
-      },
-      [Symbol.asyncIterator]() {
-        return this;
-      },
+      // Wait for next emit
+      return new Promise((resolve) => {
+        this.resolve = resolve;
+      });
     };
+
+    const iter: AsyncIterableIterator<AgentEvent> = {
+      next,
+      [Symbol.asyncIterator]: () => iter,
+    };
+    return iter;
   }
 }

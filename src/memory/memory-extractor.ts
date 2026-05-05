@@ -11,6 +11,8 @@
  * - Limited to 5 iterations to prevent rabbit holes
  */
 
+import type { AgentTool } from '../contracts/entities/agent-tool.js';
+import type { Logger } from '../utils/logger.js';
 import type { FileMemorySystem } from './file-memory-system.js';
 import { formatMemoryManifest } from './memory-scanner.js';
 import { buildForkedExtractionPrompt } from './memory-prompts.js';
@@ -62,7 +64,7 @@ export type ForkFn = (
   options?: {
     systemPrompt?: string;
     model?: string;
-    tools?: import('../contracts/entities/agent-tool.js').AgentTool[];
+    tools?: AgentTool[];
     background?: boolean;
   },
 ) => Promise<string>;
@@ -83,7 +85,7 @@ export async function extractMemories(
   conversationText: string,
   memorySystem: FileMemorySystem,
   fork: ForkFn,
-  options?: { model?: string; threadId?: string; logger?: import('../utils/logger.js').Logger },
+  options?: { model?: string; threadId?: string; logger?: Logger },
 ): Promise<void> {
   if (!conversationText.trim()) return;
 

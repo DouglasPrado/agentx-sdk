@@ -389,8 +389,12 @@ export class FileMemorySystem {
   private withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.lockChain.then(() => fn());
     this.lockChain = result.then(
-      () => {},
-      () => {},
+      () => {
+        /* settled — chain continues */
+      },
+      () => {
+        /* swallow — error already handled by caller */
+      },
     );
     return result;
   }

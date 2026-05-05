@@ -161,7 +161,7 @@ export function sanitizeFilename(name: string): string {
 export function validateThreadId(threadId: string): string | undefined {
   if (!threadId) return undefined;
   if (threadId.includes('\0')) return undefined;
-  if (/[\x00-\x1f\x7f]/.test(threadId)) return undefined;
+  if (/\p{Cc}/u.test(threadId)) return undefined;
   if (threadId.includes('/') || threadId.includes('\\')) return undefined;
   if (threadId === '.' || threadId === '..') return undefined;
   // Defense-in-depth: ensure normalization does not turn it into a traversal

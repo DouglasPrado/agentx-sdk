@@ -65,8 +65,10 @@ function rowToMessage(row: ConversationRow, logger: Logger): ChatMessage {
 
   let content: string | { type: string; text?: string; image_url?: { url: string } }[];
   try {
-    const parsed = JSON.parse(row.content);
-    content = Array.isArray(parsed) ? parsed : row.content;
+    const parsed: unknown = JSON.parse(row.content);
+    content = Array.isArray(parsed)
+      ? (parsed as { type: string; text?: string; image_url?: { url: string } }[])
+      : row.content;
   } catch {
     content = row.content;
   }
@@ -74,7 +76,7 @@ function rowToMessage(row: ConversationRow, logger: Logger): ChatMessage {
   let toolCalls: ChatMessage['toolCalls'];
   if (row.tool_calls) {
     try {
-      toolCalls = JSON.parse(row.tool_calls);
+      toolCalls = JSON.parse(row.tool_calls) as ChatMessage['toolCalls'];
     } catch (e) {
       // Issue #25: corrupted tool_calls must be loud, not silently dropped —
       // partial writes, migration bugs, or manual DB edits would otherwise

@@ -270,7 +270,7 @@ export class SkillManager {
     let usedChars = 0;
 
     for (const skill of eligible) {
-      const prefix = skill.triggerPrefix ? skill.triggerPrefix : `/${skill.name}`;
+      const prefix = skill.triggerPrefix ?? `/${skill.name}`;
 
       let line = `- ${prefix}: ${skill.description}`;
       if (skill.whenToUse) {

@@ -7,10 +7,14 @@ export interface RetryOptions {
   isRetryable?: (error: unknown) => boolean;
 }
 
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('Aborted');
+}
+
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(signal.reason ?? new Error('Aborted'));
+      reject(abortError(signal));
       return;
     }
 
@@ -20,7 +24,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       'abort',
       () => {
         clearTimeout(timer);
-        reject(signal.reason ?? new Error('Aborted'));
+        reject(abortError(signal));
       },
       { once: true },
     );

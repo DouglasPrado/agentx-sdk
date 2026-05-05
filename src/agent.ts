@@ -1,12 +1,13 @@
 import type { AgentConfig, AgentConfigInput, MCPConnectionConfigInput } from './config/config.js';
 import { AgentConfigSchema } from './config/config.js';
-import type { AgentEvent, AgentEndEvent } from './contracts/entities/agent-event.js';
+import type { AgentEvent } from './contracts/entities/agent-event.js';
 import type { AgentTool } from './contracts/entities/agent-tool.js';
 import type { AgentSkill } from './contracts/entities/agent-skill.js';
+import type { ChatMessage } from './contracts/entities/chat-message.js';
 import type { KnowledgeDocument, RetrievedKnowledge } from './contracts/entities/knowledge.js';
 import type { TokenUsage } from './contracts/entities/token-usage.js';
 import type { ContentPart } from './contracts/entities/content-part.js';
-import type { MessageRole } from './contracts/enums/index.js';
+import type { MemoryFile } from './memory/memory-types.js';
 import type { ContextInjection } from './core/context-builder.js';
 import type { Terminal } from './core/loop-types.js';
 import { LLMClient } from './llm/llm-client.js';
@@ -184,7 +185,7 @@ export class Agent {
       typeof input === 'string'
         ? input
         : input.map((p) => (p.type === 'text' ? p.text : '[image]')).join('');
-    await this.conversations.withThread(threadId, async () => {
+    await this.conversations.withThread(threadId, () => {
       this.conversations.appendMessage(
         {
           role: 'user',
@@ -562,7 +563,7 @@ export class Agent {
       systemPrompt?: string;
       model?: string;
       /** Tools available to the forked agent. If omitted, fork has no tools. */
-      tools?: import('./contracts/entities/agent-tool.js').AgentTool[];
+      tools?: AgentTool[];
       /** If true, runs in background and returns a Promise (fire-and-forget). Default: false (blocking). */
       background?: boolean;
     },
@@ -611,7 +612,7 @@ export class Agent {
     return getModelContextWindow(this.config.model, this.config.maxContextTokens);
   }
 
-  getHistory(threadId?: string): import('./contracts/entities/chat-message.js').ChatMessage[] {
+  getHistory(threadId?: string): ChatMessage[] {
     return this.conversations.getHistory(threadId ?? 'default');
   }
 
@@ -681,10 +682,7 @@ export class Agent {
     );
   }
 
-  async recall(
-    query: string,
-    threadId?: string,
-  ): Promise<import('./memory/memory-types.js').MemoryFile[]> {
+  async recall(query: string, threadId?: string): Promise<MemoryFile[]> {
     if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
     return this.fileMemorySystem.findRelevant(query, undefined, undefined, threadId);
   }
@@ -744,10 +742,7 @@ export class Agent {
    * Returns a promise that resolves with relevant MemoryFiles.
    * Races against a timeout so it never blocks the response indefinitely.
    */
-  private startMemoryPrefetch(
-    userInput: string,
-    threadId?: string,
-  ): Promise<import('./memory/memory-types.js').MemoryFile[]> {
+  private startMemoryPrefetch(userInput: string, threadId?: string): Promise<MemoryFile[]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Agent.MEMORY_PREFETCH_TIMEOUT);
 
@@ -757,14 +752,14 @@ export class Agent {
       this.surfacedMemories,
       threadId,
     )
-      .catch(() => [] as import('./memory/memory-types.js').MemoryFile[])
+      .catch(() => [] as MemoryFile[])
       .finally(() => clearTimeout(timeout));
   }
 
   private async buildInjectionsWithSkills(
     userInput: string,
     threadId: string,
-    memoryPrefetch?: Promise<import('./memory/memory-types.js').MemoryFile[]>,
+    memoryPrefetch?: Promise<MemoryFile[]>,
   ): Promise<{ injections: ContextInjection[]; skillToolNames: string[] }> {
     const injections: ContextInjection[] = [];
 

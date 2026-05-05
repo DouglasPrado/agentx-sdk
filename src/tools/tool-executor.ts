@@ -1,4 +1,4 @@
-import { ZodError, type ZodSchema } from 'zod';
+import { ZodError } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';

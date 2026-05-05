@@ -16,9 +16,9 @@ describe('Agent', () => {
     expect(() => Agent.create({ apiKey: '' })).toThrow();
   });
 
-  it('should register tools', () => {
+  it('should register tools', async () => {
     const agent = Agent.create({ apiKey: 'test-key' });
-    const { z } = require('zod');
+    const { z } = await import('zod');
     agent.addTool({
       name: 'test',
       description: 'test tool',

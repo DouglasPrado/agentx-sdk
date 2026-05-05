@@ -26,8 +26,8 @@ function sanitizeErrorBody(text: string): string {
   const truncated =
     text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
   try {
-    const parsed = JSON.parse(truncated);
-    const msg = parsed?.error?.message ?? parsed?.message;
+    const parsed = JSON.parse(truncated) as { error?: { message?: unknown }; message?: unknown };
+    const msg = parsed.error?.message ?? parsed.message;
     if (typeof msg === 'string') return msg.slice(0, MAX_ERROR_BODY);
   } catch {
     /* not JSON — return truncated plain text */
@@ -140,7 +140,9 @@ export class LLMClient {
       json = (await response.json()) as ChatJson;
     } catch (e) {
       // Ensure body is fully consumed so the HTTP connection is returned to the pool
-      await response.body?.cancel().catch(() => {});
+      await response.body?.cancel().catch(() => {
+        /* swallow — already in error path */
+      });
       throw new Error(
         `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
       );
@@ -178,7 +180,9 @@ export class LLMClient {
     try {
       json = (await response.json()) as EmbedJson;
     } catch (e) {
-      await response.body?.cancel().catch(() => {});
+      await response.body?.cancel().catch(() => {
+        /* swallow — already in error path */
+      });
       throw new Error(
         `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
       );
@@ -234,7 +238,7 @@ export class LLMClient {
     const body = response.body;
     if (!body) throw new Error('Response body is null');
 
-    const reader = body.getReader();
+    const reader = (body as ReadableStream<Uint8Array>).getReader();
     const decoder = new TextDecoder();
     let buffer = '';
 
@@ -251,7 +255,9 @@ export class LLMClient {
 
     // Propagate abort to the reader so a hanging read() is unblocked immediately.
     const abortHandler = (): void => {
-      void reader.cancel().catch(() => {});
+      void reader.cancel().catch(() => {
+        /* swallow — abort path */
+      });
     };
     if (signal) {
       if (signal.aborted) abortHandler();

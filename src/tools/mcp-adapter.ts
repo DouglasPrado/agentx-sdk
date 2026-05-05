@@ -1,5 +1,5 @@
 import { z, ZodError } from 'zod';
-import type { ZodIssue } from 'zod';
+import type { ZodIssue, ZodSchema } from 'zod';
 import type { AgentTool } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { MCPConnectionConfig } from '../config/config.js';
@@ -375,7 +375,7 @@ export class MCPAdapter {
     const safeServerName = serverName.replace(/__/g, '_');
     const safeToolName = mcpTool.name.replace(/__/g, '_');
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
-    const parameters = jsonSchemaToZod(mcpTool.inputSchema);
+    const parameters = jsonSchemaToZod(mcpTool.inputSchema) as unknown as ZodSchema;
     const isolateErrors = config.isolateErrors ?? true;
     const timeout = config.timeout ?? 30_000;
 

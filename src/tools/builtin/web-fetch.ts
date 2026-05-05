@@ -157,7 +157,7 @@ async function readBodyWithLimit(
     return { text: '', truncatedByBytes: false };
   }
 
-  const reader = response.body.getReader();
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   let text = '';
   let bytesRead = 0;
@@ -195,7 +195,7 @@ export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): Age
   let resolverPromise: Promise<DnsResolver> | null = null;
   const getResolver = (): Promise<DnsResolver> => {
     if (options?.dnsResolver) return Promise.resolve(options.dnsResolver);
-    if (!resolverPromise) resolverPromise = defaultDnsResolver();
+    resolverPromise ??= defaultDnsResolver();
     return resolverPromise;
   };
 

@@ -66,7 +66,11 @@ export function createGrepTool(workingDir?: string): AgentTool {
         }
       }
 
-      const baseDir = searchPath || workingDir || process.cwd();
+      const baseDir = searchPath?.trim()
+        ? searchPath
+        : workingDir?.trim()
+          ? workingDir
+          : process.cwd();
       const maxResults = max_results ?? DEFAULT_MAX_RESULTS;
 
       // Reject patterns that can cause catastrophic backtracking (ReDoS).

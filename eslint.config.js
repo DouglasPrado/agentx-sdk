@@ -42,7 +42,10 @@ export default tseslint.config(
       '@typescript-eslint/no-empty-function': 'warn',
       '@typescript-eslint/no-base-to-string': 'warn',
       '@typescript-eslint/prefer-nullish-coalescing': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-this-alias': 'warn',
       '@typescript-eslint/await-thenable': 'warn',
       '@typescript-eslint/prefer-promise-reject-errors': 'warn',

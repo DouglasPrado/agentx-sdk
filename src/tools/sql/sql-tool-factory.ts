@@ -10,7 +10,7 @@ function unwrapZodType(schema: z.ZodTypeAny): string {
     );
   }
   if (schema instanceof z.ZodDefault) {
-    return unwrapZodType(schema.removeDefault());
+    return unwrapZodType(schema.removeDefault() as z.ZodTypeAny);
   }
   if (schema instanceof z.ZodString) return 'string';
   if (schema instanceof z.ZodNumber) return 'number';
@@ -77,7 +77,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
     isReadOnly: true,
     maxResultChars,
 
-    async execute(rawArgs: unknown) {
+    execute(rawArgs: unknown) {
       const { keyword } = rawArgs as { keyword: string };
       const lower = keyword.toLowerCase();
 
@@ -87,7 +87,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
       });
 
       if (matches.length === 0) {
-        return `No queries found matching "${keyword}". Try a broader term.`;
+        return Promise.resolve(`No queries found matching "${keyword}". Try a broader term.`);
       }
 
       const results = matches.map((q) => {
@@ -109,7 +109,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
         };
       });
 
-      return JSON.stringify(results, null, 2);
+      return Promise.resolve(JSON.stringify(results, null, 2));
     },
   };
 

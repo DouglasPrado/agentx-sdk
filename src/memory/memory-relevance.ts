@@ -6,6 +6,7 @@
  */
 
 import type { LLMClient } from '../llm/llm-client.js';
+import type { Logger } from '../utils/logger.js';
 
 const SELECT_MEMORIES_SYSTEM_PROMPT = `You are selecting memories that will be useful to an AI agent as it processes a user's query. You will be given the user's query and a list of available memory files with their filenames and descriptions.
 
@@ -23,7 +24,7 @@ export async function selectRelevantMemories(
   manifest: string,
   validFilenames: Set<string>,
   client: LLMClient,
-  options?: { model?: string; signal?: AbortSignal; logger?: import('../utils/logger.js').Logger },
+  options?: { model?: string; signal?: AbortSignal; logger?: Logger },
 ): Promise<string[]> {
   if (!manifest.trim()) return [];
 

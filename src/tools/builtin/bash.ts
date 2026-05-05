@@ -84,7 +84,7 @@ export function createBashTool(options: BashToolOptions = {}): AgentTool {
           {
             timeout: effectiveTimeout,
             maxBuffer: MAX_OUTPUT,
-            shell: process.env.SHELL || '/bin/sh',
+            shell: process.env.SHELL?.trim() ? process.env.SHELL : '/bin/sh',
             ...(workingDir ? { cwd: workingDir } : {}),
             // Detach on POSIX so the child gets its own process group —
             // lets us kill the whole tree (including backgrounded grandchildren).

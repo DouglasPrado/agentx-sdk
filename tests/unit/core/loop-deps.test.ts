@@ -3,6 +3,7 @@ import { executeReactLoop } from '../../../src/core/react-loop.js';
 import { ToolExecutor } from '../../../src/tools/tool-executor.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
 import type { StreamChunk } from '../../../src/llm/message-types.js';
+import { failingStream } from '../../test-helpers.js';
 import type { AgentEvent } from '../../../src/contracts/entities/agent-event.js';
 import type { Terminal } from '../../../src/core/loop-types.js';
 import type { LoopDeps } from '../../../src/core/loop-deps.js';
@@ -32,9 +33,7 @@ describe('LoopDeps (Dependency Injection)', () => {
 
     // Client should NOT be called
     const client = {
-      streamChat: vi.fn(async function* () {
-        throw new Error('Should not be called');
-      }),
+      streamChat: vi.fn(() => failingStream(new Error('Should not be called'))),
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
