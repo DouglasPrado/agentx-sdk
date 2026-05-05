@@ -36,6 +36,20 @@ describe('package.json security overrides (issue #26)', () => {
   });
 });
 
+describe('release.yml safe sync — no destructive reset (issue #89)', () => {
+  it('does NOT use git reset --hard in the bump/version step', () => {
+    // git reset --hard silently discards any commits that landed between fetch and reset,
+    // making concurrent-push races invisible. A fast-forward merge fails loudly instead.
+    expect(releaseYml).not.toMatch(/git\s+reset\s+--hard/);
+  });
+
+  it('uses git merge --ff-only to sync with remote main before bumping', () => {
+    // --ff-only aborts if the local HEAD cannot be fast-forwarded, surfacing races as errors
+    // rather than silently overwriting them.
+    expect(releaseYml).toMatch(/git\s+merge\s+--ff-only\s+origin\/main/);
+  });
+});
+
 describe('release.yml shell injection hardening (issue #51)', () => {
   it('does NOT interpolate ${{ steps.version.outputs.version }} directly in a run: shell command', () => {
     // Direct interpolation: VERSION=${{ steps.version.outputs.version }} inside run: is a shell injection risk.
