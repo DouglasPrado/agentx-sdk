@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SkillManager } from '../../../src/skills/skill-manager.js';
-import { createSkillTool, SKILL_TOOL_NAME, buildSkillToolPrompt } from '../../../src/tools/skill-tool.js';
+import {
+  createSkillTool,
+  SKILL_TOOL_NAME,
+  buildSkillToolPrompt,
+} from '../../../src/tools/skill-tool.js';
 import { ToolExecutor } from '../../../src/tools/tool-executor.js';
 import type { AgentSkill } from '../../../src/contracts/entities/agent-skill.js';
 import { z } from 'zod';
@@ -36,10 +40,12 @@ describe('SkillTool', () => {
   });
 
   it('should invoke a skill by exact name', async () => {
-    manager.register(createSkill({
-      name: 'review',
-      instructions: 'Review code carefully.',
-    }));
+    manager.register(
+      createSkill({
+        name: 'review',
+        instructions: 'Review code carefully.',
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'review' }, new AbortController().signal);
@@ -51,11 +57,13 @@ describe('SkillTool', () => {
   });
 
   it('should invoke a skill by alias', async () => {
-    manager.register(createSkill({
-      name: 'code-review',
-      aliases: ['cr', 'review'],
-      instructions: 'Review instructions.',
-    }));
+    manager.register(
+      createSkill({
+        name: 'code-review',
+        aliases: ['cr', 'review'],
+        instructions: 'Review instructions.',
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'cr' }, new AbortController().signal);
@@ -65,11 +73,13 @@ describe('SkillTool', () => {
   });
 
   it('should invoke a skill by alias with / prefix', async () => {
-    manager.register(createSkill({
-      name: 'code-review',
-      aliases: ['/cr'],
-      instructions: 'Review.',
-    }));
+    manager.register(
+      createSkill({
+        name: 'code-review',
+        aliases: ['/cr'],
+        instructions: 'Review.',
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: '/cr' }, new AbortController().signal);
@@ -79,11 +89,13 @@ describe('SkillTool', () => {
   });
 
   it('should invoke a skill by triggerPrefix', async () => {
-    manager.register(createSkill({
-      name: 'translate',
-      triggerPrefix: '/translate',
-      instructions: 'Translate text.',
-    }));
+    manager.register(
+      createSkill({
+        name: 'translate',
+        triggerPrefix: '/translate',
+        instructions: 'Translate text.',
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: '/translate' }, new AbortController().signal);
@@ -93,28 +105,38 @@ describe('SkillTool', () => {
   });
 
   it('should pass args to resolveInstructions', async () => {
-    manager.register(createSkill({
-      name: 'review',
-      instructions: 'Review $file carefully.',
-      argNames: ['file'],
-    }));
+    manager.register(
+      createSkill({
+        name: 'review',
+        instructions: 'Review $file carefully.',
+        argNames: ['file'],
+      }),
+    );
 
     const tool = buildTool();
-    const result = await tool.execute({ skill: 'review', args: 'main.ts' }, new AbortController().signal);
+    const result = await tool.execute(
+      { skill: 'review', args: 'main.ts' },
+      new AbortController().signal,
+    );
     const content = typeof result === 'string' ? result : result.content;
 
     expect(content).toContain('Review main.ts carefully.');
   });
 
   it('should use getPrompt when available', async () => {
-    manager.register(createSkill({
-      name: 'dynamic',
-      instructions: 'static',
-      getPrompt: async (args) => `Dynamic prompt for: ${args}`,
-    }));
+    manager.register(
+      createSkill({
+        name: 'dynamic',
+        instructions: 'static',
+        getPrompt: async (args) => `Dynamic prompt for: ${args}`,
+      }),
+    );
 
     const tool = buildTool();
-    const result = await tool.execute({ skill: 'dynamic', args: 'test' }, new AbortController().signal);
+    const result = await tool.execute(
+      { skill: 'dynamic', args: 'test' },
+      new AbortController().signal,
+    );
     const content = typeof result === 'string' ? result : result.content;
 
     expect(content).toContain('Dynamic prompt for: test');
@@ -133,10 +155,12 @@ describe('SkillTool', () => {
   });
 
   it('should return error for disabled skill', async () => {
-    manager.register(createSkill({
-      name: 'disabled-skill',
-      isEnabled: () => false,
-    }));
+    manager.register(
+      createSkill({
+        name: 'disabled-skill',
+        isEnabled: () => false,
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'disabled-skill' }, new AbortController().signal);
@@ -147,10 +171,12 @@ describe('SkillTool', () => {
   });
 
   it('should return error for modelInvocable=false skill', async () => {
-    manager.register(createSkill({
-      name: 'user-only',
-      modelInvocable: false,
-    }));
+    manager.register(
+      createSkill({
+        name: 'user-only',
+        modelInvocable: false,
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'user-only' }, new AbortController().signal);
@@ -177,31 +203,37 @@ describe('SkillTool', () => {
       execute: async () => 'file content',
     };
 
-    manager.register(createSkill({
-      name: 'file-manager',
-      instructions: 'Manage files.',
-      tools: [skillTool],
-    }));
+    manager.register(
+      createSkill({
+        name: 'file-manager',
+        instructions: 'Manage files.',
+        tools: [skillTool],
+      }),
+    );
 
     const tool = buildTool();
     await tool.execute({ skill: 'file-manager' }, new AbortController().signal);
 
     // Verify tool was registered in executor
     const registered = toolExecutor.listTools();
-    expect(registered.some(t => t.name === 'read_file')).toBe(true);
+    expect(registered.some((t) => t.name === 'read_file')).toBe(true);
   });
 
   it('should mention skill tools in result', async () => {
-    manager.register(createSkill({
-      name: 'file-manager',
-      instructions: 'Manage files.',
-      tools: [{
-        name: 'read_file',
-        description: 'Read',
-        parameters: z.object({ path: z.string() }),
-        execute: async () => 'ok',
-      }],
-    }));
+    manager.register(
+      createSkill({
+        name: 'file-manager',
+        instructions: 'Manage files.',
+        tools: [
+          {
+            name: 'read_file',
+            description: 'Read',
+            parameters: z.object({ path: z.string() }),
+            execute: async () => 'ok',
+          },
+        ],
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'file-manager' }, new AbortController().signal);
@@ -212,11 +244,13 @@ describe('SkillTool', () => {
   });
 
   it('should note model override if present', async () => {
-    manager.register(createSkill({
-      name: 'premium',
-      instructions: 'Premium analysis.',
-      model: 'anthropic/claude-opus-4-20250514',
-    }));
+    manager.register(
+      createSkill({
+        name: 'premium',
+        instructions: 'Premium analysis.',
+        model: 'anthropic/claude-opus-4-20250514',
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'premium' }, new AbortController().signal);
@@ -231,10 +265,12 @@ describe('SkillTool', () => {
   });
 
   it('should handle empty args', async () => {
-    manager.register(createSkill({
-      name: 'simple',
-      instructions: 'Simple instructions.',
-    }));
+    manager.register(
+      createSkill({
+        name: 'simple',
+        instructions: 'Simple instructions.',
+      }),
+    );
 
     const tool = buildTool();
     const result = await tool.execute({ skill: 'simple' }, new AbortController().signal);
@@ -251,18 +287,20 @@ describe('SkillTool', () => {
       execute: async () => 'ok',
     };
 
-    manager.register(createSkill({
-      name: 'skill-a',
-      instructions: 'A',
-      tools: [skillTool],
-    }));
+    manager.register(
+      createSkill({
+        name: 'skill-a',
+        instructions: 'A',
+        tools: [skillTool],
+      }),
+    );
 
     const tool = buildTool();
     await tool.execute({ skill: 'skill-a' }, new AbortController().signal);
     await tool.execute({ skill: 'skill-a' }, new AbortController().signal);
 
     // Should only have registered once (deduplication via Set)
-    const count = toolExecutor.listTools().filter(t => t.name === 'my_tool').length;
+    const count = toolExecutor.listTools().filter((t) => t.name === 'my_tool').length;
     expect(count).toBe(1);
   });
 });

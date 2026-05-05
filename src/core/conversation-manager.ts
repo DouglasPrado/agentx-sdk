@@ -17,7 +17,7 @@ class InMemoryConversationStore implements ConversationStore {
   }
 
   listPinned(threadId: string): ChatMessage[] {
-    return this.listThread(threadId).filter(m => m.pinned);
+    return this.listThread(threadId).filter((m) => m.pinned);
   }
 
   clearThread(threadId: string): void {
@@ -39,14 +39,16 @@ export class ConversationManager {
   /**
    * Acquires mutex for a thread, executes fn, then releases.
    */
-  async withThread<T>(threadId: string, fn: () => Promise<T>): Promise<T> {
+  async withThread<T>(threadId: string, fn: () => T | Promise<T>): Promise<T> {
     // Wait for any existing lock on this thread
     while (this.locks.has(threadId)) {
       await this.locks.get(threadId);
     }
 
     let releaseLock: () => void;
-    const lockPromise = new Promise<void>(resolve => { releaseLock = resolve; });
+    const lockPromise = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
     this.locks.set(threadId, lockPromise);
 
     try {

@@ -57,5 +57,5 @@ export function matchGlob(pattern: string, filePath: string): boolean {
  * Test if a file path matches any of the given glob patterns.
  */
 export function matchAnyGlob(patterns: string[], filePath: string): boolean {
-  return patterns.some(p => matchGlob(p, filePath));
+  return patterns.some((p) => matchGlob(p, filePath));
 }

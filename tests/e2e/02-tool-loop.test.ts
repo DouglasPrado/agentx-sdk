@@ -32,18 +32,22 @@ describe('E2E 02 — tool loop (react cycle)', () => {
     scriptFetch({
       chat: [
         // Turn 1: LLM asks to invoke `calc`
-        createSSEResponse(toolCallFrames({
-          toolCallId: 'call_1',
-          name: 'calc',
-          arguments: JSON.stringify({ a: 2, b: 3 }),
-          usage: { prompt_tokens: 20, completion_tokens: 5, total_tokens: 25 },
-        })),
+        createSSEResponse(
+          toolCallFrames({
+            toolCallId: 'call_1',
+            name: 'calc',
+            arguments: JSON.stringify({ a: 2, b: 3 }),
+            usage: { prompt_tokens: 20, completion_tokens: 5, total_tokens: 25 },
+          }),
+        ),
         // Turn 2: LLM sees the result and replies
-        createSSEResponse(textResponseFrames({
-          content: 'Result is 5.',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 30, completion_tokens: 4, total_tokens: 34 },
-        })),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'Result is 5.',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 30, completion_tokens: 4, total_tokens: 34 },
+          }),
+        ),
       ],
     });
 
@@ -63,8 +67,8 @@ describe('E2E 02 — tool loop (react cycle)', () => {
     expect(firstCall[0]).toEqual({ a: 2, b: 3 });
 
     // --- Tool events come in the expected order ---
-    const toolStartIdx = events.findIndex(e => e.type === 'tool_call_start');
-    const toolEndIdx = events.findIndex(e => e.type === 'tool_call_end');
+    const toolStartIdx = events.findIndex((e) => e.type === 'tool_call_start');
+    const toolEndIdx = events.findIndex((e) => e.type === 'tool_call_end');
     expect(toolStartIdx).toBeGreaterThanOrEqual(0);
     expect(toolEndIdx).toBeGreaterThan(toolStartIdx);
 
@@ -76,13 +80,13 @@ describe('E2E 02 — tool loop (react cycle)', () => {
     expect(end.result.content).toBe('5');
 
     // --- Text comes after tool result ---
-    const firstTextIdx = events.findIndex(e => e.type === 'text_delta');
+    const firstTextIdx = events.findIndex((e) => e.type === 'text_delta');
     expect(firstTextIdx).toBeGreaterThan(toolEndIdx);
 
     // --- Persistence: [user, assistant(tool_calls), tool, assistant(text)] in createdAt order ---
     const history = handle.agent.getHistory();
     expect(history).toHaveLength(4);
-    expect(history.map(m => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+    expect(history.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
     expect(history[1]!.toolCalls).toHaveLength(1);
     expect(history[1]!.toolCalls![0]!.id).toBe('call_1');
     expect(history[2]!.toolCallId).toBe('call_1');
@@ -102,17 +106,21 @@ describe('E2E 02 — tool loop (react cycle)', () => {
   it('surfaces tool errors via tool_call_end.isError and keeps streaming (onToolError=continue)', async () => {
     scriptFetch({
       chat: [
-        createSSEResponse(toolCallFrames({
-          toolCallId: 'call_err',
-          name: 'boom',
-          arguments: '{}',
-          usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
-        })),
-        createSSEResponse(textResponseFrames({
-          content: 'Recovered.',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
-        })),
+        createSSEResponse(
+          toolCallFrames({
+            toolCallId: 'call_err',
+            name: 'boom',
+            arguments: '{}',
+            usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+          }),
+        ),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'Recovered.',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+          }),
+        ),
       ],
     });
 
@@ -121,7 +129,9 @@ describe('E2E 02 — tool loop (react cycle)', () => {
       name: 'boom',
       description: 'Always fails',
       parameters: z.object({}),
-      execute: async () => { throw new Error('kapow'); },
+      execute: async () => {
+        throw new Error('kapow');
+      },
     });
 
     const events = await consumeStream(handle.agent.stream('do it'));

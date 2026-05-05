@@ -7,7 +7,9 @@ import { builtinTools } from '../../../../src/tools/builtin/index.js';
 import { Agent } from '../../../../src/agent.js';
 
 describe('Builtin tools integration', () => {
-  afterEach(() => { vi.restoreAllMocks(); });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   describe('path containment via workingDir (issue #69)', () => {
     let workingDir: string;
@@ -23,7 +25,7 @@ describe('Builtin tools integration', () => {
 
     it('all(workingDir) — Write tool blocks paths outside workingDir', async () => {
       const executor = new ToolExecutor();
-      builtinTools.all(workingDir).forEach(t => executor.register(t));
+      builtinTools.all(workingDir).forEach((t) => executor.register(t));
 
       const result = await executor.execute('Write', {
         file_path: join(tmpdir(), 'escaped.txt'),
@@ -35,7 +37,7 @@ describe('Builtin tools integration', () => {
 
     it('all(workingDir) — Write tool allows paths inside workingDir', async () => {
       const executor = new ToolExecutor();
-      builtinTools.all(workingDir).forEach(t => executor.register(t));
+      builtinTools.all(workingDir).forEach((t) => executor.register(t));
 
       const result = await executor.execute('Write', {
         file_path: join(workingDir, 'safe.txt'),
@@ -46,7 +48,7 @@ describe('Builtin tools integration', () => {
 
     it('all(workingDir) — Edit tool blocks paths outside workingDir', async () => {
       const executor = new ToolExecutor();
-      builtinTools.all(workingDir).forEach(t => executor.register(t));
+      builtinTools.all(workingDir).forEach((t) => executor.register(t));
 
       const result = await executor.execute('Edit', {
         file_path: join(tmpdir(), 'escaped.txt'),
@@ -59,7 +61,7 @@ describe('Builtin tools integration', () => {
 
     it('all() without workingDir remains backward compatible', async () => {
       const executor = new ToolExecutor();
-      builtinTools.all().forEach(t => executor.register(t));
+      builtinTools.all().forEach((t) => executor.register(t));
 
       const result = await executor.execute('Write', {
         file_path: join(workingDir, 'compat.txt'),
@@ -70,7 +72,7 @@ describe('Builtin tools integration', () => {
 
     it('fileOps(workingDir) — Write tool enforces containment', async () => {
       const executor = new ToolExecutor();
-      builtinTools.fileOps(workingDir).forEach(t => executor.register(t));
+      builtinTools.fileOps(workingDir).forEach((t) => executor.register(t));
 
       const result = await executor.execute('Write', {
         file_path: join(tmpdir(), 'escaped.txt'),
@@ -82,7 +84,7 @@ describe('Builtin tools integration', () => {
 
   it('should register all tools and generate valid JSON Schema for LLM', () => {
     const executor = new ToolExecutor();
-    builtinTools.all().forEach(t => executor.register(t));
+    builtinTools.all().forEach((t) => executor.register(t));
 
     const defs = executor.getToolDefinitions();
     expect(defs.length).toBe(7); // all() excludes askUser
@@ -97,9 +99,13 @@ describe('Builtin tools integration', () => {
   });
 
   it('should register via Agent.addTool and appear in tool listing', () => {
-    const agent = Agent.create({ apiKey: 'test', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
 
-    builtinTools.all().forEach(t => agent.addTool(t));
+    builtinTools.all().forEach((t) => agent.addTool(t));
 
     // Tools should be visible (agent doesn't expose listTools, but we can verify
     // by checking that the agent was created without error)
@@ -119,7 +125,10 @@ describe('Builtin tools integration', () => {
     const executor = new ToolExecutor();
     executor.register(builtinTools.glob());
 
-    const result = await executor.execute('Glob', { pattern: 'src/tools/builtin/*.ts', path: process.cwd() });
+    const result = await executor.execute('Glob', {
+      pattern: 'src/tools/builtin/*.ts',
+      path: process.cwd(),
+    });
     const content = typeof result === 'string' ? result : result.content;
     expect(content).toContain('glob.ts');
     expect(content).toContain('bash.ts');
@@ -149,16 +158,16 @@ describe('Builtin tools integration', () => {
   it('should provide fileOps() helper with 5 tools', () => {
     const tools = builtinTools.fileOps();
     expect(tools.length).toBe(5);
-    const names = tools.map(t => t.name).sort();
+    const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(['Edit', 'Glob', 'Grep', 'Read', 'Write']);
   });
 
   it('should set correct flags on each tool', () => {
     const all = builtinTools.all();
-    const read = all.find(t => t.name === 'Read')!;
-    const write = all.find(t => t.name === 'Write')!;
-    const bash = all.find(t => t.name === 'Bash')!;
-    const glob = all.find(t => t.name === 'Glob')!;
+    const read = all.find((t) => t.name === 'Read')!;
+    const write = all.find((t) => t.name === 'Write')!;
+    const bash = all.find((t) => t.name === 'Bash')!;
+    const glob = all.find((t) => t.name === 'Glob')!;
 
     expect(read.isConcurrencySafe).toBe(true);
     expect(read.isReadOnly).toBe(true);
@@ -177,7 +186,9 @@ describe('Builtin tools integration', () => {
   it('should work end-to-end with Agent.stream()', async () => {
     // Mock fetch to simulate LLM calling the Read tool
     const toolCallSSE = [
-      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"tc-1","type":"function","function":{"name":"Read","arguments":"{\\"file_path\\":\\"' + process.cwd() + '/package.json\\"}"}}]},"index":0}]}\n\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"tc-1","type":"function","function":{"name":"Read","arguments":"{\\"file_path\\":\\"' +
+        process.cwd() +
+        '/package.json\\"}"}}]},"index":0}]}\n\n',
       'data: {"choices":[{"finish_reason":"tool_calls","index":0}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n',
     ].join('');
 
@@ -196,13 +207,20 @@ describe('Builtin tools integration', () => {
       const data = callCount === 1 ? toolCallSSE : finalSSE;
       return new Response(
         new ReadableStream({
-          start(c) { c.enqueue(new TextEncoder().encode(data)); c.close(); },
+          start(c) {
+            c.enqueue(new TextEncoder().encode(data));
+            c.close();
+          },
         }),
         { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
       );
     });
 
-    const agent = Agent.create({ apiKey: 'test', memory: { enabled: false }, knowledge: { enabled: false } });
+    const agent = Agent.create({
+      apiKey: 'test',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
     agent.addTool(builtinTools.fileRead());
 
     const events: string[] = [];

@@ -29,7 +29,7 @@ export function microcompact(
   const { maxToolResultChars, perToolMaxChars, toolCallIdToName } = options;
   let truncatedCount = 0;
 
-  const result = messages.map(msg => {
+  const result = messages.map((msg) => {
     if (msg.role !== 'tool' || typeof msg.content !== 'string') return msg;
 
     // Determine per-tool limit

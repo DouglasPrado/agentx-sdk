@@ -48,7 +48,7 @@ describe('ConversationManager', () => {
     const order: number[] = [];
 
     const p1 = cm.withThread('t1', async () => {
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       order.push(1);
     });
 
@@ -65,7 +65,7 @@ describe('ConversationManager', () => {
     const order: string[] = [];
 
     const p1 = cm.withThread('t1', async () => {
-      await new Promise(r => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 50));
       order.push('t1');
     });
 
@@ -82,11 +82,11 @@ describe('ConversationManager', () => {
     const order: number[] = [];
 
     const p1 = cm.withThread('t1', async () => {
-      await new Promise(r => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, 20));
       order.push(1);
     });
     const p2 = cm.withThread('t1', async () => {
-      await new Promise(r => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 5));
       order.push(2);
     });
     const p3 = cm.withThread('t1', async () => {

@@ -73,9 +73,11 @@ export const AgentConfigSchema = z.object({
   costPolicy: CostPolicySchema.optional(),
 
   // Pluggable stores
-  conversation: z.object({
-    store: z.custom<ConversationStore>().optional(),
-  }).optional(),
+  conversation: z
+    .object({
+      store: z.custom<ConversationStore>().optional(),
+    })
+    .optional(),
 
   // MCP
   mcp: z.array(MCPConnectionConfigSchema).optional(),
@@ -99,10 +101,12 @@ export const AgentConfigSchema = z.object({
   escalatedMaxOutputTokens: z.number().int().positive().optional(),
 
   // Token budget continuation
-  tokenBudget: z.object({
-    total: z.number().int().positive(),
-    outputThreshold: z.number().min(0).max(1).default(0.5),
-  }).optional(),
+  tokenBudget: z
+    .object({
+      total: z.number().int().positive(),
+      outputThreshold: z.number().min(0).max(1).default(0.5),
+    })
+    .optional(),
 
   // Observability
   logLevel: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),

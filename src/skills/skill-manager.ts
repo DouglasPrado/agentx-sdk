@@ -58,9 +58,11 @@ export class SkillManager {
   }
 
   unregister(name: string): boolean {
-    return this.skills.delete(name)
-      || this.conditionalSkills.delete(name)
-      || this.activatedSkills.delete(name);
+    return (
+      this.skills.delete(name) ||
+      this.conditionalSkills.delete(name) ||
+      this.activatedSkills.delete(name)
+    );
   }
 
   /** All skills (unconditional + activated conditional) */
@@ -106,7 +108,7 @@ export class SkillManager {
 
     for (const [name, skill] of this.conditionalSkills) {
       if (!skill.paths) continue;
-      const matched = filePaths.some(fp => matchAnyGlob(skill.paths!, fp));
+      const matched = filePaths.some((fp) => matchAnyGlob(skill.paths!, fp));
       if (matched) {
         this.activatedSkills.set(name, skill);
         this.conditionalSkills.delete(name);
@@ -161,7 +163,7 @@ export class SkillManager {
 
       // 2. Alias match
       if (skill.aliases) {
-        const matched = skill.aliases.some(alias => {
+        const matched = skill.aliases.some((alias) => {
           const prefix = alias.startsWith('/') ? alias : `/${alias}`;
           return input.startsWith(prefix);
         });
@@ -173,7 +175,7 @@ export class SkillManager {
       }
 
       // 3. Custom match function
-      if (skill.match && skill.match(input, { threadId: context.threadId, recentMessages: 0 })) {
+      if (skill.match?.(input, { threadId: context.threadId, recentMessages: 0 })) {
         matches.push({ skill, matchType: 'custom', score: 0.8 });
         matchedNames.add(skill.name);
         continue;
@@ -192,7 +194,13 @@ export class SkillManager {
       if (a.skill.exclusive && !b.skill.exclusive) return -1;
       if (!a.skill.exclusive && b.skill.exclusive) return 1;
 
-      const typeOrder: Record<string, number> = { prefix: 4, sticky: 3.5, alias: 3, custom: 2, semantic: 1 };
+      const typeOrder: Record<string, number> = {
+        prefix: 4,
+        sticky: 3.5,
+        alias: 3,
+        custom: 2,
+        semantic: 1,
+      };
       const typeDiff = (typeOrder[b.matchType] ?? 0) - (typeOrder[a.matchType] ?? 0);
       if (typeDiff !== 0) return typeDiff;
 
@@ -212,7 +220,7 @@ export class SkillManager {
       return [sorted[0].skill];
     }
 
-    return sorted.slice(0, this.maxActiveSkills).map(m => m.skill);
+    return sorted.slice(0, this.maxActiveSkills).map((m) => m.skill);
   }
 
   // ---------------------------------------------------------------------------
@@ -254,8 +262,7 @@ export class SkillManager {
    * Truncates to fit within the given character budget.
    */
   buildSkillListing(budgetChars: number): string {
-    const eligible = this.getEligibleSkills()
-      .filter(s => s.modelInvocable !== false);
+    const eligible = this.getEligibleSkills().filter((s) => s.modelInvocable !== false);
 
     if (eligible.length === 0) return '';
 
@@ -263,9 +270,7 @@ export class SkillManager {
     let usedChars = 0;
 
     for (const skill of eligible) {
-      const prefix = skill.triggerPrefix
-        ? skill.triggerPrefix
-        : `/${skill.name}`;
+      const prefix = skill.triggerPrefix ?? `/${skill.name}`;
 
       let line = `- ${prefix}: ${skill.description}`;
       if (skill.whenToUse) {
@@ -369,13 +374,10 @@ export class SkillManager {
    * meaning it can only be activated via semantic matching.
    */
   private hasSkillsNeedingSemantic(eligible: AgentSkill[]): boolean {
-    return eligible.some(s => !s.triggerPrefix && !s.aliases?.length && !s.match);
+    return eligible.some((s) => !s.triggerPrefix && !s.aliases?.length && !s.match);
   }
 
-  private async semanticMatch(
-    input: string,
-    eligible: AgentSkill[],
-  ): Promise<SkillMatchResult[]> {
+  private async semanticMatch(input: string, eligible: AgentSkill[]): Promise<SkillMatchResult[]> {
     if (!this.embeddingService) return [];
 
     const inputEmbedding = await this.embeddingService.embedSingle(input);
@@ -385,9 +387,7 @@ export class SkillManager {
       // Only semantic-match skills that lack explicit matchers
       if (skill.triggerPrefix || skill.aliases?.length || skill.match) continue;
 
-      const text = skill.whenToUse
-        ? `${skill.description}. ${skill.whenToUse}`
-        : skill.description;
+      const text = skill.whenToUse ? `${skill.description}. ${skill.whenToUse}` : skill.description;
       const skillEmbedding = await this.embeddingService.embedSingle(text);
       const score = cosineSimilarity(inputEmbedding, skillEmbedding);
 
@@ -401,7 +401,9 @@ export class SkillManager {
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0, normA = 0, normB = 0;
+  let dot = 0,
+    normA = 0,
+    normB = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i]! * b[i]!;
     normA += a[i]! * a[i]!;

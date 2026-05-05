@@ -1,5 +1,6 @@
 // CJK Unified Ideographs and common CJK ranges
-const CJK_REGEX = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\uac00-\ud7af]/g;
+const CJK_REGEX =
+  /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\uac00-\ud7af]/g;
 const CHARS_PER_TOKEN_LATIN = 4;
 const CHARS_PER_TOKEN_CJK = 1.5;
 

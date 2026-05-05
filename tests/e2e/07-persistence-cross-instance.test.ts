@@ -31,11 +31,13 @@ describe('E2E 07 — persistence across Agent instances', () => {
 
     scriptFetch({
       chat: [
-        createSSEResponse(textResponseFrames({
-          content: 'from agent A',
-          finishReason: 'stop',
-          usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
-        })),
+        createSSEResponse(
+          textResponseFrames({
+            content: 'from agent A',
+            finishReason: 'stop',
+            usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 },
+          }),
+        ),
       ],
     });
 

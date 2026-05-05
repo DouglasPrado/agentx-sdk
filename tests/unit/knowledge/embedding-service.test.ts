@@ -4,7 +4,12 @@ import type { LLMClient } from '../../../src/llm/llm-client.js';
 
 function createMockClient(embedResult?: number[][]): LLMClient {
   return {
-    embed: vi.fn().mockResolvedValue(embedResult ?? [[0.1, 0.2], [0.3, 0.4]]),
+    embed: vi.fn().mockResolvedValue(
+      embedResult ?? [
+        [0.1, 0.2],
+        [0.3, 0.4],
+      ],
+    ),
   } as unknown as LLMClient;
 }
 
@@ -34,7 +39,10 @@ describe('EmbeddingService', () => {
       const results = await service.embed(['hello', 'world']);
 
       expect(client.embed).toHaveBeenCalledWith(['hello', 'world'], undefined);
-      expect(results).toEqual([[0.1, 0.2], [0.3, 0.4]]);
+      expect(results).toEqual([
+        [0.1, 0.2],
+        [0.3, 0.4],
+      ]);
     });
 
     it('should pass custom model to client.embed', async () => {
@@ -51,7 +59,10 @@ describe('EmbeddingService', () => {
       const results = await service.embed(['hello', 'world']);
 
       expect(client.embed).not.toHaveBeenCalled();
-      expect(results).toEqual([[0.1, 0.2], [0.3, 0.4]]);
+      expect(results).toEqual([
+        [0.1, 0.2],
+        [0.3, 0.4],
+      ]);
     });
 
     it('should only fetch uncached texts on partial cache hit', async () => {
@@ -108,10 +119,7 @@ describe('EmbeddingService', () => {
 
       expect(client.embed).not.toHaveBeenCalled();
       expect(result).toBeInstanceOf(Float32Array);
-      expect(Array.from(result)).toEqual([
-        expect.closeTo(0.4, 5),
-        expect.closeTo(0.5, 5),
-      ]);
+      expect(Array.from(result)).toEqual([expect.closeTo(0.4, 5), expect.closeTo(0.5, 5)]);
     });
   });
 });

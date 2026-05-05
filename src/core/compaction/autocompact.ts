@@ -41,8 +41,8 @@ export async function autocompact(
   // tail. Pinned messages in the early region are preserved in their ORIGINAL
   // position (not floated to the top) to keep assistant.tool_calls followed by
   // their `tool` results — OpenAI rejects any other order.
-  const systemMessages = messages.filter(m => m.role === 'system');
-  const nonSystem = messages.filter(m => m.role !== 'system');
+  const systemMessages = messages.filter((m) => m.role === 'system');
+  const nonSystem = messages.filter((m) => m.role !== 'system');
   const tailCount = Math.min(tailProtection, nonSystem.length);
   const earlyNonSystem = nonSystem.slice(0, nonSystem.length - tailCount);
   const tailMessages = nonSystem.slice(-tailCount);
@@ -50,23 +50,30 @@ export async function autocompact(
   // Within the early region, split into pinned (kept verbatim, in place) and
   // compactable (summarized). The relative order of pinned messages to each
   // other is preserved; they are emitted at the top of the early slot.
-  const earlyPinned = earlyNonSystem.filter(m => (m as unknown as Record<string, unknown>)._pinned === true);
-  const toCompact = earlyNonSystem.filter(m => (m as unknown as Record<string, unknown>)._pinned !== true);
+  const earlyPinned = earlyNonSystem.filter(
+    (m) => (m as unknown as Record<string, unknown>)._pinned === true,
+  );
+  const toCompact = earlyNonSystem.filter(
+    (m) => (m as unknown as Record<string, unknown>)._pinned !== true,
+  );
 
   if (toCompact.length === 0) return null;
 
   // Build conversation text for summarization
-  const conversationText = toCompact.map(m => {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    return `${m.role}: ${content.slice(0, 2000)}`; // Limit per message for the summary prompt
-  }).join('\n');
+  const conversationText = toCompact
+    .map((m) => {
+      const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      return `${m.role}: ${content.slice(0, 2000)}`; // Limit per message for the summary prompt
+    })
+    .join('\n');
 
   try {
     const response = await client.chat({
       messages: [
         {
           role: 'system',
-          content: 'You are a conversation summarizer. Create a concise summary of the following conversation, preserving key facts, decisions, tool results, and context needed for continuation. Be factual and specific. Output only the summary.',
+          content:
+            'You are a conversation summarizer. Create a concise summary of the following conversation, preserving key facts, decisions, tool results, and context needed for continuation. Be factual and specific. Output only the summary.',
         },
         { role: 'user', content: conversationText },
       ],
@@ -81,12 +88,7 @@ export async function autocompact(
       _pinned: true,
     } as LLMMessage & { _pinned?: boolean };
 
-    const compactedMessages = [
-      ...systemMessages,
-      ...earlyPinned,
-      summaryMessage,
-      ...tailMessages,
-    ];
+    const compactedMessages = [...systemMessages, ...earlyPinned, summaryMessage, ...tailMessages];
 
     const newTokens = estimateMessagesTokens(compactedMessages);
     return {

@@ -15,7 +15,8 @@ const FileReadParams = z.object({
 export function createFileReadTool(workingDir?: string): AgentTool {
   return {
     name: 'Read',
-    description: 'Read file contents with line numbers. Supports partial reads with offset and limit.',
+    description:
+      'Read file contents with line numbers. Supports partial reads with offset and limit.',
     parameters: FileReadParams,
     isConcurrencySafe: true,
     isReadOnly: true,
@@ -35,7 +36,10 @@ export function createFileReadTool(workingDir?: string): AgentTool {
       try {
         const fileStat = await stat(file_path);
         if (fileStat.size > MAX_FILE_SIZE) {
-          return { content: `File too large (${fileStat.size} bytes). Use offset/limit to read portions.`, isError: true };
+          return {
+            content: `File too large (${fileStat.size} bytes). Use offset/limit to read portions.`,
+            isError: true,
+          };
         }
 
         const content = await readFile(file_path, 'utf-8');
@@ -52,13 +56,15 @@ export function createFileReadTool(workingDir?: string): AgentTool {
 
         const total = allLines.length;
         const showing = endLine - startLine + 1;
-        const header = showing < total
-          ? `Showing lines ${startLine}-${endLine} of ${total}:\n`
-          : '';
+        const header =
+          showing < total ? `Showing lines ${startLine}-${endLine} of ${total}:\n` : '';
 
         return `${header}${numbered}`;
       } catch (error) {
-        return { content: `Cannot read file: ${file_path} — ${(error as Error).message}`, isError: true };
+        return {
+          content: `Cannot read file: ${file_path} — ${(error as Error).message}`,
+          isError: true,
+        };
       }
     },
   };

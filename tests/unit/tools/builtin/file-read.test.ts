@@ -35,7 +35,10 @@ describe('builtin/file-read', () => {
 
   it('should support offset and limit', async () => {
     const tool = createFileReadTool();
-    const result = await tool.execute({ file_path: join(tempDir, 'test.txt'), offset: 2, limit: 2 }, signal);
+    const result = await tool.execute(
+      { file_path: join(tempDir, 'test.txt'), offset: 2, limit: 2 },
+      signal,
+    );
     const content = typeof result === 'string' ? result : result.content;
     expect(content).toContain('Line 2');
     expect(content).toContain('Line 3');

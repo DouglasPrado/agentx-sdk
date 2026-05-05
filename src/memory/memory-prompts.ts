@@ -8,11 +8,7 @@
  * Ported from old_src/memdir/memoryTypes.ts and old_src/memdir/memdir.ts.
  */
 
-import {
-  MEMORY_TYPES,
-  ENTRYPOINT_NAME,
-  MAX_ENTRYPOINT_LINES,
-} from './memory-types.js';
+import { MEMORY_TYPES, ENTRYPOINT_NAME, MAX_ENTRYPOINT_LINES } from './memory-types.js';
 
 // ---------------------------------------------------------------------------
 // Frontmatter example
@@ -229,13 +225,11 @@ export function buildMemoryInstructions(memoryDir: string): string {
  *
  * @deprecated Use buildForkedExtractionPrompt instead.
  */
-export function buildExtractionPrompt(
-  newMessageCount: number,
-  existingManifest: string,
-): string {
-  const manifest = existingManifest.length > 0
-    ? `\n\n## Existing memory files\n\n${existingManifest}\n\nCheck this list before writing — update an existing file rather than creating a duplicate.`
-    : '';
+export function buildExtractionPrompt(newMessageCount: number, existingManifest: string): string {
+  const manifest =
+    existingManifest.length > 0
+      ? `\n\n## Existing memory files\n\n${existingManifest}\n\nCheck this list before writing — update an existing file rather than creating a duplicate.`
+      : '';
 
   return [
     `You are a memory extraction agent. Analyze the most recent ~${newMessageCount} messages and extract durable memories worth saving for future conversations.`,
@@ -271,9 +265,10 @@ export function buildForkedExtractionPrompt(
   newMessageCount: number,
   existingManifest: string,
 ): string {
-  const manifest = existingManifest.length > 0
-    ? `\n\n## Existing memory files\n\n${existingManifest}\n\nCheck this list before writing — update an existing file rather than creating a duplicate.`
-    : '';
+  const manifest =
+    existingManifest.length > 0
+      ? `\n\n## Existing memory files\n\n${existingManifest}\n\nCheck this list before writing — update an existing file rather than creating a duplicate.`
+      : '';
 
   return [
     `You are the memory extraction subagent. Analyze the most recent ~${newMessageCount} messages and use your tools to update the persistent memory system.`,

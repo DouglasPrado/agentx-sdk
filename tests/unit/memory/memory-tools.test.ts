@@ -6,7 +6,7 @@ import { createMemoryTools } from '../../../src/memory/memory-tools.js';
 import type { AgentTool } from '../../../src/contracts/entities/agent-tool.js';
 
 function findTool(tools: AgentTool[], name: string): AgentTool {
-  const tool = tools.find(t => t.name === name);
+  const tool = tools.find((t) => t.name === name);
   if (!tool) throw new Error(`Tool ${name} not found`);
   return tool;
 }
@@ -34,15 +34,18 @@ describe('memory-tools', () => {
     });
 
     it('returns manifest of existing memories', async () => {
-      await writeFile(join(tempDir, 'user-role.md'), [
-        '---',
-        'name: User Role',
-        'description: User is a data scientist',
-        'type: user',
-        '---',
-        '',
-        'The user is a data scientist.',
-      ].join('\n'));
+      await writeFile(
+        join(tempDir, 'user-role.md'),
+        [
+          '---',
+          'name: User Role',
+          'description: User is a data scientist',
+          'type: user',
+          '---',
+          '',
+          'The user is a data scientist.',
+        ].join('\n'),
+      );
 
       const tool = findTool(tools, 'memory_list');
       const result = await tool.execute({}, signal);
@@ -88,12 +91,15 @@ describe('memory-tools', () => {
   describe('memory_write', () => {
     it('creates a new memory file with frontmatter', async () => {
       const tool = findTool(tools, 'memory_write');
-      const result = await tool.execute({
-        name: 'User Role',
-        description: 'User is a Go developer',
-        type: 'user',
-        content: 'The user has 10 years of Go experience.',
-      }, signal);
+      const result = await tool.execute(
+        {
+          name: 'User Role',
+          description: 'User is a Go developer',
+          type: 'user',
+          content: 'The user has 10 years of Go experience.',
+        },
+        signal,
+      );
 
       const text = typeof result === 'string' ? result : result.content;
       expect(text).toContain('user-role.md');
@@ -106,12 +112,15 @@ describe('memory-tools', () => {
 
     it('updates MEMORY.md index', async () => {
       const tool = findTool(tools, 'memory_write');
-      await tool.execute({
-        name: 'Feedback',
-        description: 'Use TDD always',
-        type: 'feedback',
-        content: 'The user wants TDD.',
-      }, signal);
+      await tool.execute(
+        {
+          name: 'Feedback',
+          description: 'Use TDD always',
+          type: 'feedback',
+          content: 'The user wants TDD.',
+        },
+        signal,
+      );
 
       const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
       expect(index).toContain('feedback.md');
@@ -120,21 +129,27 @@ describe('memory-tools', () => {
 
   describe('memory_edit', () => {
     it('updates content of existing memory file', async () => {
-      await writeFile(join(tempDir, 'user-role.md'), [
-        '---',
-        'name: User Role',
-        'description: User is a dev',
-        'type: user',
-        '---',
-        '',
-        'Old content.',
-      ].join('\n'));
+      await writeFile(
+        join(tempDir, 'user-role.md'),
+        [
+          '---',
+          'name: User Role',
+          'description: User is a dev',
+          'type: user',
+          '---',
+          '',
+          'Old content.',
+        ].join('\n'),
+      );
 
       const tool = findTool(tools, 'memory_edit');
-      const result = await tool.execute({
-        filename: 'user-role.md',
-        content: 'Updated: user is a senior Go developer with 10 years experience.',
-      }, signal);
+      const result = await tool.execute(
+        {
+          filename: 'user-role.md',
+          content: 'Updated: user is a senior Go developer with 10 years experience.',
+        },
+        signal,
+      );
 
       const text = typeof result === 'string' ? result : result.content;
       expect(text).toContain('updated');
@@ -146,32 +161,41 @@ describe('memory-tools', () => {
 
     it('returns error for nonexistent file', async () => {
       const tool = findTool(tools, 'memory_edit');
-      const result = await tool.execute({
-        filename: 'nope.md',
-        content: 'new content',
-      }, signal);
+      const result = await tool.execute(
+        {
+          filename: 'nope.md',
+          content: 'new content',
+        },
+        signal,
+      );
       const res = typeof result === 'string' ? { content: result, isError: false } : result;
       expect(res.isError).toBe(true);
     });
 
     it('allows updating description and name', async () => {
-      await writeFile(join(tempDir, 'test.md'), [
-        '---',
-        'name: Old Name',
-        'description: Old desc',
-        'type: user',
-        '---',
-        '',
-        'Old body.',
-      ].join('\n'));
+      await writeFile(
+        join(tempDir, 'test.md'),
+        [
+          '---',
+          'name: Old Name',
+          'description: Old desc',
+          'type: user',
+          '---',
+          '',
+          'Old body.',
+        ].join('\n'),
+      );
 
       const tool = findTool(tools, 'memory_edit');
-      await tool.execute({
-        filename: 'test.md',
-        content: 'New body.',
-        name: 'New Name',
-        description: 'New desc',
-      }, signal);
+      await tool.execute(
+        {
+          filename: 'test.md',
+          content: 'New body.',
+          name: 'New Name',
+          description: 'New desc',
+        },
+        signal,
+      );
 
       const fileContent = await readFile(join(tempDir, 'test.md'), 'utf-8');
       expect(fileContent).toContain('name: New Name');
@@ -225,12 +249,15 @@ describe('memory-tools', () => {
   describe('frontmatter injection prevention', () => {
     it('sanitizes newlines in name and description when writing', async () => {
       const tool = findTool(tools, 'memory_write');
-      await tool.execute({
-        name: 'Safe Name',
-        description: 'Line one\nmalicious: injected',
-        type: 'user',
-        content: 'body',
-      }, signal);
+      await tool.execute(
+        {
+          name: 'Safe Name',
+          description: 'Line one\nmalicious: injected',
+          type: 'user',
+          content: 'body',
+        },
+        signal,
+      );
 
       const fileContent = await readFile(join(tempDir, 'safe-name.md'), 'utf-8');
       const fm = fileContent.split('---')[1] ?? '';
@@ -246,12 +273,15 @@ describe('memory-tools', () => {
       const threadTools = createMemoryTools(tempDir, 'thread-42');
       const writeTool = findTool(threadTools, 'memory_write');
 
-      await writeTool.execute({
-        name: 'Thread Memory',
-        description: 'A thread-scoped memory',
-        type: 'project',
-        content: 'Thread-specific info.',
-      }, signal);
+      await writeTool.execute(
+        {
+          name: 'Thread Memory',
+          description: 'A thread-scoped memory',
+          type: 'project',
+          content: 'Thread-specific info.',
+        },
+        signal,
+      );
 
       const fileContent = await readFile(join(threadDir, 'thread-memory.md'), 'utf-8');
       expect(fileContent).toContain('Thread-specific info');

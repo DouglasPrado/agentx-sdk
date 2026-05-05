@@ -11,7 +11,12 @@ function createMockClient(overrides: Record<string, unknown> = {}) {
     callTool: vi.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }),
     listResources: vi.fn().mockResolvedValue({
       resources: [
-        { uri: 'file:///readme.md', name: 'README', mimeType: 'text/markdown', description: 'Project readme' },
+        {
+          uri: 'file:///readme.md',
+          name: 'README',
+          mimeType: 'text/markdown',
+          description: 'Project readme',
+        },
         { uri: 'db://users', name: 'Users table', description: 'All users' },
       ],
     }),
@@ -21,7 +26,11 @@ function createMockClient(overrides: Record<string, unknown> = {}) {
     listPrompts: vi.fn().mockResolvedValue({
       prompts: [
         { name: 'summarize', description: 'Summarize content' },
-        { name: 'translate', description: 'Translate text', arguments: [{ name: 'language', required: true }] },
+        {
+          name: 'translate',
+          description: 'Translate text',
+          arguments: [{ name: 'language', required: true }],
+        },
       ],
     }),
     getPrompt: vi.fn().mockResolvedValue({

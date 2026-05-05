@@ -20,7 +20,7 @@ import type { AgentEvent } from '../../src/contracts/entities/agent-event.js';
 
 /** Build an SSE Response body from a list of `data: ...` frames. */
 export function createSSEResponse(events: string[]): Response {
-  const text = events.map(e => (e.startsWith('data:') ? e : `data: ${e}`)).join('\n\n') + '\n\n';
+  const text = events.map((e) => (e.startsWith('data:') ? e : `data: ${e}`)).join('\n\n') + '\n\n';
   const stream = new ReadableStream({
     start(controller) {
       controller.enqueue(new TextEncoder().encode(text));
@@ -32,10 +32,10 @@ export function createSSEResponse(events: string[]): Response {
 
 /** Build an /embeddings JSON response. */
 export function createEmbeddingResponse(vectors: number[][]): Response {
-  return new Response(
-    JSON.stringify({ data: vectors.map(embedding => ({ embedding })) }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } },
-  );
+  return new Response(JSON.stringify({ data: vectors.map((embedding) => ({ embedding })) }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -73,19 +73,31 @@ export interface ToolCallChunkOptions {
 export function toolCallFrames(opts: ToolCallChunkOptions): string[] {
   const frames: string[] = [];
   // Chunk 1: id + name
-  frames.push(JSON.stringify({
-    choices: [{
-      delta: { tool_calls: [{ index: 0, id: opts.toolCallId, function: { name: opts.name, arguments: '' } }] },
-      index: 0,
-    }],
-  }));
+  frames.push(
+    JSON.stringify({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              { index: 0, id: opts.toolCallId, function: { name: opts.name, arguments: '' } },
+            ],
+          },
+          index: 0,
+        },
+      ],
+    }),
+  );
   // Chunk 2: arguments (in one piece)
-  frames.push(JSON.stringify({
-    choices: [{
-      delta: { tool_calls: [{ index: 0, function: { arguments: opts.arguments } }] },
-      index: 0,
-    }],
-  }));
+  frames.push(
+    JSON.stringify({
+      choices: [
+        {
+          delta: { tool_calls: [{ index: 0, function: { arguments: opts.arguments } }] },
+          index: 0,
+        },
+      ],
+    }),
+  );
   // Done
   const done: Record<string, unknown> = {
     choices: [{ finish_reason: 'tool_calls', index: 0 }],
@@ -113,9 +125,9 @@ export interface FetchScript {
 export interface ScriptedFetchMock {
   mock: Mock;
   /** Request bodies captured per chat turn (parsed JSON). */
-  chatRequests: Array<Record<string, unknown>>;
+  chatRequests: Record<string, unknown>[];
   /** Request bodies captured per embeddings call (parsed JSON). */
-  embeddingRequests: Array<Record<string, unknown>>;
+  embeddingRequests: Record<string, unknown>[];
 }
 
 /**
@@ -126,15 +138,20 @@ export interface ScriptedFetchMock {
 export function scriptFetch(script: FetchScript): ScriptedFetchMock {
   let chatIdx = 0;
   let embedIdx = 0;
-  const chatRequests: Array<Record<string, unknown>> = [];
-  const embeddingRequests: Array<Record<string, unknown>> = [];
+  const chatRequests: Record<string, unknown>[] = [];
+  const embeddingRequests: Record<string, unknown>[] = [];
 
   const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+    const urlStr =
+      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const bodyRaw = (init?.body ?? (input as Request).body) as string | undefined;
     let body: Record<string, unknown> = {};
     if (typeof bodyRaw === 'string') {
-      try { body = JSON.parse(bodyRaw) as Record<string, unknown>; } catch { /* non-JSON */ }
+      try {
+        body = JSON.parse(bodyRaw) as Record<string, unknown>;
+      } catch {
+        /* non-JSON */
+      }
     }
 
     if (urlStr.includes('/chat/completions')) {
@@ -197,7 +214,12 @@ export async function createTempAgent(
 
   // Separate memory/knowledge overrides so we can merge them into our defaults
   // without the outer `...rest` spread accidentally replacing the whole object.
-  const { memory: memoryOverride, knowledge: knowledgeOverride, dbPath: dbPathOverride, ...rest } = overrides;
+  const {
+    memory: memoryOverride,
+    knowledge: knowledgeOverride,
+    dbPath: dbPathOverride,
+    ...rest
+  } = overrides;
 
   const agent = Agent.create({
     apiKey: 'test-key',
@@ -205,13 +227,23 @@ export async function createTempAgent(
     baseUrl: 'https://api.test/v1',
     logLevel: 'silent',
     dbPath: dbPathOverride ?? dbPath,
-    memory: { enabled: true, memoryDir, samplingRate: 0, extractionInterval: 9999, ...memoryOverride },
+    memory: {
+      enabled: true,
+      memoryDir,
+      samplingRate: 0,
+      extractionInterval: 9999,
+      ...memoryOverride,
+    },
     knowledge: { enabled: true, chunkSize: 64, chunkOverlap: 8, ...knowledgeOverride },
     ...rest,
   });
 
   const cleanup = async (): Promise<void> => {
-    try { await agent.destroy(); } catch { /* already destroyed */ }
+    try {
+      await agent.destroy();
+    } catch {
+      /* already destroyed */
+    }
     await rm(tempDir, { recursive: true, force: true });
   };
 

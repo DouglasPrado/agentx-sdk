@@ -59,8 +59,10 @@ describe('StreamEmitter', () => {
     const iter = emitter.iterator();
     const events: unknown[] = [];
     // Sync drain
-    let next = iter.next();
-    void next.then(r => { if (!r.done) events.push(r.value); });
+    const next = iter.next();
+    void next.then((r) => {
+      if (!r.done) events.push(r.value);
+    });
   });
 
   it('should not emit after close', () => {

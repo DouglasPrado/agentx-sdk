@@ -135,6 +135,14 @@ export interface AgentEndEvent {
   type: 'agent_end';
   traceId: string;
   usage: TokenUsage;
-  reason: 'stop' | 'cost_limit' | 'max_iterations' | 'error' | 'abort' | 'stop_hook' | 'prompt_too_long' | 'max_output_tokens';
+  reason:
+    | 'stop'
+    | 'cost_limit'
+    | 'max_iterations'
+    | 'error'
+    | 'abort'
+    | 'stop_hook'
+    | 'prompt_too_long'
+    | 'max_output_tokens';
   duration: number;
 }

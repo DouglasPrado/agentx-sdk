@@ -5,7 +5,10 @@ describe('PromptSectionCache', () => {
   it('should cache builder result on first call', () => {
     const cache = new PromptSectionCache();
     let callCount = 0;
-    const builder = () => { callCount++; return 'built content'; };
+    const builder = () => {
+      callCount++;
+      return 'built content';
+    };
 
     const first = cache.getOrBuild('test', builder);
     const second = cache.getOrBuild('test', builder);
@@ -41,7 +44,10 @@ describe('PromptSectionCache', () => {
     cache.clear();
 
     let rebuilt = false;
-    cache.getOrBuild('a', () => { rebuilt = true; return 'new'; });
+    cache.getOrBuild('a', () => {
+      rebuilt = true;
+      return 'new';
+    });
     expect(rebuilt).toBe(true);
   });
 

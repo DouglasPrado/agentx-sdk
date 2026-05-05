@@ -91,9 +91,7 @@ describe('buildToolUsagePrompt', () => {
   });
 
   it('should handle isDestructive as function (treated as not statically destructive)', () => {
-    const tools = [
-      createTool({ name: 'bash', isDestructive: () => true }),
-    ];
+    const tools = [createTool({ name: 'bash', isDestructive: () => true })];
 
     const prompt = buildToolUsagePrompt(tools);
     // Function-based isDestructive is not statically classified

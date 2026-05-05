@@ -138,7 +138,9 @@ name: test
     it('should load a valid skill file', async () => {
       const skillDir = join(tempDir, 'review');
       await mkdir(skillDir);
-      await writeFile(join(skillDir, 'SKILL.md'), `---
+      await writeFile(
+        join(skillDir, 'SKILL.md'),
+        `---
 name: code-review
 description: Reviews code for quality
 triggerPrefix: /review
@@ -146,7 +148,8 @@ priority: 8
 ---
 
 You are in code review mode.
-Analyze the code carefully.`);
+Analyze the code carefully.`,
+      );
 
       const skill = await loadSkillFile(join(skillDir, 'SKILL.md'));
       expect(skill).not.toBeNull();
@@ -162,11 +165,14 @@ Analyze the code carefully.`);
     it('should use directory name as fallback name', async () => {
       const skillDir = join(tempDir, 'my-cool-skill');
       await mkdir(skillDir);
-      await writeFile(join(skillDir, 'SKILL.md'), `---
+      await writeFile(
+        join(skillDir, 'SKILL.md'),
+        `---
 description: A cool skill
 ---
 
-Instructions here`);
+Instructions here`,
+      );
 
       const skill = await loadSkillFile(join(skillDir, 'SKILL.md'));
       expect(skill!.name).toBe('my-cool-skill');
@@ -175,13 +181,16 @@ Instructions here`);
     it('should create getPrompt for skills with argNames', async () => {
       const skillDir = join(tempDir, 'review');
       await mkdir(skillDir);
-      await writeFile(join(skillDir, 'SKILL.md'), `---
+      await writeFile(
+        join(skillDir, 'SKILL.md'),
+        `---
 name: review
 description: Review a file
 argNames: [file]
 ---
 
-Review $file carefully.`);
+Review $file carefully.`,
+      );
 
       const skill = await loadSkillFile(join(skillDir, 'SKILL.md'));
       expect(skill!.getPrompt).toBeDefined();
@@ -226,29 +235,38 @@ Review $file carefully.`);
       await mkdir(reviewDir);
       await mkdir(translateDir);
 
-      await writeFile(join(reviewDir, 'SKILL.md'), `---
+      await writeFile(
+        join(reviewDir, 'SKILL.md'),
+        `---
 name: review
 description: Code review
 ---
-Review code`);
+Review code`,
+      );
 
-      await writeFile(join(translateDir, 'SKILL.md'), `---
+      await writeFile(
+        join(translateDir, 'SKILL.md'),
+        `---
 name: translate
 description: Translate text
 ---
-Translate`);
+Translate`,
+      );
 
       const skills = await scanSkillFiles(tempDir);
       expect(skills).toHaveLength(2);
-      expect(skills.map(s => s.name).sort()).toEqual(['review', 'translate']);
+      expect(skills.map((s) => s.name).sort()).toEqual(['review', 'translate']);
     });
 
     it('should scan flat .md files', async () => {
-      await writeFile(join(tempDir, 'review.md'), `---
+      await writeFile(
+        join(tempDir, 'review.md'),
+        `---
 name: review
 description: Code review
 ---
-Review code`);
+Review code`,
+      );
 
       const skills = await scanSkillFiles(tempDir);
       expect(skills).toHaveLength(1);
@@ -270,18 +288,24 @@ Review code`);
       // Subdirectory
       const reviewDir = join(tempDir, 'review');
       await mkdir(reviewDir);
-      await writeFile(join(reviewDir, 'SKILL.md'), `---
+      await writeFile(
+        join(reviewDir, 'SKILL.md'),
+        `---
 name: review
 description: Code review
 ---
-Review`);
+Review`,
+      );
 
       // Flat file
-      await writeFile(join(tempDir, 'translate.md'), `---
+      await writeFile(
+        join(tempDir, 'translate.md'),
+        `---
 name: translate
 description: Translate
 ---
-Translate`);
+Translate`,
+      );
 
       const skills = await scanSkillFiles(tempDir);
       expect(skills).toHaveLength(2);

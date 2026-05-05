@@ -9,7 +9,11 @@ describe('microcompact', () => {
     const longContent = 'x'.repeat(15_000);
     const messages: LLMMessage[] = [
       { role: 'user', content: 'search files' },
-      { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search', arguments: '{}' } }] },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search', arguments: '{}' } }],
+      },
       { role: 'tool', content: longContent, tool_call_id: 'c1' },
       { role: 'assistant', content: 'Found results' },
     ];
@@ -18,7 +22,9 @@ describe('microcompact', () => {
 
     expect(result.messages).toHaveLength(4);
     const toolMsg = result.messages[2]!;
-    expect(typeof toolMsg.content === 'string' ? toolMsg.content.length : 0).toBeLessThan(longContent.length);
+    expect(typeof toolMsg.content === 'string' ? toolMsg.content.length : 0).toBeLessThan(
+      longContent.length,
+    );
     expect(typeof toolMsg.content === 'string' ? toolMsg.content : '').toContain('[truncated');
     expect(result.truncatedCount).toBe(1);
   });
@@ -37,9 +43,7 @@ describe('microcompact', () => {
 
   it('should preserve head and tail of truncated content', () => {
     const content = 'HEAD_CONTENT' + 'x'.repeat(15_000) + 'TAIL_CONTENT';
-    const messages: LLMMessage[] = [
-      { role: 'tool', content, tool_call_id: 'c1' },
-    ];
+    const messages: LLMMessage[] = [{ role: 'tool', content, tool_call_id: 'c1' }];
 
     const result = microcompact(messages, { maxToolResultChars: 1_000 });
 
@@ -98,8 +102,8 @@ describe('autocompact', () => {
       // Should have: system + summary + last 2 messages (tail protection)
       expect(result.messages.length).toBeLessThan(messages.length);
       // Summary should be present
-      const summaryMsg = result.messages.find(m =>
-        typeof m.content === 'string' && m.content.includes('Summary of the conversation'),
+      const summaryMsg = result.messages.find(
+        (m) => typeof m.content === 'string' && m.content.includes('Summary of the conversation'),
       );
       expect(summaryMsg).toBeDefined();
       // Tail messages preserved

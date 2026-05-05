@@ -16,8 +16,18 @@ describe('Turn-End Hooks', () => {
   it('should run all hooks in order', async () => {
     const order: string[] = [];
     const hooks: TurnEndHook[] = [
-      { name: 'first', execute: async () => { order.push('first'); } },
-      { name: 'second', execute: async () => { order.push('second'); } },
+      {
+        name: 'first',
+        execute: async () => {
+          order.push('first');
+        },
+      },
+      {
+        name: 'second',
+        execute: async () => {
+          order.push('second');
+        },
+      },
     ];
 
     await runTurnEndHooks(hooks, createContext());
@@ -27,7 +37,12 @@ describe('Turn-End Hooks', () => {
   it('should pass context to hooks', async () => {
     const receivedCtx: TurnEndHookContext[] = [];
     const hooks: TurnEndHook[] = [
-      { name: 'spy', execute: async (ctx) => { receivedCtx.push(ctx); } },
+      {
+        name: 'spy',
+        execute: async (ctx) => {
+          receivedCtx.push(ctx);
+        },
+      },
     ];
 
     const ctx = createContext({ assistantText: 'test', turnCount: 3 });
@@ -39,7 +54,12 @@ describe('Turn-End Hooks', () => {
 
   it('should not throw when a hook errors (fire-and-forget)', async () => {
     const hooks: TurnEndHook[] = [
-      { name: 'broken', execute: async () => { throw new Error('boom'); } },
+      {
+        name: 'broken',
+        execute: async () => {
+          throw new Error('boom');
+        },
+      },
       { name: 'after', execute: vi.fn() },
     ];
 
@@ -80,7 +100,7 @@ describe('Turn-End Hooks', () => {
         name: 'slow',
         // blocking defaults to false (fire-and-forget)
         execute: async () => {
-          await new Promise(r => setTimeout(r, 10));
+          await new Promise((r) => setTimeout(r, 10));
           resolved = true;
         },
       },
