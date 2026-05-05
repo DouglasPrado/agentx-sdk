@@ -104,9 +104,11 @@ jobs:
 
           # Sync with the latest main before bumping so we never start from a
           # stale SHA when multiple PRs are merged in quick succession.
+          # --ff-only fails loudly if a concurrent commit cannot be fast-forwarded,
+          # preventing silent loss of commits (issue #89).
           git fetch origin main
           git checkout main
-          git reset --hard origin/main
+          git merge --ff-only origin/main
 
           NEW_VERSION=$(npm version ${{ steps.bump.outputs.type }} --no-git-tag-version)
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
