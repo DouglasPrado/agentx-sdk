@@ -17,6 +17,13 @@ const pgPool = config.database.url
   ? new pg.Pool({ connectionString: config.database.url, max: 10 })
   : null;
 
+/** Sanitize a string for safe embedding in log messages — strips control chars and ANSI escapes. */
+function sanitizeForLog(value: string, maxLen = 40): string {
+  return value
+    .replace(/[\x00-\x1f\x7f]/g, '_')
+    .slice(0, maxLen);
+}
+
 /** One agent per conversation — full isolation of state, tools, and memory. */
 const pool = new Map<string, PoolEntry>();
 
@@ -161,9 +168,9 @@ async function createAgent(conversationId: string): Promise<Agent> {
       });
       const health = agent.getHealth();
       const mcpTools = health.servers.find(s => s.name === 'albert')?.toolCount ?? 0;
-      console.log(`[${conversationId}] MCP albert connected — ${mcpTools} tools loaded`);
+      console.log(`[${sanitizeForLog(conversationId)}] MCP albert connected — ${mcpTools} tools loaded`);
     } catch (error) {
-      console.error(`[${conversationId}] ⚠️  MCP albert FAILED — tools will NOT be available:`, error instanceof Error ? error.message : error);
+      console.error(`[${sanitizeForLog(conversationId)}] ⚠️  MCP albert FAILED — tools will NOT be available:`, error instanceof Error ? error.message : error);
     }
   }
 
@@ -172,7 +179,7 @@ async function createAgent(conversationId: string): Promise<Agent> {
   agent.addSkill(onboardingSkill);
   agent.addSkill(blogContentSkill);
 
-  console.log(`[pool] Agent created for conversation ${conversationId.slice(0, 20)}... (pool size: ${pool.size + 1})`);
+  console.log(`[pool] Agent created for conversation ${sanitizeForLog(conversationId, 20)}... (pool size: ${pool.size + 1})`);
   return agent;
 }
 
@@ -184,7 +191,7 @@ export async function destroyAgent(conversationId: string): Promise<void> {
   if (entry) {
     pool.delete(conversationId);
     await entry.agent.destroy();
-    console.log(`[pool] Agent destroyed for conversation ${conversationId.slice(0, 20)}...`);
+    console.log(`[pool] Agent destroyed for conversation ${sanitizeForLog(conversationId, 20)}...`);
   }
 }
 
@@ -195,7 +202,7 @@ export async function destroyAll(): Promise<void> {
   const entries = [...pool.entries()];
   pool.clear();
   await Promise.allSettled(entries.map(([id, e]) => {
-    console.log(`[pool] Destroying agent ${id.slice(0, 20)}...`);
+    console.log(`[pool] Destroying agent ${sanitizeForLog(id, 20)}...`);
     return e.agent.destroy();
   }));
 }
@@ -264,7 +271,7 @@ setInterval(async () => {
 
   for (const id of toRemove) {
     await destroyAgent(id);
-    console.log(`[pool] Evicted idle agent ${id.slice(0, 20)}...`);
+    console.log(`[pool] Evicted idle agent ${sanitizeForLog(id, 20)}...`);
   }
 
   if (toRemove.length > 0) {
