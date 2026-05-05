@@ -32,6 +32,9 @@ const CLEANUP_INTERVAL = 5 * 60_000;
 /** Destroy agents idle for more than 30 minutes. */
 const IDLE_TTL = 30 * 60_000;
 
+/** Maximum number of concurrent agents — prevents OOM under DoS. */
+export let MAX_POOL_SIZE = 500;
+
 const SYSTEM_PROMPT = `You are Albert, a helpful Microsoft Teams assistant for managing businesses on the Albert platform.
 
 You have PERSISTENT MEMORY across conversations. You remember facts, preferences, and context from previous messages. Never say you don't have memory or don't remember previous conversations — you do.
@@ -69,16 +72,24 @@ Formatting:
  * Creates one on first access; subsequent calls return the cached instance.
  */
 export async function getAgent(conversationId: string): Promise<Agent> {
-  // Return existing agent
+  // Return existing agent — move to end to maintain LRU order
   const entry = pool.get(conversationId);
   if (entry) {
     entry.lastUsedAt = Date.now();
+    pool.delete(conversationId);
+    pool.set(conversationId, entry);
     return entry.agent;
   }
 
   // Deduplicate concurrent init for the same conversation
   if (initializing.has(conversationId)) {
     return initializing.get(conversationId)!;
+  }
+
+  // LRU eviction: Map preserves insertion order; first entry is least-recently-used
+  if (pool.size >= MAX_POOL_SIZE) {
+    const oldestId = pool.keys().next().value;
+    if (oldestId) await destroyAgent(oldestId);
   }
 
   const promise = createAgent(conversationId);
@@ -229,14 +240,15 @@ export async function validateMCP(): Promise<{ status: 'enabled' | 'disabled'; r
 }
 
 /** Pool stats for monitoring. */
-export function getPoolStats(): { size: number; conversationIds: string[] } {
-  return { size: pool.size, conversationIds: [...pool.keys()] };
+export function getPoolStats(): { size: number; maxSize: number; conversationIds: string[] } {
+  return { size: pool.size, maxSize: MAX_POOL_SIZE, conversationIds: [...pool.keys()] };
 }
 
-/** @internal — test-only: clear pool state between tests. */
-export function _resetPool(): void {
+/** @internal — test-only: clear pool state and optionally override MAX_POOL_SIZE. */
+export function _resetPool(maxPoolSize = 500): void {
   pool.clear();
   initializing.clear();
+  MAX_POOL_SIZE = maxPoolSize;
 }
 
 // --- Periodic cleanup of idle agents ---
