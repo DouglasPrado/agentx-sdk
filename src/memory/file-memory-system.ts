@@ -29,7 +29,7 @@ import {
   MAX_ENTRYPOINT_BYTES,
   parseMemoryType,
 } from './memory-types.js';
-import { resolveMemoryDir, ensureMemoryDir, sanitizeFilename, sanitizeFrontmatterValue, validateThreadId } from './memory-paths.js';
+import { resolveMemoryDir, ensureMemoryDir, sanitizeFilename, sanitizeFrontmatterValue, validateThreadId, validateMemoryPath } from './memory-paths.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
 import { selectRelevantMemories } from './memory-relevance.js';
 import { memoryFreshnessNote } from './memory-age.js';
@@ -123,7 +123,9 @@ export class FileMemorySystem {
   async readMemory(filename: string, threadId?: string): Promise<MemoryFile | null> {
     try {
       const dir = this.resolveDir(threadId);
-      const filePath = join(dir, filename);
+      const candidate = join(dir, filename);
+      const filePath = validateMemoryPath(candidate, this.memoryDir);
+      if (!filePath) return null;
       const content = await readFile(filePath, 'utf-8');
       const fileStat = await stat(filePath);
       const frontmatter = parseFrontmatter(content);
@@ -152,7 +154,9 @@ export class FileMemorySystem {
   async deleteMemory(filename: string, threadId?: string): Promise<boolean> {
     try {
       const dir = this.resolveDir(threadId);
-      const filePath = join(dir, filename);
+      const candidate = join(dir, filename);
+      const filePath = validateMemoryPath(candidate, this.memoryDir);
+      if (!filePath) return false;
       await unlink(filePath);
       await this.removeFromIndex(filename, threadId);
       this.logger.debug('Memory deleted', { filename, threadId: threadId ?? 'global' });
