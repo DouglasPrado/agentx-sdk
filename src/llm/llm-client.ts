@@ -59,7 +59,12 @@ export class LLMClient {
     this.timeoutMs = config.timeoutMs ?? LLMClient.DEFAULT_TIMEOUT_MS;
   }
 
-  async *streamChat(params: StreamChatParams): AsyncIterableIterator<StreamChunk> {
+  /**
+   * Monta o body do POST /chat/completions e dispara a request com retry.
+   * Compartilhado entre streamChat() e chat() — única diferença é o `stream` flag
+   * e o `stream_options` que streamChat injeta.
+   */
+  private async sendChatRequest(params: StreamChatParams, streaming: boolean): Promise<Response> {
     const model = params.model ?? this.model;
     const reasoningArgs = buildReasoningArgs(model);
 
@@ -71,13 +76,14 @@ export class LLMClient {
     const body: Record<string, unknown> = {
       model,
       messages,
-      stream: true,
-      // OpenAI-compatible providers (OpenAI, OpenRouter, LiteLLM, vLLM) only emit
-      // usage on the SSE stream when this flag is set. Without it, the final chunk
-      // has finish_reason but no token counts — costs cannot be computed downstream.
-      stream_options: { include_usage: true },
+      stream: streaming,
       ...reasoningArgs,
     };
+
+    // OpenAI-compatible providers (OpenAI, OpenRouter, LiteLLM, vLLM) only emit
+    // usage on the SSE stream when this flag is set. Without it, the final chunk
+    // has finish_reason but no token counts — costs cannot be computed downstream.
+    if (streaming) body.stream_options = { include_usage: true };
 
     if (params.tools?.length) body.tools = params.tools;
     if (params.temperature !== undefined) body.temperature = params.temperature;
@@ -88,45 +94,20 @@ export class LLMClient {
       else body.max_tokens = params.maxTokens;
     }
 
-    const response = await retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
+    return retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
       maxRetries: 3,
       initialDelay: 1000,
       isRetryable: (e) => e instanceof RetryableError,
     });
+  }
 
+  async *streamChat(params: StreamChatParams): AsyncIterableIterator<StreamChunk> {
+    const response = await this.sendChatRequest(params, true);
     yield* this.parseSSEStream(response, params.signal);
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const model = params.model ?? this.model;
-    const reasoningArgs = buildReasoningArgs(model);
-
-    let messages = params.messages;
-    if (requiresNoSystemRole(model)) {
-      messages = messages.map((m) => (m.role === 'system' ? { ...m, role: 'user' as const } : m));
-    }
-
-    const body: Record<string, unknown> = {
-      model,
-      messages,
-      stream: false,
-      ...reasoningArgs,
-    };
-
-    if (params.tools?.length) body.tools = params.tools;
-    if (params.temperature !== undefined) body.temperature = params.temperature;
-    if (params.responseFormat) body.response_format = params.responseFormat;
-    if (params.seed !== undefined) body.seed = params.seed;
-    if (params.maxTokens !== undefined) {
-      if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;
-      else body.max_tokens = params.maxTokens;
-    }
-
-    const response = await retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
-      maxRetries: 3,
-      initialDelay: 1000,
-      isRetryable: (e) => e instanceof RetryableError,
-    });
+    const response = await this.sendChatRequest(params, false);
 
     interface ChatJson {
       choices: {

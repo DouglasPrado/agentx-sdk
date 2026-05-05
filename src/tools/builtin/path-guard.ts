@@ -13,6 +13,25 @@ function resolveReal(p: string): string {
 }
 
 /**
+ * Resolve o diretório-raiz para tools como Glob/Grep:
+ *  1. Se `searchPath` foi passado (e workingDir definido), valida que está dentro do workingDir.
+ *  2. Retorna o primeiro candidato não-vazio: searchPath > workingDir > process.cwd().
+ *
+ * Lança erro se searchPath for inseguro.
+ */
+export function resolveSearchDir(
+  searchPath: string | undefined,
+  workingDir: string | undefined,
+): string {
+  if (workingDir && searchPath) {
+    assertSafePath(searchPath, workingDir);
+  }
+  if (searchPath?.trim()) return searchPath;
+  if (workingDir?.trim()) return workingDir;
+  return process.cwd();
+}
+
+/**
  * Asserts that filePath is contained within rootDir.
  * Throws if the resolved path (including symlinks) escapes the root.
  */

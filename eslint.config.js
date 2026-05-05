@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
+import sonarjs from 'eslint-plugin-sonarjs';
 import globals from 'globals';
 
 export default tseslint.config(
@@ -20,6 +21,22 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
+  // Não usamos sonarjs.configs.recommended (muito amplo — cognitive-complexity, deprecation,
+  // slow-regex etc não são sobre dedup). Só ativamos as regras focadas em duplicação semântica:
+  {
+    plugins: { sonarjs },
+    rules: {
+      'sonarjs/no-identical-functions': 'error',
+      'sonarjs/no-identical-conditions': 'error',
+      'sonarjs/no-identical-expressions': 'error',
+      'sonarjs/no-duplicate-string': ['warn', { threshold: 5 }],
+      'sonarjs/no-collapsible-if': 'warn',
+      'sonarjs/no-redundant-jump': 'warn',
+      'sonarjs/no-redundant-boolean': 'warn',
+      'sonarjs/no-useless-catch': 'error',
+      'sonarjs/no-inverted-boolean-check': 'warn',
+    },
+  },
   {
     languageOptions: {
       globals: { ...globals.node },
@@ -75,6 +92,9 @@ export default tseslint.config(
       '@typescript-eslint/no-empty-function': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-base-to-string': 'off',
+      // Literais repetidas em tests sao fixture data (IDs, mensagens mock, paths) —
+      // extrair tudo pra constante nao ajuda legibilidade do teste.
+      'sonarjs/no-duplicate-string': 'off',
     },
   },
   prettier,
