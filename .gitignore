@@ -26,3 +26,5 @@ coverage/
 /examples/telegram-bot/package-lock.json
 .agentx/
 .jscpd-tmp/
+.stryker-tmp/
+reports/
