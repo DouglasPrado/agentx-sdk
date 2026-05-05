@@ -95,7 +95,7 @@ describe('MCPAdapter', () => {
       const tools = await adapter.connect({
         name: 'remote-server',
         transport: 'sse',
-        url: 'http://localhost:3001/sse',
+        url: 'https://mcp.example.com/sse',
       });
 
       expect(tools).toHaveLength(2);
@@ -106,7 +106,7 @@ describe('MCPAdapter', () => {
       await adapter.connect({
         name: 'auth-server',
         transport: 'sse',
-        url: 'http://localhost:3001/sse',
+        url: 'https://mcp.example.com/sse',
         headers: {
           Authorization: 'Bearer my-token',
           'X-Custom': 'value',
@@ -122,7 +122,7 @@ describe('MCPAdapter', () => {
       await adapter.connect({
         name: 'no-headers',
         transport: 'sse',
-        url: 'http://localhost:3001/sse',
+        url: 'https://mcp.example.com/sse',
       });
 
       expect(mockSSETransport).toHaveBeenCalledWith(expect.any(URL), { requestInit: undefined });
@@ -708,7 +708,7 @@ describe('MCPAdapter', () => {
       const tools = await adapter.connect({
         name: 'auto-srv',
         transport: 'auto',
-        url: 'http://localhost:3000/mcp',
+        url: 'https://mcp.example.com/mcp',
       });
 
       expect(tools).toHaveLength(2);
@@ -726,7 +726,7 @@ describe('MCPAdapter', () => {
       const tools = await adapter.connect({
         name: 'fallback-srv',
         transport: 'auto',
-        url: 'http://localhost:3000/mcp',
+        url: 'https://mcp.example.com/mcp',
       });
 
       expect(tools).toHaveLength(2);
@@ -743,7 +743,7 @@ describe('MCPAdapter', () => {
       const tools = await adapter.connect({
         name: 'http-srv',
         transport: 'http',
-        url: 'http://localhost:3000/mcp',
+        url: 'https://mcp.example.com/mcp',
       });
 
       expect(tools).toHaveLength(2);
@@ -922,6 +922,49 @@ describe('MCPAdapter', () => {
 
       // After sanitization: mcp__foo__bar_baz (__ in tool name collapsed to _)
       expect(tools[0]!.name).toBe('mcp__foo__bar_baz');
+    });
+  });
+
+  describe('SSRF protection in MCP URL (#90)', () => {
+    it('blocks cloud metadata URL (169.254.169.254) on SSE transport', async () => {
+      await expect(
+        adapter.connect({
+          name: 'evil-sse',
+          transport: 'sse',
+          url: 'http://169.254.169.254/latest/meta-data/',
+        })
+      ).rejects.toThrow(/SSRF|blocked|private|link-local/i);
+    });
+
+    it('blocks private range 10.x on HTTP transport', async () => {
+      await expect(
+        adapter.connect({
+          name: 'evil-http',
+          transport: 'http',
+          url: 'http://10.0.0.1/admin',
+        })
+      ).rejects.toThrow(/SSRF|blocked|private/i);
+    });
+
+    it('blocks private range 192.168.x on auto transport', async () => {
+      await expect(
+        adapter.connect({
+          name: 'evil-auto',
+          transport: 'auto',
+          url: 'http://192.168.1.1/api',
+        })
+      ).rejects.toThrow(/SSRF|blocked|private/i);
+    });
+
+    it('allows public URLs on SSE transport', async () => {
+      mockClient.connect.mockResolvedValueOnce(undefined);
+      mockClient.listTools.mockResolvedValueOnce({ tools: [] });
+      const tools = await adapter.connect({
+        name: 'public-sse',
+        transport: 'sse',
+        url: 'https://mcp.example.com/sse',
+      });
+      expect(tools).toHaveLength(0);
     });
   });
 });

@@ -5,6 +5,7 @@ import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { MCPConnectionConfig } from '../config/config.js';
 import type { ToolExecutor } from './tool-executor.js';
 import { jsonSchemaToZod } from './json-schema-to-zod.js';
+import { validateSsrfUrl } from '../utils/ssrf-guard.js';
 
 /**
  * Subclass of ZodError that exposes a human-readable, prefixed message while
@@ -478,6 +479,12 @@ export class MCPAdapter {
     }
 
     // Auto-detect: try StreamableHTTP first, fall back to SSE
+    if (config.url) {
+      const ssrfError = validateSsrfUrl(config.url);
+      if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
+    }
+
+    const requestInit: RequestInit | undefined = config.headers ? { headers: config.headers } : undefined;
     const requestInit: RequestInit | undefined = config.headers
       ? { headers: config.headers }
       : undefined;
@@ -597,6 +604,11 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
   if (config.transport === 'stdio') {
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
     return new StdioClientTransport({ command: config.command!, args: config.args ?? [] });
+  }
+
+  if (config.url) {
+    const ssrfError = validateSsrfUrl(config.url);
+    if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
   }
 
   if (config.transport === 'sse') {

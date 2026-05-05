@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
+import { validateSsrfUrl } from '../../utils/ssrf-guard.js';
 
 const DEFAULT_MAX_CHARS = 50_000;
 const MAX_REDIRECT_HOPS = 5;
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB hard limit — prevents OOM via large responses
 
+const validateFetchUrl = validateSsrfUrl;
 /** Validate URL against SSRF attack vectors. Returns null if safe, error message if blocked. */
 function validateFetchUrl(rawUrl: string): string | null {
   let parsed: URL;
