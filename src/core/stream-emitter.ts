@@ -38,7 +38,7 @@ export class StreamEmitter {
     if (this.resolve) {
       const r = this.resolve;
       this.resolve = null;
-      r({ value: undefined as unknown as AgentEvent, done: true });
+      r({ value: undefined, done: true });
     }
   }
 
@@ -59,7 +59,7 @@ export class StreamEmitter {
         }
 
         // Wait for next emit
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
           self.resolve = resolve;
         });
       },

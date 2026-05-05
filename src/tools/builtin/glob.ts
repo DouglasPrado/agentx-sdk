@@ -28,7 +28,8 @@ async function walkDir(dir: string, results: string[]): Promise<void> {
 export function createGlobTool(workingDir?: string): AgentTool {
   return {
     name: 'Glob',
-    description: 'Fast file pattern matching. Returns matching file paths sorted by modification time.',
+    description:
+      'Fast file pattern matching. Returns matching file paths sorted by modification time.',
     parameters: GlobParams,
     isConcurrencySafe: true,
     isReadOnly: true,
@@ -55,7 +56,7 @@ export function createGlobTool(workingDir?: string): AgentTool {
 
       // Match against pattern (relative paths). Use path.relative + posix-style
       // separators so `/home/user` does not prefix-match `/home/username`.
-      const matched = allFiles.filter(f => {
+      const matched = allFiles.filter((f) => {
         const rel = relative(baseDir, f);
         if (rel.startsWith('..') || rel === '') return false;
         const posix = sep === '/' ? rel : rel.split(sep).join('/');
@@ -68,7 +69,7 @@ export function createGlobTool(workingDir?: string): AgentTool {
 
       // Sort by mtime (newest first)
       const withStats = await Promise.all(
-        matched.slice(0, MAX_RESULTS * 2).map(async f => {
+        matched.slice(0, MAX_RESULTS * 2).map(async (f) => {
           try {
             const s = await stat(f);
             return { path: f, mtimeMs: s.mtimeMs };
@@ -80,10 +81,13 @@ export function createGlobTool(workingDir?: string): AgentTool {
       withStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
       const limited = withStats.slice(0, MAX_RESULTS);
-      const lines = limited.map(f => f.path);
+      const lines = limited.map((f) => f.path);
       const truncated = matched.length > MAX_RESULTS;
 
-      return lines.join('\n') + (truncated ? `\n\n[${matched.length - MAX_RESULTS} more files not shown]` : '');
+      return (
+        lines.join('\n') +
+        (truncated ? `\n\n[${matched.length - MAX_RESULTS} more files not shown]` : '')
+      );
     },
   };
 }

@@ -56,10 +56,7 @@ describe('E2E 04 — knowledge RAG (ingest → search)', () => {
     const oppositeVec = [-1, 0, 0, 0]; // cosine = -1, clamped to 0 — below minScore
 
     scriptFetch({
-      embeddings: [
-        createEmbeddingResponse([docVec]),
-        createEmbeddingResponse([oppositeVec]),
-      ],
+      embeddings: [createEmbeddingResponse([docVec]), createEmbeddingResponse([oppositeVec])],
     });
 
     handle = await createTempAgent({

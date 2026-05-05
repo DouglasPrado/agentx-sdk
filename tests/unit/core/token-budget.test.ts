@@ -25,24 +25,33 @@ describe('Token Budget Continuation', () => {
       streamChat: vi.fn(async function* () {
         callCount++;
         if (callCount === 1) {
-          yield { type: 'content', data: 'Partial work...' } as StreamChunk;
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 50, outputTokens: 100, totalTokens: 150 } } as StreamChunk;
+          yield { type: 'content', data: 'Partial work...' };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 50, outputTokens: 100, totalTokens: 150 },
+          };
         } else {
-          yield { type: 'content', data: ' Completed!' } as StreamChunk;
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 60, outputTokens: 800, totalTokens: 860 } } as StreamChunk;
+          yield { type: 'content', data: ' Completed!' };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 60, outputTokens: 800, totalTokens: 860 },
+          };
         }
       }),
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'Write a long essay' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        tokenBudget: { total: 2000, outputThreshold: 0.5 },
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'Write a long essay' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      tokenBudget: { total: 2000, outputThreshold: 0.5 },
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
@@ -51,27 +60,35 @@ describe('Token Budget Continuation', () => {
     expect(callCount).toBeGreaterThanOrEqual(2);
 
     // Should have recovery event for budget continuation
-    const recoveryEvents = events.filter(e => e.type === 'recovery' && (e as { reason: string }).reason === 'token_budget_continuation');
+    const recoveryEvents = events.filter(
+      (e) =>
+        e.type === 'recovery' && (e as { reason: string }).reason === 'token_budget_continuation',
+    );
     expect(recoveryEvents.length).toBeGreaterThan(0);
   });
 
   it('should not continue when output tokens exceed threshold', async () => {
     const client = {
       streamChat: vi.fn(async function* () {
-        yield { type: 'content', data: 'Complete response' } as StreamChunk;
-        yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 50, outputTokens: 800, totalTokens: 850 } } as StreamChunk;
+        yield { type: 'content', data: 'Complete response' };
+        yield {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 50, outputTokens: 800, totalTokens: 850 },
+        };
       }),
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        tokenBudget: { total: 1000, outputThreshold: 0.5 },
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      tokenBudget: { total: 1000, outputThreshold: 0.5 },
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');
@@ -84,21 +101,26 @@ describe('Token Budget Continuation', () => {
     const client = {
       streamChat: vi.fn(async function* () {
         callCount++;
-        yield { type: 'content', data: `Attempt ${callCount}.` } as StreamChunk;
+        yield { type: 'content', data: `Attempt ${callCount}.` };
         // Always low output — triggers continuation but eventually gives up
-        yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 } } as StreamChunk;
+        yield {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+        };
       }),
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'Write' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        tokenBudget: { total: 2000, outputThreshold: 0.5 },
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'Write' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      tokenBudget: { total: 2000, outputThreshold: 0.5 },
+    });
 
     const { terminal } = await consumeLoop(gen);
 
@@ -110,20 +132,25 @@ describe('Token Budget Continuation', () => {
   it('should not trigger budget continuation when no tokenBudget configured', async () => {
     const client = {
       streamChat: vi.fn(async function* () {
-        yield { type: 'content', data: 'Short' } as StreamChunk;
-        yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 } } as StreamChunk;
+        yield { type: 'content', data: 'Short' };
+        yield {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 50, outputTokens: 10, totalTokens: 60 },
+        };
       }),
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        // No tokenBudget
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      // No tokenBudget
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');

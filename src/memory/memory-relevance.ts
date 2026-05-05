@@ -47,7 +47,7 @@ export async function selectRelevantMemories(
     if (!Array.isArray(parsed.selected_memories)) return [];
 
     return parsed.selected_memories
-      .filter(f => typeof f === 'string' && validFilenames.has(f))
+      .filter((f) => typeof f === 'string' && validFilenames.has(f))
       .slice(0, 5);
   } catch (e) {
     options?.logger?.debug('Memory relevance selection failed', {

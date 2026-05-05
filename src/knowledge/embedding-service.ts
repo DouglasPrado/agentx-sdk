@@ -12,12 +12,15 @@ export class EmbeddingService {
   constructor(client: LLMClient, options?: { model?: string; cacheSize?: number }) {
     this.client = client;
     this.model = options?.model;
-    this.cache = new LRUCache<string, number[]>({ maxSize: options?.cacheSize ?? 10_000, ttl: 3_600_000 });
+    this.cache = new LRUCache<string, number[]>({
+      maxSize: options?.cacheSize ?? 10_000,
+      ttl: 3_600_000,
+    });
   }
 
   async embed(texts: string[]): Promise<number[][]> {
     const results: number[][] = new Array(texts.length);
-    const uncached: Array<{ index: number; text: string }> = [];
+    const uncached: { index: number; text: string }[] = [];
 
     // Check cache
     for (let i = 0; i < texts.length; i++) {
@@ -31,7 +34,10 @@ export class EmbeddingService {
 
     // Fetch uncached
     if (uncached.length > 0) {
-      const embeddings = await this.client.embed(uncached.map(u => u.text), this.model);
+      const embeddings = await this.client.embed(
+        uncached.map((u) => u.text),
+        this.model,
+      );
       for (let i = 0; i < uncached.length; i++) {
         const entry = uncached[i]!;
         results[entry.index] = embeddings[i]!;

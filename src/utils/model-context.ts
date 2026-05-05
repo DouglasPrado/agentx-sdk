@@ -8,7 +8,7 @@
 const DEFAULT_CONTEXT_WINDOW = 128_000;
 
 /** Known model patterns → context window tokens */
-const MODEL_CONTEXT_WINDOWS: Array<{ pattern: string; tokens: number }> = [
+const MODEL_CONTEXT_WINDOWS: { pattern: string; tokens: number }[] = [
   // Anthropic Claude
   { pattern: 'claude-opus-4', tokens: 200_000 },
   { pattern: 'claude-sonnet-4', tokens: 200_000 },

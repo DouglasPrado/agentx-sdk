@@ -33,27 +33,37 @@ async function consumeLoop(
 
 describe('executeReactLoop', () => {
   it('should complete a simple text response', async () => {
-    const client = createMockClient([[
-      { type: 'content', data: 'Hello' },
-      { type: 'content', data: ' world!' },
-      { type: 'done', finishReason: 'stop', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'content', data: 'Hello' },
+        { type: 'content', data: ' world!' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'Hi' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'Hi' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('stop');
     expect(terminal.usage.totalTokens).toBe(7);
 
-    const textDeltas = events.filter(e => e.type === 'text_delta');
+    const textDeltas = events.filter((e) => e.type === 'text_delta');
     expect(textDeltas).toHaveLength(2);
 
-    const textDone = events.find(e => e.type === 'text_done');
+    const textDone = events.find((e) => e.type === 'text_done');
     expect(textDone).toBeDefined();
   });
 
@@ -61,11 +71,19 @@ describe('executeReactLoop', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'call_1', name: 'get_weather', arguments: '{"city":"NYC"}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        },
       ],
       [
         { type: 'content', data: 'The weather in NYC is sunny.' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+        },
       ],
     ]);
 
@@ -77,20 +95,24 @@ describe('executeReactLoop', () => {
       execute: vi.fn().mockResolvedValue('Sunny, 25C'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'Weather in NYC?' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'Weather in NYC?' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('stop');
     expect(terminal.usage.totalTokens).toBe(45);
 
-    const toolCallStarts = events.filter(e => e.type === 'tool_call_start');
+    const toolCallStarts = events.filter((e) => e.type === 'tool_call_start');
     expect(toolCallStarts).toHaveLength(1);
 
-    const toolCallEnds = events.filter(e => e.type === 'tool_call_end');
+    const toolCallEnds = events.filter((e) => e.type === 'tool_call_end');
     expect(toolCallEnds).toHaveLength(1);
   });
 
@@ -98,7 +120,11 @@ describe('executeReactLoop', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'call_1', name: 'loop_tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
       ],
     ]);
 
@@ -110,15 +136,19 @@ describe('executeReactLoop', () => {
       execute: vi.fn().mockResolvedValue('ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'loop' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 2, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'loop' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 2,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('max_iterations');
-    const warnings = events.filter(e => e.type === 'warning');
+    const warnings = events.filter((e) => e.type === 'warning');
     expect(warnings.length).toBeGreaterThan(0);
   });
 
@@ -126,11 +156,19 @@ describe('executeReactLoop', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'c1', name: 'tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 300, outputTokens: 300, totalTokens: 600 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 300, outputTokens: 300, totalTokens: 600 },
+        },
       ],
       [
         { type: 'content', data: 'text' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 100, outputTokens: 100, totalTokens: 200 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 100, outputTokens: 100, totalTokens: 200 },
+        },
       ],
     ]);
 
@@ -142,14 +180,15 @@ describe('executeReactLoop', () => {
       execute: vi.fn().mockResolvedValue('ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        costPolicy: { maxTokensPerExecution: 500, onLimitReached: 'stop' },
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      costPolicy: { maxTokensPerExecution: 500, onLimitReached: 'stop' },
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('cost_limit');
@@ -169,13 +208,21 @@ describe('executeReactLoop', () => {
         if ((client.streamChat as ReturnType<typeof vi.fn>).mock.calls.length === 1) {
           yield { type: 'tool_call', id: 'call_a', name: 'fast_tool', arguments: '{}' };
           // Simulate delay so fast_tool completes during streaming
-          await new Promise(r => setTimeout(r, 10));
+          await new Promise((r) => setTimeout(r, 10));
           yield { type: 'tool_call', id: 'call_b', name: 'fast_tool', arguments: '{}' };
-          yield { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } };
+          yield {
+            type: 'done',
+            finishReason: 'tool_calls',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          };
         } else {
           // Turn 2: text response
           yield { type: 'content', data: 'Done' };
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 20, outputTokens: 2, totalTokens: 22 } };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 20, outputTokens: 2, totalTokens: 22 },
+          };
         }
       }),
     } as unknown as LLMClient;
@@ -188,19 +235,24 @@ describe('executeReactLoop', () => {
       execute: vi.fn().mockResolvedValue('result_ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');
 
     // The second LLM call must include tool results for BOTH call_a and call_b
-    const toolMessages = (capturedMessages as Array<{ role: string; tool_call_id?: string }>)
-      .filter(m => m.role === 'tool');
+    const toolMessages = (capturedMessages as { role: string; tool_call_id?: string }[]).filter(
+      (m) => m.role === 'tool',
+    );
     expect(toolMessages).toHaveLength(2);
-    expect(toolMessages.map(m => m.tool_call_id)).toEqual(
+    expect(toolMessages.map((m) => m.tool_call_id)).toEqual(
       expect.arrayContaining(['call_a', 'call_b']),
     );
   });
@@ -218,11 +270,24 @@ describe('executeReactLoop', () => {
         capturedMessages = params.messages;
         const n = (client.streamChat as ReturnType<typeof vi.fn>).mock.calls.length;
         if (n === 1) {
-          yield { type: 'tool_call', id: 'skill-1', name: SKILL_TOOL_NAME, arguments: '{"skill":"albert-api"}' };
-          yield { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+          yield {
+            type: 'tool_call',
+            id: 'skill-1',
+            name: SKILL_TOOL_NAME,
+            arguments: '{"skill":"albert-api"}',
+          };
+          yield {
+            type: 'done',
+            finishReason: 'tool_calls',
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          };
         } else {
           yield { type: 'content', data: 'ok' };
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          };
         }
       }),
     } as unknown as LLMClient;
@@ -253,17 +318,25 @@ describe('executeReactLoop', () => {
 
     // On turn 2, messages sent to LLM must be in the canonical order
     // [system, user, assistant(tool_calls), tool].
-    expect(capturedMessages.map(m => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
-    const assistantIdx = capturedMessages.findIndex(m => m.role === 'assistant' && !!m.tool_calls);
-    const toolIdx = capturedMessages.findIndex(m => m.role === 'tool');
+    expect(capturedMessages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
+    const assistantIdx = capturedMessages.findIndex(
+      (m) => m.role === 'assistant' && !!m.tool_calls,
+    );
+    const toolIdx = capturedMessages.findIndex((m) => m.role === 'tool');
     expect(toolIdx).toBe(assistantIdx + 1);
   });
 
   it('should handle tool error with onToolError=stop', async () => {
-    const client = createMockClient([[
-      { type: 'tool_call', id: 'c1', name: 'bad_tool', arguments: '{}' },
-      { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'tool_call', id: 'c1', name: 'bad_tool', arguments: '{}' },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
     executor.register({
@@ -273,10 +346,14 @@ describe('executeReactLoop', () => {
       execute: vi.fn().mockRejectedValue(new Error('boom')),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'stop' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'stop',
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('error');

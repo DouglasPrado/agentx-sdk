@@ -23,12 +23,15 @@ function isRetryableStatus(status: number): boolean {
 const MAX_ERROR_BODY = 500;
 
 function sanitizeErrorBody(text: string): string {
-  const truncated = text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
+  const truncated =
+    text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
   try {
     const parsed = JSON.parse(truncated);
     const msg = parsed?.error?.message ?? parsed?.message;
     if (typeof msg === 'string') return msg.slice(0, MAX_ERROR_BODY);
-  } catch { /* not JSON — return truncated plain text */ }
+  } catch {
+    /* not JSON — return truncated plain text */
+  }
   return truncated;
 }
 
@@ -62,9 +65,7 @@ export class LLMClient {
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
-      messages = messages.map(m =>
-        m.role === 'system' ? { ...m, role: 'user' as const } : m
-      );
+      messages = messages.map((m) => (m.role === 'system' ? { ...m, role: 'user' as const } : m));
     }
 
     const body: Record<string, unknown> = {
@@ -87,10 +88,11 @@ export class LLMClient {
       else body.max_tokens = params.maxTokens;
     }
 
-    const response = await retry(
-      () => this.fetchAPI('/chat/completions', body, params.signal),
-      { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
-    );
+    const response = await retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
+      maxRetries: 3,
+      initialDelay: 1000,
+      isRetryable: (e) => e instanceof RetryableError,
+    });
 
     yield* this.parseSSEStream(response, params.signal);
   }
@@ -101,9 +103,7 @@ export class LLMClient {
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
-      messages = messages.map(m =>
-        m.role === 'system' ? { ...m, role: 'user' as const } : m
-      );
+      messages = messages.map((m) => (m.role === 'system' ? { ...m, role: 'user' as const } : m));
     }
 
     const body: Record<string, unknown> = {
@@ -122,25 +122,28 @@ export class LLMClient {
       else body.max_tokens = params.maxTokens;
     }
 
-    const response = await retry(
-      () => this.fetchAPI('/chat/completions', body, params.signal),
-      { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
-    );
+    const response = await retry(() => this.fetchAPI('/chat/completions', body, params.signal), {
+      maxRetries: 3,
+      initialDelay: 1000,
+      isRetryable: (e) => e instanceof RetryableError,
+    });
 
-    type ChatJson = {
-      choices: Array<{
+    interface ChatJson {
+      choices: {
         message: { content?: string; tool_calls?: LLMToolCall[] };
         finish_reason: string;
-      }>;
+      }[];
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-    };
+    }
     let json: ChatJson;
     try {
-      json = await response.json() as ChatJson;
+      json = (await response.json()) as ChatJson;
     } catch (e) {
       // Ensure body is fully consumed so the HTTP connection is returned to the pool
       await response.body?.cancel().catch(() => {});
-      throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(
+        `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
 
     const choice = json.choices[0]!;
@@ -160,26 +163,35 @@ export class LLMClient {
 
   async embed(texts: string[], model?: string): Promise<number[][]> {
     const response = await retry(
-      () => this.fetchAPI('/embeddings', {
-        model: model ?? this.model,
-        input: texts,
-      }),
+      () =>
+        this.fetchAPI('/embeddings', {
+          model: model ?? this.model,
+          input: texts,
+        }),
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
     );
 
-    type EmbedJson = { data: Array<{ embedding: number[] }> };
+    interface EmbedJson {
+      data: { embedding: number[] }[];
+    }
     let json: EmbedJson;
     try {
-      json = await response.json() as EmbedJson;
+      json = (await response.json()) as EmbedJson;
     } catch (e) {
       await response.body?.cancel().catch(() => {});
-      throw new Error(`Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(
+        `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
 
-    return json.data.map(d => d.embedding);
+    return json.data.map((d) => d.embedding);
   }
 
-  private async fetchAPI(path: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  private async fetchAPI(
+    path: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     // Always apply a default timeout; compose with the caller-provided signal if any.
     const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
     if (signal) signals.push(signal);
@@ -189,7 +201,7 @@ export class LLMClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
       signal: effectiveSignal,
@@ -215,7 +227,10 @@ export class LLMClient {
     return response;
   }
 
-  private async *parseSSEStream(response: Response, signal?: AbortSignal): AsyncIterableIterator<StreamChunk> {
+  private async *parseSSEStream(
+    response: Response,
+    signal?: AbortSignal,
+  ): AsyncIterableIterator<StreamChunk> {
     const body = response.body;
     if (!body) throw new Error('Response body is null');
 
@@ -235,7 +250,9 @@ export class LLMClient {
     let donePending = false;
 
     // Propagate abort to the reader so a hanging read() is unblocked immediately.
-    const abortHandler = (): void => { void reader.cancel().catch(() => {}); };
+    const abortHandler = (): void => {
+      void reader.cancel().catch(() => {});
+    };
     if (signal) {
       if (signal.aborted) abortHandler();
       else signal.addEventListener('abort', abortHandler, { once: true });
@@ -349,18 +366,18 @@ class RetryableError extends Error {
 }
 
 interface SSEPayload {
-  choices?: Array<{
+  choices?: {
     delta?: {
       content?: string;
       reasoning?: string;
-      tool_calls?: Array<{
+      tool_calls?: {
         index: number;
         id?: string;
         function?: { name?: string; arguments?: string };
-      }>;
+      }[];
     };
     finish_reason?: string;
-  }>;
+  }[];
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;

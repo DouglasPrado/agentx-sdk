@@ -68,9 +68,9 @@ export class SQLiteDatabase {
 
     // FTS5 virtual table for full-text search
     // Check if already exists (FTS5 tables don't support IF NOT EXISTS in all versions)
-    const ftsExists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'"
-    ).get();
+    const ftsExists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'")
+      .get();
 
     if (!ftsExists) {
       db.exec(`

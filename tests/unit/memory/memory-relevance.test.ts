@@ -19,11 +19,7 @@ describe('memory-relevance', () => {
 - [feedback] feedback_testing.md (2026-01-14T10:00:00.000Z): Integration tests must use real DB
 - [project] project_deadline.md (2026-01-13T10:00:00.000Z): Merge freeze on March 5`;
 
-  const validFilenames = new Set([
-    'user_role.md',
-    'feedback_testing.md',
-    'project_deadline.md',
-  ]);
+  const validFilenames = new Set(['user_role.md', 'feedback_testing.md', 'project_deadline.md']);
 
   it('should return selected filenames from LLM response', async () => {
     const client = createMockClient(
@@ -45,21 +41,14 @@ describe('memory-relevance', () => {
       JSON.stringify({ selected_memories: ['user_role.md', 'nonexistent.md'] }),
     );
 
-    const result = await selectRelevantMemories(
-      'query',
-      manifest,
-      validFilenames,
-      client,
-    );
+    const result = await selectRelevantMemories('query', manifest, validFilenames, client);
 
     expect(result).toEqual(['user_role.md']);
   });
 
   it('should return max 5 results', async () => {
     const manyFiles = Array.from({ length: 10 }, (_, i) => `file${i}.md`);
-    const client = createMockClient(
-      JSON.stringify({ selected_memories: manyFiles }),
-    );
+    const client = createMockClient(JSON.stringify({ selected_memories: manyFiles }));
     const allValid = new Set(manyFiles);
 
     const result = await selectRelevantMemories('query', manifest, allValid, client);
@@ -107,13 +96,9 @@ describe('memory-relevance', () => {
     const logger = { debug: debugSpy, info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const client = createErrorClient();
 
-    const result = await selectRelevantMemories(
-      'query',
-      manifest,
-      validFilenames,
-      client,
-      { logger: logger as any },
-    );
+    const result = await selectRelevantMemories('query', manifest, validFilenames, client, {
+      logger: logger as any,
+    });
 
     expect(result).toEqual([]);
     expect(debugSpy).toHaveBeenCalledWith(

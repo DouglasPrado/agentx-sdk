@@ -17,7 +17,7 @@ class InMemoryConversationStore implements ConversationStore {
   }
 
   listPinned(threadId: string): ChatMessage[] {
-    return this.listThread(threadId).filter(m => m.pinned);
+    return this.listThread(threadId).filter((m) => m.pinned);
   }
 
   clearThread(threadId: string): void {
@@ -46,7 +46,9 @@ export class ConversationManager {
     }
 
     let releaseLock: () => void;
-    const lockPromise = new Promise<void>(resolve => { releaseLock = resolve; });
+    const lockPromise = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
     this.locks.set(threadId, lockPromise);
 
     try {

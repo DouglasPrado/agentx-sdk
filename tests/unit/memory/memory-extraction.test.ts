@@ -20,13 +20,19 @@ function mockFetchForChat(assistantResponse: string) {
     const body = init?.body ? JSON.parse(init.body as string) : {};
 
     // If messages contain extraction instructions, return extracted memories
-    const hasExtractionPrompt = body.messages?.some((m: { content: string }) =>
-      typeof m.content === 'string' && m.content.includes('Analyze this conversation')
+    const hasExtractionPrompt = body.messages?.some(
+      (m: { content: string }) =>
+        typeof m.content === 'string' && m.content.includes('Analyze this conversation'),
     );
 
     if (hasExtractionPrompt) {
       const extractionResponse = JSON.stringify([
-        { name: 'Dark Mode Preference', description: 'User prefers dark mode', type: 'user', content: 'User prefers dark mode' },
+        {
+          name: 'Dark Mode Preference',
+          description: 'User prefers dark mode',
+          type: 'user',
+          content: 'User prefers dark mode',
+        },
       ]);
       return new Response(
         JSON.stringify({
@@ -38,8 +44,9 @@ function mockFetchForChat(assistantResponse: string) {
     }
 
     // Memory relevance selection call (json_object response format)
-    const hasRelevancePrompt = body.messages?.some((m: { content: string }) =>
-      typeof m.content === 'string' && m.content.includes('Available memories')
+    const hasRelevancePrompt = body.messages?.some(
+      (m: { content: string }) =>
+        typeof m.content === 'string' && m.content.includes('Available memories'),
     );
 
     if (hasRelevancePrompt) {
@@ -100,7 +107,7 @@ describe('Memory Extraction (file-based)', () => {
     await agent.chat('Remember that I prefer dark mode');
 
     // Give async extraction time to complete
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
 
     await agent.destroy();
   });

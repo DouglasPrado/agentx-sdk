@@ -22,8 +22,12 @@ async function consumeLoop(
 describe('LoopDeps (Dependency Injection)', () => {
   it('should use injected callModel instead of client.streamChat', async () => {
     const fakeCallModel = vi.fn(async function* () {
-      yield { type: 'content', data: 'Injected response' } as StreamChunk;
-      yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } as StreamChunk;
+      yield { type: 'content', data: 'Injected response' };
+      yield {
+        type: 'done',
+        finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      };
     });
 
     // Client should NOT be called
@@ -36,14 +40,15 @@ describe('LoopDeps (Dependency Injection)', () => {
     const executor = new ToolExecutor();
     const deps: Partial<LoopDeps> = { callModel: fakeCallModel };
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        deps,
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      deps,
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
@@ -51,7 +56,7 @@ describe('LoopDeps (Dependency Injection)', () => {
     expect(fakeCallModel).toHaveBeenCalledOnce();
     expect(client.streamChat).not.toHaveBeenCalled();
 
-    const textDeltas = events.filter(e => e.type === 'text_delta');
+    const textDeltas = events.filter((e) => e.type === 'text_delta');
     expect(textDeltas).toHaveLength(1);
   });
 
@@ -61,22 +66,27 @@ describe('LoopDeps (Dependency Injection)', () => {
 
     const client = {
       streamChat: vi.fn(async function* () {
-        yield { type: 'content', data: 'ok' } as StreamChunk;
-        yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } as StreamChunk;
+        yield { type: 'content', data: 'ok' };
+        yield {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        };
       }),
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
     const deps: Partial<LoopDeps> = { uuid: fakeUuid };
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        deps,
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      deps,
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('stop');

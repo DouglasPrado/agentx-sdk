@@ -22,7 +22,12 @@ export interface LoggerOptions {
   prefix?: string;
 }
 
-function formatMessage(level: string, prefix: string | undefined, message: string, context?: Record<string, unknown>): string {
+function formatMessage(
+  level: string,
+  prefix: string | undefined,
+  message: string,
+  context?: Record<string, unknown>,
+): string {
   const timestamp = new Date().toISOString();
   const prefixStr = prefix ? `[${prefix}] ` : '';
   const contextStr = context ? ' ' + JSON.stringify(context) : '';

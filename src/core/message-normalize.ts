@@ -54,7 +54,7 @@ export function normalizeMessagesForAPI(messages: readonly LLMMessage[]): LLMMes
   const result: LLMMessage[] = [];
   for (const msg of positionallyValid) {
     if (msg.role === 'assistant' && msg.tool_calls) {
-      const validCalls = msg.tool_calls.filter(tc => presentToolResultIds.has(tc.id));
+      const validCalls = msg.tool_calls.filter((tc) => presentToolResultIds.has(tc.id));
       if (validCalls.length === 0) {
         if (msg.content && typeof msg.content === 'string' && msg.content.trim()) {
           result.push({ ...msg, tool_calls: undefined });

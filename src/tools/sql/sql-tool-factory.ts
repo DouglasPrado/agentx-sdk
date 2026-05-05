@@ -5,7 +5,9 @@ import type { SqlQueryDef } from './sql-query-def.js';
 /** Unwrap Zod wrappers (nullable, optional, default) to get the base type name. */
 function unwrapZodType(schema: z.ZodTypeAny): string {
   if (schema instanceof z.ZodNullable || schema instanceof z.ZodOptional) {
-    return unwrapZodType((schema as z.ZodNullable<z.ZodTypeAny> | z.ZodOptional<z.ZodTypeAny>).unwrap());
+    return unwrapZodType(
+      (schema as z.ZodNullable<z.ZodTypeAny> | z.ZodOptional<z.ZodTypeAny>).unwrap(),
+    );
   }
   if (schema instanceof z.ZodDefault) {
     return unwrapZodType(schema.removeDefault());
@@ -89,10 +91,10 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
       }
 
       const results = matches.map((q) => {
-        const shape = (q.parameters as z.ZodObject<z.ZodRawShape>).shape;
+        const shape = q.parameters.shape;
         const params: Record<string, { type: string; nullable: boolean; description: string }> = {};
         for (const [key, schema] of Object.entries(shape)) {
-          const s = schema as z.ZodTypeAny;
+          const s = schema;
           params[key] = {
             type: unwrapZodType(s),
             nullable: s.isNullable(),
@@ -112,26 +114,27 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
   };
 
   // Build inline catalog for run_query description so the LLM knows all queries upfront
-  const catalog = queries.map((q) => {
-    const shape = (q.parameters as z.ZodObject<z.ZodRawShape>).shape;
-    const paramList = Object.entries(shape)
-      .map(([key, schema]) => {
-        const s = schema as z.ZodTypeAny;
-        const nullable = s.isNullable() ? ', nullable' : '';
-        return `${key} (${unwrapZodType(s)}${nullable}): ${s.description ?? ''}`;
-      })
-      .join('; ');
-    return `- ${q.name}: ${q.description} Params: { ${paramList} }`;
-  }).join('\n');
+  const catalog = queries
+    .map((q) => {
+      const shape = q.parameters.shape;
+      const paramList = Object.entries(shape)
+        .map(([key, schema]) => {
+          const s = schema;
+          const nullable = s.isNullable() ? ', nullable' : '';
+          return `${key} (${unwrapZodType(s)}${nullable}): ${s.description ?? ''}`;
+        })
+        .join('; ');
+      return `- ${q.name}: ${q.description} Params: { ${paramList} }`;
+    })
+    .join('\n');
 
   // Derive flags from the catalog — write queries must not run concurrently or be
   // reported as read-only, as that would cause race conditions in ToolExecutor.
-  const hasWriteQueries = queries.some(q => SQL_WRITE_PATTERN.test(q.sql));
+  const hasWriteQueries = queries.some((q) => SQL_WRITE_PATTERN.test(q.sql));
 
   const runTool: AgentTool = {
     name: `${toolNamePrefix}run_query`,
-    description:
-      `Execute a SQL query by name. Pass params as key-value pairs. Use null for optional/nullable params you don't need.\n\nAvailable queries:\n${catalog}`,
+    description: `Execute a SQL query by name. Pass params as key-value pairs. Use null for optional/nullable params you don't need.\n\nAvailable queries:\n${catalog}`,
     parameters: z.object({
       query_name: z.string().describe('Name of the query to execute'),
       params: z
@@ -168,7 +171,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
       }
 
       // Map values in schema key order to match $1, $2, ... in SQL
-      const schemaKeys = Object.keys((def.parameters as z.ZodObject<z.ZodRawShape>).shape);
+      const schemaKeys = Object.keys(def.parameters.shape);
       const data = parsed.data as Record<string, unknown>;
       const values = schemaKeys.map((key) => data[key] ?? null);
 

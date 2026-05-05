@@ -78,14 +78,16 @@ function expandAndNormalize(raw: string): string {
  *
  * Returns the normalized path if valid, undefined if rejected.
  */
-export function validateMemoryPath(
-  path: string,
-  memoryDir: string,
-): string | undefined {
+export function validateMemoryPath(path: string, memoryDir: string): string | undefined {
   if (!path || path.includes('\0')) return undefined;
 
   // Reject URL-encoded path traversal
-  if (path.includes('%2e') || path.includes('%2E') || path.includes('%2f') || path.includes('%2F')) {
+  if (
+    path.includes('%2e') ||
+    path.includes('%2E') ||
+    path.includes('%2f') ||
+    path.includes('%2F')
+  ) {
     return undefined;
   }
 
@@ -98,7 +100,10 @@ export function validateMemoryPath(
   if (normalized.startsWith('\\\\') || normalized.startsWith('//')) return undefined;
 
   // Must be within memory directory (containment check)
-  const normalizedDir = normalize(memoryDir).replace(/[/\\]+$/, '').normalize('NFC') + sep;
+  const normalizedDir =
+    normalize(memoryDir)
+      .replace(/[/\\]+$/, '')
+      .normalize('NFC') + sep;
   if (!normalized.startsWith(normalizedDir)) return undefined;
 
   return normalized;
@@ -187,6 +192,9 @@ export async function ensureMemoryDir(memoryDir: string): Promise<void> {
  */
 export function isMemoryPath(absolutePath: string, memoryDir: string): boolean {
   const normalizedPath = normalize(absolutePath).normalize('NFC');
-  const normalizedDir = normalize(memoryDir).replace(/[/\\]+$/, '').normalize('NFC') + sep;
+  const normalizedDir =
+    normalize(memoryDir)
+      .replace(/[/\\]+$/, '')
+      .normalize('NFC') + sep;
   return normalizedPath.startsWith(normalizedDir);
 }

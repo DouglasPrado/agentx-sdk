@@ -30,8 +30,12 @@ describe('Recovery Mechanisms', () => {
             throw new PromptTooLongError('Prompt too long');
           }
           // Second call succeeds after compaction
-          yield { type: 'content', data: 'Recovered!' } as StreamChunk;
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } as StreamChunk;
+          yield { type: 'content', data: 'Recovered!' };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          };
         }),
         chat: vi.fn().mockResolvedValue({
           content: 'Conversation summary.',
@@ -68,7 +72,7 @@ describe('Recovery Mechanisms', () => {
 
       expect(terminal.reason).toBe('stop');
       // Should have a recovery event
-      const recoveryEvents = events.filter(e => e.type === 'recovery');
+      const recoveryEvents = events.filter((e) => e.type === 'recovery');
       expect(recoveryEvents.length).toBeGreaterThan(0);
     });
 
@@ -81,14 +85,16 @@ describe('Recovery Mechanisms', () => {
       } as unknown as LLMClient;
 
       const executor = new ToolExecutor();
-      const gen = executeReactLoop(
-        [{ role: 'user', content: 'question '.repeat(200) }],
-        {
-          client, toolExecutor: executor, model: 'test',
-          maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-          maxContextTokens: 500, compactionThreshold: 0.3,
-        },
-      );
+      const gen = executeReactLoop([{ role: 'user', content: 'question '.repeat(200) }], {
+        client,
+        toolExecutor: executor,
+        model: 'test',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+        maxContextTokens: 500,
+        compactionThreshold: 0.3,
+      });
 
       const { terminal } = await consumeLoop(gen);
       expect(terminal.reason).toBe('prompt_too_long');
@@ -102,37 +108,50 @@ describe('Recovery Mechanisms', () => {
         callCount++;
         if (callCount === 1) {
           // First call: truncated at default maxTokens
-          yield { type: 'content', data: 'Partial...' } as StreamChunk;
-          yield { type: 'done', finishReason: 'length', usage: { inputTokens: 10, outputTokens: 100, totalTokens: 110 } } as StreamChunk;
+          yield { type: 'content', data: 'Partial...' };
+          yield {
+            type: 'done',
+            finishReason: 'length',
+            usage: { inputTokens: 10, outputTokens: 100, totalTokens: 110 },
+          };
         } else if (callCount === 2) {
           // Second call: escalated maxTokens, still truncated
-          yield { type: 'content', data: 'More partial...' } as StreamChunk;
-          yield { type: 'done', finishReason: 'length', usage: { inputTokens: 20, outputTokens: 200, totalTokens: 220 } } as StreamChunk;
+          yield { type: 'content', data: 'More partial...' };
+          yield {
+            type: 'done',
+            finishReason: 'length',
+            usage: { inputTokens: 20, outputTokens: 200, totalTokens: 220 },
+          };
         } else {
           // Third call: resume message, completes
-          yield { type: 'content', data: ' done!' } as StreamChunk;
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 30, outputTokens: 50, totalTokens: 80 } } as StreamChunk;
+          yield { type: 'content', data: ' done!' };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 30, outputTokens: 50, totalTokens: 80 },
+          };
         }
       });
 
       const client = { streamChat: streamChatFn } as unknown as LLMClient;
       const executor = new ToolExecutor();
-      const gen = executeReactLoop(
-        [{ role: 'user', content: 'Write something long' }],
-        {
-          client, toolExecutor: executor, model: 'test',
-          maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-          maxOutputTokens: 4096,
-          escalatedMaxOutputTokens: 16384,
-        },
-      );
+      const gen = executeReactLoop([{ role: 'user', content: 'Write something long' }], {
+        client,
+        toolExecutor: executor,
+        model: 'test',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+        maxOutputTokens: 4096,
+        escalatedMaxOutputTokens: 16384,
+      });
 
       const { events, terminal } = await consumeLoop(gen);
 
       expect(terminal.reason).toBe('stop');
       expect(callCount).toBe(3);
 
-      const recoveryEvents = events.filter(e => e.type === 'recovery');
+      const recoveryEvents = events.filter((e) => e.type === 'recovery');
       // First recovery: escalate, second: resume message
       expect(recoveryEvents).toHaveLength(2);
       expect((recoveryEvents[0] as { reason: string }).reason).toBe('max_output_tokens_escalate');
@@ -149,48 +168,62 @@ describe('Recovery Mechanisms', () => {
         streamChat: vi.fn(async function* () {
           callCount++;
           if (callCount === 1) {
-            yield { type: 'content', data: 'Partial response...' } as StreamChunk;
-            yield { type: 'done', finishReason: 'length', usage: { inputTokens: 10, outputTokens: 100, totalTokens: 110 } } as StreamChunk;
+            yield { type: 'content', data: 'Partial response...' };
+            yield {
+              type: 'done',
+              finishReason: 'length',
+              usage: { inputTokens: 10, outputTokens: 100, totalTokens: 110 },
+            };
           } else {
-            yield { type: 'content', data: ' completed!' } as StreamChunk;
-            yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } } as StreamChunk;
+            yield { type: 'content', data: ' completed!' };
+            yield {
+              type: 'done',
+              finishReason: 'stop',
+              usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+            };
           }
         }),
       } as unknown as LLMClient;
 
       const executor = new ToolExecutor();
-      const gen = executeReactLoop(
-        [{ role: 'user', content: 'Write something long' }],
-        {
-          client, toolExecutor: executor, model: 'test',
-          maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        },
-      );
+      const gen = executeReactLoop([{ role: 'user', content: 'Write something long' }], {
+        client,
+        toolExecutor: executor,
+        model: 'test',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+      });
 
       const { events, terminal } = await consumeLoop(gen);
 
       expect(terminal.reason).toBe('stop');
       // Should have recovery event
-      const recoveryEvents = events.filter(e => e.type === 'recovery');
+      const recoveryEvents = events.filter((e) => e.type === 'recovery');
       expect(recoveryEvents.length).toBeGreaterThan(0);
     });
 
     it('should give up after max recovery attempts', async () => {
       const client = {
         streamChat: vi.fn(async function* () {
-          yield { type: 'content', data: 'Partial...' } as StreamChunk;
-          yield { type: 'done', finishReason: 'length', usage: { inputTokens: 10, outputTokens: 100, totalTokens: 110 } } as StreamChunk;
+          yield { type: 'content', data: 'Partial...' };
+          yield {
+            type: 'done',
+            finishReason: 'length',
+            usage: { inputTokens: 10, outputTokens: 100, totalTokens: 110 },
+          };
         }),
       } as unknown as LLMClient;
 
       const executor = new ToolExecutor();
-      const gen = executeReactLoop(
-        [{ role: 'user', content: 'Write something' }],
-        {
-          client, toolExecutor: executor, model: 'test',
-          maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        },
-      );
+      const gen = executeReactLoop([{ role: 'user', content: 'Write something' }], {
+        client,
+        toolExecutor: executor,
+        model: 'test',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+      });
 
       const { terminal } = await consumeLoop(gen);
       expect(terminal.reason).toBe('max_output_tokens');
@@ -206,26 +239,31 @@ describe('Recovery Mechanisms', () => {
           if (callCount === 1) {
             throw new OverloadedError('Model overloaded');
           }
-          yield { type: 'content', data: 'Fallback response' } as StreamChunk;
-          yield { type: 'done', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } } as StreamChunk;
+          yield { type: 'content', data: 'Fallback response' };
+          yield {
+            type: 'done',
+            finishReason: 'stop',
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          };
         }),
       } as unknown as LLMClient;
 
       const executor = new ToolExecutor();
-      const gen = executeReactLoop(
-        [{ role: 'user', content: 'test' }],
-        {
-          client, toolExecutor: executor, model: 'primary-model',
-          maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-          fallbackModel: 'fallback-model',
-        },
-      );
+      const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+        client,
+        toolExecutor: executor,
+        model: 'primary-model',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+        fallbackModel: 'fallback-model',
+      });
 
       const { events, terminal } = await consumeLoop(gen);
 
       expect(terminal.reason).toBe('stop');
       // Should have used fallback model
-      const fallbackEvents = events.filter(e => e.type === 'model_fallback');
+      const fallbackEvents = events.filter((e) => e.type === 'model_fallback');
       expect(fallbackEvents.length).toBeGreaterThan(0);
     });
 
@@ -237,14 +275,15 @@ describe('Recovery Mechanisms', () => {
       } as unknown as LLMClient;
 
       const executor = new ToolExecutor();
-      const gen = executeReactLoop(
-        [{ role: 'user', content: 'test' }],
-        {
-          client, toolExecutor: executor, model: 'test',
-          maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-          // No fallbackModel
-        },
-      );
+      const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+        client,
+        toolExecutor: executor,
+        model: 'test',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+        // No fallbackModel
+      });
 
       const { terminal } = await consumeLoop(gen);
       expect(terminal.reason).toBe('error');

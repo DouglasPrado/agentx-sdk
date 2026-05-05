@@ -16,20 +16,21 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
     const timer = setTimeout(resolve, ms);
 
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(signal.reason ?? new Error('Aborted'));
-    }, { once: true });
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason ?? new Error('Aborted'));
+      },
+      { once: true },
+    );
   });
 }
 
 /**
  * Retries an async function with exponential backoff.
  */
-export async function retry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions,
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
   const {
     maxRetries,
     initialDelay = 1000,

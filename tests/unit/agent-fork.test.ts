@@ -73,8 +73,8 @@ describe('Agent.fork()', () => {
 
     // Verify the forked agent used the parent's API key and base URL
     expect(fetchSpy).toHaveBeenCalled();
-    const callUrl = fetchSpy.mock.calls.find(c => {
-      const u = typeof c[0] === 'string' ? c[0] : c[0]!.toString();
+    const callUrl = fetchSpy.mock.calls.find((c) => {
+      const u = typeof c[0] === 'string' ? c[0] : c[0].toString();
       return u.includes('chat/completions');
     });
     expect(callUrl).toBeDefined();

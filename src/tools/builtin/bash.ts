@@ -17,7 +17,9 @@ function killTree(pid: number | undefined, signal: NodeJS.Signals = 'SIGTERM'): 
     } else {
       process.kill(-pid, signal);
     }
-  } catch { /* already exited */ }
+  } catch {
+    /* already exited */
+  }
 }
 
 const DEFAULT_TIMEOUT = 120_000;
@@ -65,7 +67,7 @@ export function createBashTool(options: BashToolOptions = {}): AgentTool {
           };
         }
         const firstToken = command.trimStart().split(/\s+/)[0] ?? '';
-        const allowed = allowedCommands.some(prefix => firstToken === prefix);
+        const allowed = allowedCommands.some((prefix) => firstToken === prefix);
         if (!allowed) {
           return {
             content: `Command not allowed by allowedCommands policy. Allowed prefixes: ${allowedCommands.join(', ')}`,
@@ -77,37 +79,41 @@ export function createBashTool(options: BashToolOptions = {}): AgentTool {
       const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT;
 
       return new Promise<string | { content: string; isError?: boolean }>((resolve) => {
-        const child = exec(command, {
-          timeout: effectiveTimeout,
-          maxBuffer: MAX_OUTPUT,
-          shell: process.env.SHELL || '/bin/sh',
-          ...(workingDir ? { cwd: workingDir } : {}),
-          // Detach on POSIX so the child gets its own process group —
-          // lets us kill the whole tree (including backgrounded grandchildren).
-          ...(process.platform !== 'win32' ? { detached: true } : {}),
-        }, (error, stdout, stderr) => {
-          const out = stdout?.slice(0, MAX_OUTPUT) ?? '';
-          const err = stderr?.slice(0, MAX_OUTPUT) ?? '';
+        const child = exec(
+          command,
+          {
+            timeout: effectiveTimeout,
+            maxBuffer: MAX_OUTPUT,
+            shell: process.env.SHELL || '/bin/sh',
+            ...(workingDir ? { cwd: workingDir } : {}),
+            // Detach on POSIX so the child gets its own process group —
+            // lets us kill the whole tree (including backgrounded grandchildren).
+            ...(process.platform !== 'win32' ? { detached: true } : {}),
+          },
+          (error, stdout, stderr) => {
+            const out = stdout?.slice(0, MAX_OUTPUT) ?? '';
+            const err = stderr?.slice(0, MAX_OUTPUT) ?? '';
 
-          if (error) {
-            const exitCode = error.code ?? 'unknown';
+            if (error) {
+              const exitCode = error.code ?? 'unknown';
+              const parts: string[] = [];
+              if (out) parts.push(out);
+              if (err) parts.push(err);
+              if (!out && !err) parts.push(error.message);
+              parts.push(`\nExit code: ${exitCode}`);
+
+              resolve({ content: parts.join('\n'), isError: true });
+              return;
+            }
+
             const parts: string[] = [];
             if (out) parts.push(out);
-            if (err) parts.push(err);
-            if (!out && !err) parts.push(error.message);
-            parts.push(`\nExit code: ${exitCode}`);
+            if (err) parts.push(`[stderr]\n${err}`);
+            if (!out && !err) parts.push('(no output)');
 
-            resolve({ content: parts.join('\n'), isError: true });
-            return;
-          }
-
-          const parts: string[] = [];
-          if (out) parts.push(out);
-          if (err) parts.push(`[stderr]\n${err}`);
-          if (!out && !err) parts.push('(no output)');
-
-          resolve(parts.join('\n'));
-        });
+            resolve(parts.join('\n'));
+          },
+        );
 
         // Abort propagates to the entire process group so subshells and
         // backgrounded commands are not left orphaned.

@@ -33,27 +33,37 @@ async function consumeLoop(
 
 describe('executeReactLoop (AsyncGenerator)', () => {
   it('should yield text_delta events and return Terminal on text response', async () => {
-    const client = createMockClient([[
-      { type: 'content', data: 'Hello' },
-      { type: 'content', data: ' world!' },
-      { type: 'done', finishReason: 'stop', usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'content', data: 'Hello' },
+        { type: 'content', data: ' world!' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'Hi' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'Hi' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('stop');
     expect(terminal.usage.totalTokens).toBe(7);
 
-    const textDeltas = events.filter(e => e.type === 'text_delta');
+    const textDeltas = events.filter((e) => e.type === 'text_delta');
     expect(textDeltas).toHaveLength(2);
 
-    const textDone = events.find(e => e.type === 'text_done');
+    const textDone = events.find((e) => e.type === 'text_done');
     expect(textDone).toBeDefined();
   });
 
@@ -61,11 +71,19 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'call_1', name: 'get_weather', arguments: '{"city":"NYC"}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        },
       ],
       [
         { type: 'content', data: 'The weather in NYC is sunny.' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30 },
+        },
       ],
     ]);
 
@@ -78,20 +96,24 @@ describe('executeReactLoop (AsyncGenerator)', () => {
       isConcurrencySafe: true,
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'Weather in NYC?' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'Weather in NYC?' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('stop');
     expect(terminal.usage.totalTokens).toBe(45);
 
-    const toolStarts = events.filter(e => e.type === 'tool_call_start');
+    const toolStarts = events.filter((e) => e.type === 'tool_call_start');
     expect(toolStarts).toHaveLength(1);
 
-    const toolEnds = events.filter(e => e.type === 'tool_call_end');
+    const toolEnds = events.filter((e) => e.type === 'tool_call_end');
     expect(toolEnds).toHaveLength(1);
   });
 
@@ -99,7 +121,11 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'call_1', name: 'loop_tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
       ],
     ]);
 
@@ -111,15 +137,19 @@ describe('executeReactLoop (AsyncGenerator)', () => {
       execute: vi.fn().mockResolvedValue('ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'loop' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 2, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'loop' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 2,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('max_iterations');
-    const warnings = events.filter(e => e.type === 'warning');
+    const warnings = events.filter((e) => e.type === 'warning');
     expect(warnings.length).toBeGreaterThan(0);
   });
 
@@ -127,11 +157,19 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'c1', name: 'tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 300, outputTokens: 300, totalTokens: 600 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 300, outputTokens: 300, totalTokens: 600 },
+        },
       ],
       [
         { type: 'content', data: 'text' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 100, outputTokens: 100, totalTokens: 200 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 100, outputTokens: 100, totalTokens: 200 },
+        },
       ],
     ]);
 
@@ -143,14 +181,15 @@ describe('executeReactLoop (AsyncGenerator)', () => {
       execute: vi.fn().mockResolvedValue('ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      {
-        client, toolExecutor: executor, model: 'test',
-        maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
-        costPolicy: { maxTokensPerExecution: 500, onLimitReached: 'stop' },
-      },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      costPolicy: { maxTokensPerExecution: 500, onLimitReached: 'stop' },
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('cost_limit');
@@ -160,11 +199,19 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'c1', name: 'tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
       ],
       [
         { type: 'content', data: 'done' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
       ],
     ]);
 
@@ -180,8 +227,12 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const messagesCopy = [...originalMessages];
 
     const gen = executeReactLoop(originalMessages, {
-      client, toolExecutor: executor, model: 'test',
-      maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue',
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
     });
 
     await consumeLoop(gen);
@@ -200,16 +251,20 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     } as unknown as LLMClient;
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events, terminal } = await consumeLoop(gen);
 
     expect(terminal.reason).toBe('error');
 
-    const errors = events.filter(e => e.type === 'error');
+    const errors = events.filter((e) => e.type === 'error');
     expect(errors).toHaveLength(3);
   });
 
@@ -217,16 +272,27 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const controller = new AbortController();
     controller.abort();
 
-    const client = createMockClient([[
-      { type: 'content', data: 'text' },
-      { type: 'done', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'content', data: 'text' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue', signal: controller.signal },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      signal: controller.signal,
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('abort');
@@ -236,11 +302,19 @@ describe('executeReactLoop (AsyncGenerator)', () => {
     const client = createMockClient([
       [
         { type: 'tool_call', id: 'c1', name: 'tool', arguments: '{}' },
-        { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
       ],
       [
         { type: 'content', data: 'done' },
-        { type: 'done', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
       ],
     ]);
 
@@ -252,15 +326,19 @@ describe('executeReactLoop (AsyncGenerator)', () => {
       execute: vi.fn().mockResolvedValue('ok'),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'continue' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+    });
 
     const { events } = await consumeLoop(gen);
 
-    const turnStarts = events.filter(e => e.type === 'turn_start');
-    const turnEnds = events.filter(e => e.type === 'turn_end');
+    const turnStarts = events.filter((e) => e.type === 'turn_start');
+    const turnEnds = events.filter((e) => e.type === 'turn_end');
 
     // 2 iterations = 2 turn_starts + 2 turn_ends
     expect(turnStarts).toHaveLength(2);
@@ -268,10 +346,16 @@ describe('executeReactLoop (AsyncGenerator)', () => {
   });
 
   it('should stop on tool error with onToolError=stop', async () => {
-    const client = createMockClient([[
-      { type: 'tool_call', id: 'c1', name: 'bad_tool', arguments: '{}' },
-      { type: 'done', finishReason: 'tool_calls', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
-    ]]);
+    const client = createMockClient([
+      [
+        { type: 'tool_call', id: 'c1', name: 'bad_tool', arguments: '{}' },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        },
+      ],
+    ]);
 
     const executor = new ToolExecutor();
     executor.register({
@@ -281,10 +365,14 @@ describe('executeReactLoop (AsyncGenerator)', () => {
       execute: vi.fn().mockRejectedValue(new Error('boom')),
     });
 
-    const gen = executeReactLoop(
-      [{ role: 'user', content: 'test' }],
-      { client, toolExecutor: executor, model: 'test', maxIterations: 10, maxConsecutiveErrors: 3, onToolError: 'stop' },
-    );
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'stop',
+    });
 
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('error');

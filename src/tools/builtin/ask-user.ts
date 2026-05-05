@@ -14,7 +14,8 @@ export interface AskUserOptions {
 export function createAskUserTool(opts: AskUserOptions): AgentTool {
   return {
     name: 'AskUser',
-    description: 'Ask the user a question and wait for their response. Use when you need clarification or confirmation.',
+    description:
+      'Ask the user a question and wait for their response. Use when you need clarification or confirmation.',
     parameters: AskUserParams,
 
     async execute(rawArgs: unknown) {
@@ -24,7 +25,10 @@ export function createAskUserTool(opts: AskUserOptions): AgentTool {
         const answer = await opts.onAsk(question, options);
         return `User responded: ${answer}`;
       } catch (error) {
-        return { content: `Failed to get user response: ${(error as Error).message}`, isError: true };
+        return {
+          content: `Failed to get user response: ${(error as Error).message}`,
+          isError: true,
+        };
       }
     },
   };

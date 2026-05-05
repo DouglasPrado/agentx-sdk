@@ -21,74 +21,51 @@ describe('skill-args', () => {
     });
 
     it('should handle tabs', () => {
-      expect(splitArgs("a\tb")).toEqual(['a', 'b']);
+      expect(splitArgs('a\tb')).toEqual(['a', 'b']);
     });
   });
 
   describe('substituteArgs', () => {
     it('should substitute named positional arguments', () => {
-      const result = substituteArgs(
-        'Review $file in $env mode',
-        'app.ts production',
-        ['file', 'env'],
-      );
+      const result = substituteArgs('Review $file in $env mode', 'app.ts production', [
+        'file',
+        'env',
+      ]);
       expect(result).toBe('Review app.ts in production mode');
     });
 
     it('should leave unmatched named args empty', () => {
-      const result = substituteArgs(
-        'Review $file in $env mode',
-        'app.ts',
-        ['file', 'env'],
-      );
+      const result = substituteArgs('Review $file in $env mode', 'app.ts', ['file', 'env']);
       expect(result).toBe('Review app.ts in  mode');
     });
 
     it('should not replace partial name matches', () => {
-      const result = substituteArgs(
-        '$fileName is not $file',
-        'test.ts',
-        ['file'],
-      );
+      const result = substituteArgs('$fileName is not $file', 'test.ts', ['file']);
       expect(result).toBe('$fileName is not test.ts');
     });
 
     it('should substitute ${VARIABLE} placeholders', () => {
-      const result = substituteArgs(
-        'Dir: ${SKILL_DIR}, Thread: ${THREAD_ID}',
-        '',
-        undefined,
-        { SKILL_DIR: '/skills/review', THREAD_ID: 'thread-1' },
-      );
+      const result = substituteArgs('Dir: ${SKILL_DIR}, Thread: ${THREAD_ID}', '', undefined, {
+        SKILL_DIR: '/skills/review',
+        THREAD_ID: 'thread-1',
+      });
       expect(result).toBe('Dir: /skills/review, Thread: thread-1');
     });
 
     it('should leave unknown ${VARIABLE} as-is', () => {
-      const result = substituteArgs(
-        'Unknown: ${MISSING}',
-        '',
-        undefined,
-        { SKILL_DIR: '/path' },
-      );
+      const result = substituteArgs('Unknown: ${MISSING}', '', undefined, { SKILL_DIR: '/path' });
       expect(result).toBe('Unknown: ${MISSING}');
     });
 
     it('should combine args and variables', () => {
-      const result = substituteArgs(
-        'Review $file at ${SKILL_DIR}',
-        'main.ts',
-        ['file'],
-        { SKILL_DIR: '/skills' },
-      );
+      const result = substituteArgs('Review $file at ${SKILL_DIR}', 'main.ts', ['file'], {
+        SKILL_DIR: '/skills',
+      });
       expect(result).toBe('Review main.ts at /skills');
     });
 
     it('should handle $ARGS for remaining arguments', () => {
-      const result = substituteArgs(
-        'First: $file, Rest: $ARGS',
-        'a.ts b.ts c.ts',
-        ['file'],
-      );
+      const result = substituteArgs('First: $file, Rest: $ARGS', 'a.ts b.ts c.ts', ['file']);
       expect(result).toBe('First: a.ts, Rest: b.ts c.ts');
     });
 
@@ -98,11 +75,7 @@ describe('skill-args', () => {
     });
 
     it('should replace multiple occurrences of same arg', () => {
-      const result = substituteArgs(
-        '$file and $file again',
-        'test.ts',
-        ['file'],
-      );
+      const result = substituteArgs('$file and $file again', 'test.ts', ['file']);
       expect(result).toBe('test.ts and test.ts again');
     });
 

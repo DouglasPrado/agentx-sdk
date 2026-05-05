@@ -14,7 +14,12 @@ import { applyToolResultBudget } from './compaction/tool-result-budget.js';
 import { snipCompact } from './compaction/snip-compact.js';
 import { autocompact } from './compaction/autocompact.js';
 import { runStopHooks } from './stop-hooks.js';
-import { PromptTooLongError, OverloadedError, InsufficientCreditsError, classifyAPIError } from '../llm/errors.js';
+import {
+  PromptTooLongError,
+  OverloadedError,
+  InsufficientCreditsError,
+  classifyAPIError,
+} from '../llm/errors.js';
 import { SKILL_TOOL_NAME } from '../tools/skill-tool.js';
 import { normalizeMessagesForAPI } from './message-normalize.js';
 
@@ -68,16 +73,27 @@ export async function* executeReactLoop(
   config: ReactLoopConfig,
 ): AsyncGenerator<AgentEvent, Terminal> {
   const {
-    client, toolExecutor, maxIterations, maxConsecutiveErrors,
-    onToolError, costPolicy, signal,
-    maxContextTokens, compactionThreshold, fallbackModel,
-    maxOutputTokens, escalatedMaxOutputTokens,
-    stopHooks, deps, tokenBudget,
+    client,
+    toolExecutor,
+    maxIterations,
+    maxConsecutiveErrors,
+    onToolError,
+    costPolicy,
+    signal,
+    maxContextTokens,
+    compactionThreshold,
+    fallbackModel,
+    maxOutputTokens,
+    escalatedMaxOutputTokens,
+    stopHooks,
+    deps,
+    tokenBudget,
   } = config;
 
   let currentModel = config.model;
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-  const toolDefs = toolExecutor.listTools().length > 0 ? toolExecutor.getToolDefinitions() : undefined;
+  const toolDefs =
+    toolExecutor.listTools().length > 0 ? toolExecutor.getToolDefinitions() : undefined;
 
   // DI: use injected callModel or default to client.streamChat
   const callModel = deps?.callModel ?? ((params) => client.streamChat(params));
@@ -97,7 +113,10 @@ export async function* executeReactLoop(
     }
 
     // --- Check cost policy ---
-    if (costPolicy?.maxTokensPerExecution && usage.totalTokens >= costPolicy.maxTokensPerExecution) {
+    if (
+      costPolicy?.maxTokensPerExecution &&
+      usage.totalTokens >= costPolicy.maxTokensPerExecution
+    ) {
       if (costPolicy.onLimitReached === 'stop') {
         return { reason: 'cost_limit', usage };
       }
@@ -116,7 +135,9 @@ export async function* executeReactLoop(
     // 0. Tool result budget — aggregate truncation (largest first)
     if (maxContextTokens) {
       const budgetChars = Math.floor(maxContextTokens * 4 * 0.5); // 50% of context in chars
-      const budgetResult = applyToolResultBudget(compactedMessages, { maxTotalToolResultChars: budgetChars });
+      const budgetResult = applyToolResultBudget(compactedMessages, {
+        maxTotalToolResultChars: budgetChars,
+      });
       if (budgetResult.truncatedCount > 0) {
         compactedMessages = budgetResult.messages;
       }
@@ -173,7 +194,7 @@ export async function* executeReactLoop(
     let fullText = '';
     let finishReason = '';
     let turnOutputTokens = 0;
-    const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+    const toolCalls: { id: string; name: string; arguments: string }[] = [];
     const earlyToolResults: LLMMessage[] = []; // Tool results completed during streaming
 
     // --- Stream from LLM ---
@@ -200,7 +221,11 @@ export async function* executeReactLoop(
             toolCalls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments });
             yield {
               type: 'tool_call_start',
-              toolCall: { id: chunk.id, type: 'function', function: { name: chunk.name, arguments: chunk.arguments } },
+              toolCall: {
+                id: chunk.id,
+                type: 'function',
+                function: { name: chunk.name, arguments: chunk.arguments },
+              },
             };
             streamingExecutor.addTool(chunk.id, chunk.name, chunk.arguments);
             break;
@@ -217,13 +242,27 @@ export async function* executeReactLoop(
 
         // Yield progress events from tools executing during streaming
         for (const progress of streamingExecutor.getProgressEvents()) {
-          yield { type: 'tool_progress', toolCallId: progress.toolCallId, toolName: progress.toolName, data: progress.data };
+          yield {
+            type: 'tool_progress',
+            toolCallId: progress.toolCallId,
+            toolName: progress.toolName,
+            data: progress.data,
+          };
         }
 
         // Yield completed tool results during streaming and collect for message history
         for (const completed of streamingExecutor.getCompletedResults()) {
-          yield { type: 'tool_call_end', toolCallId: completed.id, result: completed.result, duration: completed.duration };
-          earlyToolResults.push({ role: 'tool', content: completed.result.content, tool_call_id: completed.id });
+          yield {
+            type: 'tool_call_end',
+            toolCallId: completed.id,
+            result: completed.result,
+            duration: completed.duration,
+          };
+          earlyToolResults.push({
+            role: 'tool',
+            content: completed.result.content,
+            tool_call_id: completed.id,
+          });
           if (completed.result.isError && onToolError === 'stop') {
             yield { type: 'turn_end', iteration: turnCount - 1, hasToolCalls: true };
             return { reason: 'error', usage };
@@ -234,7 +273,7 @@ export async function* executeReactLoop(
       // --- Build assistant message ---
       const assistantMessage: LLMMessage = { role: 'assistant', content: fullText };
       if (toolCalls.length > 0) {
-        assistantMessage.tool_calls = toolCalls.map(tc => ({
+        assistantMessage.tool_calls = toolCalls.map((tc) => ({
           id: tc.id,
           type: 'function' as const,
           function: { name: tc.name, arguments: tc.arguments },
@@ -244,10 +283,7 @@ export async function* executeReactLoop(
       // --- Max Output Tokens Recovery (two steps: escalate first, then resume) ---
       if (finishReason === 'length' && toolCalls.length === 0) {
         // Step 1: Escalate maxTokens (retry same request with higher limit)
-        if (
-          escalatedMaxOutputTokens &&
-          state.maxOutputTokensOverride === undefined
-        ) {
+        if (escalatedMaxOutputTokens && state.maxOutputTokensOverride === undefined) {
           yield { type: 'recovery', reason: 'max_output_tokens_escalate', attempt: 1 };
 
           state = {
@@ -271,7 +307,8 @@ export async function* executeReactLoop(
 
         const resumeMessage: LLMMessage = {
           role: 'user',
-          content: '[System: Your response was truncated. Resume directly from where you stopped — no recap, no repetition.]',
+          content:
+            '[System: Your response was truncated. Resume directly from where you stopped — no recap, no repetition.]',
         };
 
         state = {
@@ -302,7 +339,7 @@ export async function* executeReactLoop(
           if (hookResult.blockingErrors.length > 0) {
             yield { type: 'recovery', reason: 'stop_hook_blocking', attempt: 1 };
 
-            const errorMessages: LLMMessage[] = hookResult.blockingErrors.map(err => ({
+            const errorMessages: LLMMessage[] = hookResult.blockingErrors.map((err) => ({
               role: 'user' as const,
               content: `[Stop hook error: ${err}]`,
             }));
@@ -323,11 +360,16 @@ export async function* executeReactLoop(
           const outputThreshold = tokenBudget.total * tokenBudget.outputThreshold;
           const belowThreshold = cumulativeOutputTokens < outputThreshold;
           const notExhausted = budgetContinuationCount < MAX_BUDGET_CONTINUATIONS;
-          const notDiminishing = turnOutputTokens >= MIN_DELTA_TOKENS || budgetContinuationCount === 0;
+          const notDiminishing =
+            turnOutputTokens >= MIN_DELTA_TOKENS || budgetContinuationCount === 0;
 
           if (belowThreshold && notExhausted && notDiminishing) {
             budgetContinuationCount++;
-            yield { type: 'recovery', reason: 'token_budget_continuation', attempt: budgetContinuationCount };
+            yield {
+              type: 'recovery',
+              reason: 'token_budget_continuation',
+              attempt: budgetContinuationCount,
+            };
 
             const nudgeMessage: LLMMessage = {
               role: 'user',
@@ -357,14 +399,28 @@ export async function* executeReactLoop(
 
       // Drain remaining progress events
       for (const progress of streamingExecutor.getProgressEvents()) {
-        yield { type: 'tool_progress', toolCallId: progress.toolCallId, toolName: progress.toolName, data: progress.data };
+        yield {
+          type: 'tool_progress',
+          toolCallId: progress.toolCallId,
+          toolName: progress.toolName,
+          data: progress.data,
+        };
       }
 
       for await (const completed of streamingExecutor.getRemainingResults()) {
-        yield { type: 'tool_call_end', toolCallId: completed.id, result: completed.result, duration: completed.duration };
+        yield {
+          type: 'tool_call_end',
+          toolCallId: completed.id,
+          result: completed.result,
+          duration: completed.duration,
+        };
 
         if (completed.result.isError && onToolError === 'stop') {
-          toolResultMessages.push({ role: 'tool', content: completed.result.content, tool_call_id: completed.id });
+          toolResultMessages.push({
+            role: 'tool',
+            content: completed.result.content,
+            tool_call_id: completed.id,
+          });
           yield { type: 'turn_end', iteration: turnCount - 1, hasToolCalls: true };
           return { reason: 'error', usage };
         }
@@ -372,7 +428,11 @@ export async function* executeReactLoop(
         if (completed.result.isError) hasToolError = true;
 
         // Pin skill tool results so they survive compaction
-        const toolResultMsg: LLMMessage = { role: 'tool', content: completed.result.content, tool_call_id: completed.id };
+        const toolResultMsg: LLMMessage = {
+          role: 'tool',
+          content: completed.result.content,
+          tool_call_id: completed.id,
+        };
         if (completed.name === SKILL_TOOL_NAME) {
           (toolResultMsg as unknown as Record<string, unknown>)._pinned = true;
         }
@@ -380,9 +440,9 @@ export async function* executeReactLoop(
 
         // Extract file paths for conditional skill activation
         if (config.onFilePathsTouched) {
-          const toolDef = toolExecutor.listTools().find(t => t.name === completed.name);
+          const toolDef = toolExecutor.listTools().find((t) => t.name === completed.name);
           if (toolDef?.getFilePath) {
-            const tc = toolCalls.find(c => c.id === completed.id);
+            const tc = toolCalls.find((c) => c.id === completed.id);
             if (tc) {
               try {
                 const parsed = JSON.parse(tc.arguments);
@@ -392,8 +452,12 @@ export async function* executeReactLoop(
                     const arr = Array.isArray(paths) ? paths : [paths];
                     touchedFilePaths.push(...arr);
                   }
-                } catch { /* getFilePath error — skip */ }
-              } catch { /* JSON parse error — skip */ }
+                } catch {
+                  /* getFilePath error — skip */
+                }
+              } catch {
+                /* JSON parse error — skip */
+              }
             }
           }
           // Also check metadata.filePaths
@@ -414,7 +478,11 @@ export async function* executeReactLoop(
 
       // --- onToolError: 'retry' — re-run LLM turn so model can correct its args ---
       if (hasToolError && onToolError === 'retry' && state.toolRetryCount < 1) {
-        yield { type: 'recovery', reason: 'tool_retry' as RecoveryReason, attempt: state.toolRetryCount + 1 };
+        yield {
+          type: 'recovery',
+          reason: 'tool_retry' as RecoveryReason,
+          attempt: state.toolRetryCount + 1,
+        };
         state = {
           ...state,
           messages: [...messages, assistantMessage, ...toolResultMessages],
@@ -437,7 +505,6 @@ export async function* executeReactLoop(
         transition: { reason: 'next_turn' },
       };
       continue;
-
     } catch (error) {
       const classified = classifyAPIError(error);
 
@@ -453,7 +520,11 @@ export async function* executeReactLoop(
 
           if (compactResult) {
             yield { type: 'recovery', reason: 'reactive_compact_retry', attempt: 1 };
-            yield { type: 'compaction', strategy: 'autocompact', tokensFreed: compactResult.tokensFreed };
+            yield {
+              type: 'compaction',
+              strategy: 'autocompact',
+              tokensFreed: compactResult.tokensFreed,
+            };
 
             state = {
               ...state,
@@ -479,7 +550,11 @@ export async function* executeReactLoop(
       }
 
       // --- Model Fallback (529/503) ---
-      if (classified instanceof OverloadedError && fallbackModel && currentModel !== fallbackModel) {
+      if (
+        classified instanceof OverloadedError &&
+        fallbackModel &&
+        currentModel !== fallbackModel
+      ) {
         yield { type: 'model_fallback', from: currentModel, to: fallbackModel };
         currentModel = fallbackModel;
 

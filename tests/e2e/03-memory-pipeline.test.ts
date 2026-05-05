@@ -29,19 +29,31 @@ describe('E2E 03 — memory pipeline (save → recall → inject)', () => {
     scriptFetch({
       chat: [
         // First chat hit = memory relevance LLM (non-streaming, returns JSON)
-        new Response(JSON.stringify({
-          choices: [{
-            message: { content: JSON.stringify({ selected_memories: ['user-name-is-douglas.md'] }) },
-            finish_reason: 'stop',
-          }],
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ selected_memories: ['user-name-is-douglas.md'] }),
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
       ],
     });
 
     handle = await createTempAgent({
       // Disable extraction — E2E focuses on the save/recall path, not the
       // LLM-driven fork extractor (covered by unit tests).
-      memory: { enabled: true, extractionEnabled: false, samplingRate: 0, extractionInterval: 9999 },
+      memory: {
+        enabled: true,
+        extractionEnabled: false,
+        samplingRate: 0,
+        extractionInterval: 9999,
+      },
       knowledge: { enabled: false },
     });
 
@@ -75,8 +87,8 @@ describe('E2E 03 — memory pipeline (save → recall → inject)', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(
-      handle.agent.remember('x', 'user', '../../../tmp/evil'),
-    ).rejects.toThrow(/invalid threadid/i);
+    await expect(handle.agent.remember('x', 'user', '../../../tmp/evil')).rejects.toThrow(
+      /invalid threadid/i,
+    );
   });
 });

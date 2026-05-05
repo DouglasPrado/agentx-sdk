@@ -26,52 +26,64 @@ class MCPInvalidShapeError extends ZodError {
 
 /** Validated shape of listResources server response. */
 const ListResourcesResultSchema = z.object({
-  resources: z.array(z.object({
-    uri: z.string(),
-    name: z.string(),
-    mimeType: z.string().optional(),
-    description: z.string().optional(),
-  }).passthrough()),
+  resources: z.array(
+    z
+      .object({
+        uri: z.string(),
+        name: z.string(),
+        mimeType: z.string().optional(),
+        description: z.string().optional(),
+      })
+      .passthrough(),
+  ),
 });
 
 /** Validated shape of readResource server response. */
 const ReadResourceResultSchema = z.object({
-  contents: z.array(z.object({
-    text: z.string().optional(),
-    uri: z.string(),
-  }).passthrough()),
+  contents: z.array(
+    z
+      .object({
+        text: z.string().optional(),
+        uri: z.string(),
+      })
+      .passthrough(),
+  ),
 });
 
 /** Validated shape of getPrompt server response. */
 const GetPromptResultSchema = z.object({
-  messages: z.array(z.object({
-    role: z.string(),
-    content: z.union([
-      z.string(),
-      z.object({ type: z.string(), text: z.string().optional() }).passthrough(),
-    ]),
-  })),
+  messages: z.array(
+    z.object({
+      role: z.string(),
+      content: z.union([
+        z.string(),
+        z.object({ type: z.string(), text: z.string().optional() }).passthrough(),
+      ]),
+    }),
+  ),
 });
 
 /** Shape of the content array returned from MCP server tool calls. */
 const MCPToolContentSchema = z.array(
-  z.object({
-    type: z.string(),
-    text: z.string().optional(),
-    data: z.string().optional(),
-    mimeType: z.string().optional(),
-    uri: z.string().optional(),
-  }).passthrough(),
+  z
+    .object({
+      type: z.string(),
+      text: z.string().optional(),
+      data: z.string().optional(),
+      mimeType: z.string().optional(),
+      uri: z.string().optional(),
+    })
+    .passthrough(),
 );
 
 export interface MCPHealthStatus {
-  servers: Array<{
+  servers: {
     name: string;
     status: 'connected' | 'disconnected' | 'error' | 'reconnecting';
     lastError?: string;
     toolCount: number;
     uptime: number;
-  }>;
+  }[];
 }
 
 interface MCPConnection {
@@ -92,7 +104,11 @@ interface MCPClient {
   connect(transport: unknown): Promise<void>;
   close(): Promise<void>;
   listTools(): Promise<{ tools: MCPToolDef[] }>;
-  callTool(params: { name: string; arguments: unknown }, resultSchema?: unknown, options?: { signal?: AbortSignal }): Promise<MCPToolResult>;
+  callTool(
+    params: { name: string; arguments: unknown },
+    resultSchema?: unknown,
+    options?: { signal?: AbortSignal },
+  ): Promise<MCPToolResult>;
 }
 
 interface MCPToolDef {
@@ -108,7 +124,7 @@ interface MCPToolDef {
 }
 
 interface MCPToolResult {
-  content: Array<{ type: string; text?: string }>;
+  content: { type: string; text?: string }[];
   isError?: boolean;
 }
 
@@ -165,8 +181,8 @@ export class MCPAdapter {
     const { tools: mcpTools } = await client.listTools();
 
     // Convert MCP tools to AgentTools
-    const agentTools = mcpTools.map(mcpTool =>
-      this.convertTool(config.name, mcpTool, client, config)
+    const agentTools = mcpTools.map((mcpTool) =>
+      this.convertTool(config.name, mcpTool, client, config),
     );
 
     // Register tools in executor
@@ -180,7 +196,7 @@ export class MCPAdapter {
       config,
       client,
       transport,
-      toolNames: agentTools.map(t => t.name),
+      toolNames: agentTools.map((t) => t.name),
       connectedAt: Date.now(),
       status: 'connected',
     };
@@ -237,7 +253,7 @@ export class MCPAdapter {
    */
   getHealth(): MCPHealthStatus {
     return {
-      servers: [...this.connections.values()].map(conn => ({
+      servers: [...this.connections.values()].map((conn) => ({
         name: conn.name,
         status: conn.status,
         lastError: conn.lastError,
@@ -253,7 +269,7 @@ export class MCPAdapter {
 
   /** Get connection info for all servers (for context injection). */
   getConnections(): MCPConnectionInfo[] {
-    return [...this.connections.values()].map(conn => ({
+    return [...this.connections.values()].map((conn) => ({
       name: conn.name,
       status: conn.status,
       instructions: conn.instructions,
@@ -269,15 +285,17 @@ export class MCPAdapter {
   /** List resources from a connected server. */
   async listResources(serverName: string): Promise<MCPResource[]> {
     const conn = this.connections.get(serverName);
-    if (!conn || conn.status !== 'connected') return [];
+    if (conn?.status !== 'connected') return [];
 
     try {
-      const raw = await (conn.client as unknown as {
-        listResources?: () => Promise<unknown>;
-      }).listResources?.();
+      const raw = await (
+        conn.client as unknown as {
+          listResources?: () => Promise<unknown>;
+        }
+      ).listResources?.();
       if (!raw) return [];
       const parsed = ListResourcesResultSchema.parse(raw);
-      return parsed.resources.map(r => ({ ...r, serverName }));
+      return parsed.resources.map((r) => ({ ...r, serverName }));
     } catch {
       return [];
     }
@@ -286,13 +304,15 @@ export class MCPAdapter {
   /** Read a specific resource from a server. */
   async readResource(serverName: string, uri: string): Promise<string> {
     const conn = this.connections.get(serverName);
-    if (!conn || conn.status !== 'connected') {
+    if (conn?.status !== 'connected') {
       throw new Error(`MCP server "${serverName}" not connected`);
     }
 
-    const raw = await (conn.client as unknown as {
-      readResource?: (params: { uri: string }) => Promise<unknown>;
-    }).readResource?.({ uri });
+    const raw = await (
+      conn.client as unknown as {
+        readResource?: (params: { uri: string }) => Promise<unknown>;
+      }
+    ).readResource?.({ uri });
     if (!raw) throw new Error('Server does not support resources');
 
     const result = ReadResourceResultSchema.safeParse(raw);
@@ -302,13 +322,13 @@ export class MCPAdapter {
         `invalid resource shape from MCP server "${serverName}"`,
       );
     }
-    return result.data.contents.map(c => c.text ?? `[Binary: ${c.uri}]`).join('\n');
+    return result.data.contents.map((c) => c.text ?? `[Binary: ${c.uri}]`).join('\n');
   }
 
   /** Fetch and return a prompt from a server (for skill getPrompt). */
   async getPrompt(serverName: string, promptName: string, args?: string): Promise<string> {
     const conn = this.connections.get(serverName);
-    if (!conn || conn.status !== 'connected') {
+    if (conn?.status !== 'connected') {
       throw new Error(`MCP server "${serverName}" not connected`);
     }
 
@@ -320,9 +340,14 @@ export class MCPAdapter {
       }
     }
 
-    const raw = await (conn.client as unknown as {
-      getPrompt?: (params: { name: string; arguments?: Record<string, string> }) => Promise<unknown>;
-    }).getPrompt?.({ name: promptName, arguments: parsedArgs });
+    const raw = await (
+      conn.client as unknown as {
+        getPrompt?: (params: {
+          name: string;
+          arguments?: Record<string, string>;
+        }) => Promise<unknown>;
+      }
+    ).getPrompt?.({ name: promptName, arguments: parsedArgs });
 
     if (!raw) throw new Error('Server does not support prompts');
 
@@ -333,17 +358,24 @@ export class MCPAdapter {
         `invalid prompt shape from MCP server "${serverName}"`,
       );
     }
-    return result.data.messages.map(m => {
-      const content = typeof m.content === 'string' ? m.content : m.content.text ?? '';
-      return content;
-    }).join('\n');
+    return result.data.messages
+      .map((m) => {
+        const content = typeof m.content === 'string' ? m.content : (m.content.text ?? '');
+        return content;
+      })
+      .join('\n');
   }
 
-  private convertTool(serverName: string, mcpTool: MCPToolDef, client: MCPClient, config: MCPConnectionConfig): AgentTool {
+  private convertTool(
+    serverName: string,
+    mcpTool: MCPToolDef,
+    client: MCPClient,
+    config: MCPConnectionConfig,
+  ): AgentTool {
     const safeServerName = serverName.replace(/__/g, '_');
     const safeToolName = mcpTool.name.replace(/__/g, '_');
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
-    const parameters = jsonSchemaToZod(mcpTool.inputSchema as Record<string, unknown> | undefined);
+    const parameters = jsonSchemaToZod(mcpTool.inputSchema);
     const isolateErrors = config.isolateErrors ?? true;
     const timeout = config.timeout ?? 30_000;
 
@@ -367,15 +399,17 @@ export class MCPAdapter {
 
           try {
             const timeoutPromise = new Promise<never>((_, reject) => {
-              controller.signal.addEventListener('abort', () => reject(new Error(`MCP tool "${mcpTool.name}" timed out after ${timeout}ms`)), { once: true });
+              controller.signal.addEventListener(
+                'abort',
+                () => reject(new Error(`MCP tool "${mcpTool.name}" timed out after ${timeout}ms`)),
+                { once: true },
+              );
             });
 
             const result = await Promise.race([
-              client.callTool(
-                { name: mcpTool.name, arguments: args },
-                undefined,
-                { signal: controller.signal },
-              ),
+              client.callTool({ name: mcpTool.name, arguments: args }, undefined, {
+                signal: controller.signal,
+              }),
               timeoutPromise,
             ]);
 
@@ -386,12 +420,12 @@ export class MCPAdapter {
             }
 
             // Handle mixed content types (text, image, resource)
-            const parts = parsedContent.data.map(c => {
+            const parts = parsedContent.data.map((c) => {
               if (c.type === 'text' && typeof c.text === 'string') return c.text;
               if (c.type === 'image') {
                 const mime = c.mimeType ?? 'unknown';
                 const dataLen = typeof c.data === 'string' ? c.data.length : 0;
-                const sizeKB = Math.round(dataLen * 0.75 / 1024);
+                const sizeKB = Math.round((dataLen * 0.75) / 1024);
                 return `[Image: ${mime}, ~${sizeKB}KB]`;
               }
               if (c.type === 'resource') return c.text ?? `[Resource: ${c.uri ?? 'unknown'}]`;
@@ -431,7 +465,7 @@ export class MCPAdapter {
   ): Promise<{ client: MCPClient; transport: unknown }> {
     // Explicit transport — use directly, no fallback
     if (config.transport !== 'auto') {
-      const client = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
+      const client = new Client({ name: `agentx-${config.name}`, version: '0.1.0' });
       const transport = await createTransport(config);
       try {
         await client.connect(transport);
@@ -444,10 +478,13 @@ export class MCPAdapter {
     }
 
     // Auto-detect: try StreamableHTTP first, fall back to SSE
-    const requestInit: RequestInit | undefined = config.headers ? { headers: config.headers } : undefined;
+    const requestInit: RequestInit | undefined = config.headers
+      ? { headers: config.headers }
+      : undefined;
 
-    const client1 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
-    const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    const client1 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' });
+    const { StreamableHTTPClientTransport } =
+      await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
     const httpTransport = new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
     try {
       await client1.connect(httpTransport);
@@ -457,7 +494,7 @@ export class MCPAdapter {
       await closeTransportQuietly(httpTransport);
     }
 
-    const client2 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' }) as MCPClient;
+    const client2 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' });
     const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
     const sseTransport = new SSEClientTransport(new URL(config.url!), { requestInit });
     try {
@@ -527,14 +564,18 @@ export class MCPAdapter {
 
 // --- SDK Loading ---
 
-async function loadSDK(): Promise<{ Client: new (opts: { name: string; version: string }) => MCPClient }> {
+async function loadSDK(): Promise<{
+  Client: new (opts: { name: string; version: string }) => MCPClient;
+}> {
   try {
     const mod = await import('@modelcontextprotocol/sdk/client/index.js');
     // Cast needed because MCP SDK types are broader than our minimal MCPClient interface
-    return { Client: mod.Client as unknown as new (opts: { name: string; version: string }) => MCPClient };
+    return {
+      Client: mod.Client as unknown as new (opts: { name: string; version: string }) => MCPClient,
+    };
   } catch {
     throw new Error(
-      'Install @modelcontextprotocol/sdk to use MCP connections: npm install @modelcontextprotocol/sdk'
+      'Install @modelcontextprotocol/sdk to use MCP connections: npm install @modelcontextprotocol/sdk',
     );
   }
 }
@@ -543,7 +584,9 @@ async function closeTransportQuietly(transport: unknown): Promise<void> {
   try {
     const t = transport as { close?: () => unknown } | null;
     if (t && typeof t.close === 'function') await Promise.resolve(t.close());
-  } catch { /* best-effort cleanup */ }
+  } catch {
+    /* best-effort cleanup */
+  }
 }
 
 async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
@@ -562,7 +605,8 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
   }
 
   if (config.transport === 'http') {
-    const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    const { StreamableHTTPClientTransport } =
+      await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
     return new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
   }
 

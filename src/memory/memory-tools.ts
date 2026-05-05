@@ -15,7 +15,13 @@ import { join, basename } from 'node:path';
 import type { AgentTool } from '../contracts/entities/agent-tool.js';
 import { ENTRYPOINT_NAME } from './memory-types.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
-import { sanitizeFilename, sanitizeFrontmatterValue, validateMemoryPath, validateMemoryPathResolved, validateThreadId } from './memory-paths.js';
+import {
+  sanitizeFilename,
+  sanitizeFrontmatterValue,
+  validateMemoryPath,
+  validateMemoryPathResolved,
+  validateThreadId,
+} from './memory-paths.js';
 
 const THREADS_DIR = 'threads';
 
@@ -28,7 +34,10 @@ const indexLocks = new Map<string, Promise<void>>();
 async function withIndexLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
   const prev = indexLocks.get(dir) ?? Promise.resolve();
   const result = prev.then(() => fn());
-  const tail = result.then(() => {}, () => {});
+  const tail = result.then(
+    () => {},
+    () => {},
+  );
   indexLocks.set(dir, tail);
   // Opportunistically drop completed locks so the Map doesn't grow unbounded
   void tail.finally(() => {
@@ -56,7 +65,8 @@ function validateFilename(filename: string): string | null {
   if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
     return 'Path traversal not allowed';
   }
-  if (basename(filename) === ENTRYPOINT_NAME) return 'Cannot access MEMORY.md directly — it is managed automatically';
+  if (basename(filename) === ENTRYPOINT_NAME)
+    return 'Cannot access MEMORY.md directly — it is managed automatically';
   if (!filename.endsWith('.md')) return 'Filename must end with .md';
   return null;
 }
@@ -81,7 +91,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 
   const memoryList: AgentTool = {
     name: 'memory_list',
-    description: 'List all existing memory files with their name, type, description, and last modified date. Use this FIRST to see what memories already exist before creating new ones.',
+    description:
+      'List all existing memory files with their name, type, description, and last modified date. Use this FIRST to see what memories already exist before creating new ones.',
     parameters: z.object({}),
     isConcurrencySafe: true,
     isReadOnly: true,
@@ -94,7 +105,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 
   const memoryRead: AgentTool = {
     name: 'memory_read',
-    description: 'Read the full content of a memory file by filename. Use this to check existing memory content before deciding to update or skip.',
+    description:
+      'Read the full content of a memory file by filename. Use this to check existing memory content before deciding to update or skip.',
     parameters: z.object({
       filename: z.string().describe('The filename to read (e.g. "user-role.md")'),
     }),
@@ -119,7 +131,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 
   const memoryWrite: AgentTool = {
     name: 'memory_write',
-    description: 'Create a NEW memory file. Only use this when no existing memory covers this topic — otherwise use memory_edit to update the existing file.',
+    description:
+      'Create a NEW memory file. Only use this when no existing memory covers this topic — otherwise use memory_edit to update the existing file.',
     parameters: z.object({
       name: z.string().describe('Short name for the memory (2-4 words)'),
       description: z.string().describe('One-line description for indexing'),
@@ -153,7 +166,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 
   const memoryEdit: AgentTool = {
     name: 'memory_edit',
-    description: 'Update an existing memory file. Preserves the filename and type. Use this instead of memory_write when the memory already exists.',
+    description:
+      'Update an existing memory file. Preserves the filename and type. Use this instead of memory_write when the memory already exists.',
     parameters: z.object({
       filename: z.string().describe('The filename to edit (e.g. "user-role.md")'),
       content: z.string().describe('The new content (replaces existing body)'),
@@ -161,7 +175,12 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       description: z.string().optional().describe('Updated description (optional)'),
     }),
     execute: async (rawArgs) => {
-      const args = rawArgs as { filename: string; content: string; name?: string; description?: string };
+      const args = rawArgs as {
+        filename: string;
+        content: string;
+        name?: string;
+        description?: string;
+      };
       const err = validateFilename(args.filename);
       if (err) return { content: err, isError: true };
 
@@ -199,7 +218,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
 
   const memoryDelete: AgentTool = {
     name: 'memory_delete',
-    description: 'Delete a memory file and remove it from the index. Use when a memory is outdated or wrong.',
+    description:
+      'Delete a memory file and remove it from the index. Use when a memory is outdated or wrong.',
     parameters: z.object({
       filename: z.string().describe('The filename to delete (e.g. "old-info.md")'),
     }),
@@ -234,7 +254,9 @@ async function addToIndex(dir: string, filename: string, description: string): P
     let existing = '';
     try {
       existing = await readFile(entrypoint, 'utf-8');
-    } catch { /* File doesn't exist yet */ }
+    } catch {
+      /* File doesn't exist yet */
+    }
 
     if (existing.includes(`(${filename})`)) return;
 
@@ -243,7 +265,9 @@ async function addToIndex(dir: string, filename: string, description: string): P
     const updated = existing ? `${existing.trimEnd()}\n${newEntry}\n` : `${newEntry}\n`;
     try {
       await writeFile(entrypoint, updated, 'utf-8');
-    } catch { /* index update is non-critical — ignore I/O failures */ }
+    } catch {
+      /* index update is non-critical — ignore I/O failures */
+    }
   });
 }
 
@@ -252,8 +276,10 @@ async function removeFromIndex(dir: string, filename: string): Promise<void> {
     const entrypoint = join(dir, ENTRYPOINT_NAME);
     try {
       const content = await readFile(entrypoint, 'utf-8');
-      const lines = content.split('\n').filter(line => !line.includes(`(${filename})`));
+      const lines = content.split('\n').filter((line) => !line.includes(`(${filename})`));
       await writeFile(entrypoint, lines.join('\n'), 'utf-8');
-    } catch { /* Index doesn't exist */ }
+    } catch {
+      /* Index doesn't exist */
+    }
   });
 }

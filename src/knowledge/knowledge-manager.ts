@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { VectorStore } from '../contracts/entities/stores.js';
-import type { KnowledgeDocument, KnowledgeChunk, RetrievedKnowledge } from '../contracts/entities/knowledge.js';
+import type {
+  KnowledgeDocument,
+  KnowledgeChunk,
+  RetrievedKnowledge,
+} from '../contracts/entities/knowledge.js';
 import type { EmbeddingService } from './embedding-service.js';
 import { chunkText } from './chunking.js';
 import { LRUCache } from '../utils/cache.js';
@@ -79,8 +83,9 @@ export class KnowledgeManager {
     if (cached) return cached;
 
     const queryEmbedding = await this.embeddingService.embedSingle(query);
-    const results = this.store.search(queryEmbedding, this.topK)
-      .filter(r => r.score >= this.minScore);
+    const results = this.store
+      .search(queryEmbedding, this.topK)
+      .filter((r) => r.score >= this.minScore);
 
     this.searchCache.set(query, results);
     return results;

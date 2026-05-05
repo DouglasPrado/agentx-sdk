@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { FileMemorySystem, truncateEntrypointContent } from '../../../src/memory/file-memory-system.js';
+import {
+  FileMemorySystem,
+  truncateEntrypointContent,
+} from '../../../src/memory/file-memory-system.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
 import type { Logger } from '../../../src/utils/logger.js';
 
@@ -188,10 +191,7 @@ describe('FileMemorySystem', () => {
 
   describe('buildContextPrompt', () => {
     it('should return MEMORY.md content', async () => {
-      await writeFile(
-        join(tempDir, 'MEMORY.md'),
-        '- [Test](test.md) — A test memory\n',
-      );
+      await writeFile(join(tempDir, 'MEMORY.md'), '- [Test](test.md) — A test memory\n');
 
       const result = await system.buildContextPrompt();
       expect(result).toContain('test.md');
@@ -268,7 +268,10 @@ describe('FileMemorySystem — threadId path traversal', () => {
 
   it('rejects threadId with path traversal sequences', async () => {
     await expect(
-      system.saveMemory({ name: 'test', description: 'd', type: 'user', content: 'c' }, '../../../tmp/evil'),
+      system.saveMemory(
+        { name: 'test', description: 'd', type: 'user', content: 'c' },
+        '../../../tmp/evil',
+      ),
     ).rejects.toThrow(/invalid threadid/i);
   });
 
@@ -325,7 +328,7 @@ describe('FileMemorySystem — frontmatter injection prevention', () => {
     // Both files should parse correctly
     const files = (await import('node:fs/promises')).readdir;
     const list = await files(tempDir);
-    const mdFiles = list.filter(f => f.endsWith('.md') && f !== 'MEMORY.md');
+    const mdFiles = list.filter((f) => f.endsWith('.md') && f !== 'MEMORY.md');
     for (const f of mdFiles) {
       const content = await readFile(join(tempDir, f), 'utf-8');
       const fm = content.split('---')[1] ?? '';
