@@ -132,6 +132,30 @@ describe('builtin/bash', () => {
     });
   });
 
+  describe('empty allowedCommands blocks all commands (#87)', () => {
+    it('blocks any command when allowedCommands is empty array', async () => {
+      const tool = createBashTool({ allowedCommands: [] });
+      const result = await tool.execute({ command: 'echo hello' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/no commands|empty allowedCommands|not permitted/i);
+    });
+
+    it('blocks destructive commands when allowedCommands is empty array', async () => {
+      const tool = createBashTool({ allowedCommands: [] });
+      const result = await tool.execute({ command: 'rm -rf /' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+
+    it('still allows all commands when allowedCommands is undefined', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo unrestricted' }, signal);
+      const content = typeof result === 'string' ? result : result.content;
+      expect(content).toContain('unrestricted');
+    });
+  });
+
   describe('timeout parameter bounds (issue #9)', () => {
     it('should reject timeout=0 (would disable exec timeout)', async () => {
       const tool = createBashTool();
