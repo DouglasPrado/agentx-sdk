@@ -39,6 +39,9 @@ export interface SqlToolFactoryOptions {
 
   /** Prefix for tool names. Default: '' (empty). */
   toolNamePrefix?: string;
+
+  /** Logger used for query execution errors. Defaults to console.error. */
+  logger?: { error: (msg: string, meta?: unknown) => void };
 }
 
 /** SQL statements that mutate state — used to derive isReadOnly/isConcurrencySafe flags. */
@@ -58,6 +61,9 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
     defaultTimeoutMs = 30_000,
     toolNamePrefix = '',
   } = options;
+  const log = options.logger ?? {
+    error: (msg: string, meta?: unknown) => console.error(msg, meta),
+  };
 
   const queryMap = new Map<string, SqlQueryDef>();
   for (const q of queries) {
@@ -190,7 +196,10 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
         const genericMessage = pgCode
           ? `Query execution failed (error code: ${pgCode})`
           : 'Query execution failed';
-        console.error('[SqlTool] query execution error:', err);
+        log.error('[SqlTool] query execution error', {
+          pgCode,
+          message: (err as Error).message,
+        });
         return { content: genericMessage, isError: true };
       }
     },
