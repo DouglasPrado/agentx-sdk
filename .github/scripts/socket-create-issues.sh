@@ -27,23 +27,16 @@ gh label create "severity:high" --color "d93f0b" --description "Severity: high" 
 gh issue list --label socket-finding --state open --json title --limit 200 \
   | jq -r '.[].title' > existing_titles.txt
 
-# Extract alerts. Socket scan view geralmente aninha alerts em artifacts[].alerts,
-# onde o package name+version sao do artifact (parent). Walk artifacts e emite
-# {...alert, package, version} pra cada combinacao.
-# Fallback: se nao houver artifacts, recursao no JSON inteiro pra achar alerts soltos.
+# Extract alerts. Socket scan view retorna { ok: true, data: [{ name, version, alerts: [...] }, ...] }.
+# Aceita tambem .artifacts[].alerts (formato alternativo) como fallback defensivo.
+# Cada alert eh enriquecido com package/version do artifact pai pra titulo do issue.
 jq -c --argjson sev "$SEVERITIES" '
-  # Tenta artifacts (formato comum do scan view)
-  if (.artifacts // empty) | length > 0 then
-    .artifacts[] as $art
-    | ($art.alerts // [])[]
-    | . + {
-        package: ($art.name // $art.package // "unknown"),
-        version: ($art.version // ""),
-      }
-  # Fallback: recursao no JSON inteiro
-  else
-    [.. | objects | select(.severity != null and .type != null)] | .[]
-  end
+  ((.data // .artifacts // []) | select(type == "array") | .[]) as $art
+  | ($art.alerts // []) | .[]
+  | . + {
+      package: ($art.name // $art.package // "unknown"),
+      version: ($art.version // ""),
+    }
   | select(.severity as $s | $sev | index($s))
 ' "$SCAN_FILE" > filtered_alerts.jsonl 2>/dev/null || true
 
