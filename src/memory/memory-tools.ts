@@ -18,7 +18,6 @@ import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memor
 import {
   sanitizeFilename,
   sanitizeFrontmatterValue,
-  validateMemoryPath,
   validateMemoryPathResolved,
   validateThreadId,
 } from './memory-paths.js';
@@ -81,13 +80,7 @@ function validateFilename(filename: string): string | null {
 export function createMemoryTools(memoryDir: string, threadId?: string): AgentTool[] {
   const dir = resolveDir(memoryDir, threadId);
 
-  /** Defense-in-depth: ensure the resolved path stays inside memoryDir (sync, shallow). */
-  const safeJoin = (filename: string): string | null => {
-    const candidate = join(dir, filename);
-    return validateMemoryPath(candidate, memoryDir) ?? null;
-  };
-
-  /** Like safeJoin, but resolves symlinks via realpath to prevent symlink escape. */
+  /** Resolves symlinks via realpath to prevent symlink escape. */
   const safeJoinResolved = async (filename: string): Promise<string | null> => {
     const candidate = join(dir, filename);
     return (await validateMemoryPathResolved(candidate, memoryDir)) ?? null;
@@ -163,7 +156,7 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       const filename = sanitizeFilename(args.name);
 
       await mkdir(dir, { recursive: true });
-      const safePath = safeJoin(filename);
+      const safePath = await safeJoinResolved(filename);
       if (!safePath) return { content: 'Invalid path', isError: true };
 
       const fileContent = [
