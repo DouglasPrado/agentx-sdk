@@ -18,27 +18,43 @@ fi
 # Severity threshold: ajuste pra incluir 'medium' se quiser mais cobertura
 SEVERITIES='["critical", "high"]'
 
+# Garante que os labels existem (idempotente — gh label create falha se ja existir, ignoramos)
+gh label create socket-finding --color "d73a4a" --description "Auto-criada via socket-issues.yml" 2>/dev/null || true
+gh label create "severity:critical" --color "b60205" --description "Severity: critical" 2>/dev/null || true
+gh label create "severity:high" --color "d93f0b" --description "Severity: high" 2>/dev/null || true
+
 # Cache existing open issues pra dedup (1 API call vs N)
 gh issue list --label socket-finding --state open --json title --limit 200 \
   | jq -r '.[].title' > existing_titles.txt
 
-# Extract alerts via recursao — Socket scan view pode aninhar em diferentes shapes
-# (artifacts[].alerts, alerts[], packages.<name>.alerts, etc). A recursao acha
-# qualquer objeto com 'severity' + 'type' (assinatura de alert).
-# Defensive: se nao houver alerts, gera arquivo vazio em vez de falhar.
+# Extract alerts. Socket scan view geralmente aninha alerts em artifacts[].alerts,
+# onde o package name+version sao do artifact (parent). Walk artifacts e emite
+# {...alert, package, version} pra cada combinacao.
+# Fallback: se nao houver artifacts, recursao no JSON inteiro pra achar alerts soltos.
 jq -c --argjson sev "$SEVERITIES" '
-  [.. | objects | select(.severity != null and .type != null)]
-  | unique
-  | .[]
+  # Tenta artifacts (formato comum do scan view)
+  if (.artifacts // empty) | length > 0 then
+    .artifacts[] as $art
+    | ($art.alerts // [])[]
+    | . + {
+        package: ($art.name // $art.package // "unknown"),
+        version: ($art.version // ""),
+      }
+  # Fallback: recursao no JSON inteiro
+  else
+    [.. | objects | select(.severity != null and .type != null)] | .[]
+  end
   | select(.severity as $s | $sev | index($s))
 ' "$SCAN_FILE" > filtered_alerts.jsonl 2>/dev/null || true
 
 if [ ! -s filtered_alerts.jsonl ]; then
   echo "::notice::Nenhum alert de severity high/critical encontrado"
-  echo "Conteudo do scan (1000 chars):"
-  head -c 1000 "$SCAN_FILE"
+  echo "Conteudo do scan (primeiros 1500 chars):"
+  head -c 1500 "$SCAN_FILE"
   exit 0
 fi
+
+echo "::notice::Encontrados $(wc -l < filtered_alerts.jsonl) alerts severity high/critical"
 
 count=0
 while IFS= read -r alert; do
