@@ -28,3 +28,4 @@ coverage/
 .jscpd-tmp/
 .stryker-tmp/
 reports/
+docs/api/

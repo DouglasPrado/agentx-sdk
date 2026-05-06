@@ -1,0 +1,22 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "tsconfig": "tsconfig.json",
+  "readme": "README.md",
+  "name": "agentx-sdk",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true,
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "validation": {
+    "notExported": false,
+    "invalidLink": true,
+    "notDocumented": false
+  }
+}
