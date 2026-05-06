@@ -56,11 +56,23 @@ while IFS= read -r alert; do
   pkg=$(echo "$alert" | jq -r '.package // .pkg // "unknown"')
   ver=$(echo "$alert" | jq -r '.version // .ver // ""')
   description=$(echo "$alert" | jq -r '.description // .message // ""')
+  # File path dentro do package (ex: "package/dist/foo.js") — distingue alerts
+  # diferentes do mesmo pkg/version. Pega so o basename pra titulo legivel.
+  file_path=$(echo "$alert" | jq -r '.file // ""')
+  file_basename=""
+  if [ -n "$file_path" ] && [ "$file_path" != "null" ]; then
+    file_basename=$(basename "$file_path")
+  fi
 
+  # Titulo: "[socket] <type>: <pkg>@<ver> (<file>)" se file existir
+  base_title="[socket] $type: $pkg"
   if [ -n "$ver" ] && [ "$ver" != "null" ]; then
-    title="[socket] $type: $pkg@$ver"
+    base_title="$base_title@$ver"
+  fi
+  if [ -n "$file_basename" ]; then
+    title="$base_title ($file_basename)"
   else
-    title="[socket] $type: $pkg"
+    title="$base_title"
   fi
 
   if grep -Fxq "$title" existing_titles.txt; then
@@ -92,6 +104,8 @@ while IFS= read -r alert; do
     --label "socket-finding" \
     --label "severity:$severity"; then
     count=$((count + 1))
+    # Within-run dedup: alerts subsequentes com mesmo titulo ja sao skipados
+    echo "$title" >> existing_titles.txt
   else
     echo "::warning::Falha ao criar issue: $title"
   fi
