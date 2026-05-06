@@ -8,6 +8,7 @@ import type {
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import { retry } from '../utils/retry.js';
 import { buildReasoningArgs, isReasoningModel, requiresNoSystemRole } from './reasoning.js';
+import { validateSsrfUrl } from '../utils/ssrf-guard.js';
 
 export interface LLMClientConfig {
   apiKey: string;
@@ -55,7 +56,10 @@ export class LLMClient {
   constructor(config: LLMClientConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model;
-    this.baseUrl = (config.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+    const rawBase = (config.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+    const ssrfError = validateSsrfUrl(rawBase);
+    if (ssrfError) throw new Error(`baseUrl bloqueada (SSRF): ${ssrfError}`);
+    this.baseUrl = rawBase;
     this.timeoutMs = config.timeoutMs ?? LLMClient.DEFAULT_TIMEOUT_MS;
   }
 
