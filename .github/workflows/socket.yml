@@ -1,0 +1,51 @@
+name: Socket Security
+
+# Detecta packages npm maliciosos (typosquatting, install scripts maliciosos,
+# pacotes sequestrados) — categoria que npm audit / Dependabot / Semgrep / CodeQL
+# NAO cobrem.
+#
+# Dois caminhos de integracao:
+#  1. GitHub App (recomendado pra OSS, gratis): instale em
+#     https://github.com/apps/socket-security
+#     Esse workflow eh um no-op nesse caso — o App comenta direto nos PRs.
+#  2. CLI com SOCKET_SECURITY_API_KEY: setar o secret no repo ativa o scan
+#     deste workflow. Util pra hard-fail em caso de risco alto.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  socket:
+    name: Socket
+    runs-on: ubuntu-latest
+    if: (github.actor != 'dependabot[bot]')
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Run Socket Security scan
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+        run: |
+          if [ -z "$SOCKET_SECURITY_API_KEY" ]; then
+            echo "::warning title=Socket not configured::SOCKET_SECURITY_API_KEY secret not set."
+            echo "::warning::Recommended: install Socket GitHub App for free OSS integration:"
+            echo "::warning::  https://github.com/apps/socket-security"
+            echo "::warning::Alternative: register at https://socket.dev and add SOCKET_SECURITY_API_KEY secret."
+            exit 0
+          fi
+          npx --yes @socketsecurity/cli@1 scan create --json --view
