@@ -6,6 +6,9 @@ import { cosineSimilarity } from '../utils/vector-math.js';
 /** Maximum rows scanned per search call to bound memory usage. */
 const MAX_SCAN = 10_000;
 
+/** Maximum rows returned by listAll() to prevent OOM on large knowledge bases. */
+const MAX_LIST_ALL = 10_000;
+
 /**
  * SQLite implementation of VectorStore with brute-force cosine similarity.
  */
@@ -82,7 +85,9 @@ export class SQLiteVectorStore implements VectorStore {
   }
 
   listAll(): KnowledgeChunk[] {
-    const rows = this.database.db.prepare('SELECT * FROM vectors').all() as VectorRow[];
+    const rows = this.database.db
+      .prepare('SELECT * FROM vectors ORDER BY created_at ASC LIMIT ?')
+      .all(MAX_LIST_ALL) as VectorRow[];
     return rows.map((row) => ({
       id: row.id,
       content: row.content,
