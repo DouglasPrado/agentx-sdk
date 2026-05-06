@@ -36,6 +36,21 @@ describe('package.json security overrides (issue #26)', () => {
   });
 });
 
+describe('pnpm overrides — CVE-2026-42338 ip-address XSS (issue #115)', () => {
+  it('should pin ip-address to >=10.1.1 in pnpm.overrides to fix CVE-2026-42338', () => {
+    const pnpmSection = pkg.pnpm as { overrides?: Record<string, string> } | undefined;
+    const overrides = pnpmSection?.overrides ?? {};
+    expect(overrides).toHaveProperty('ip-address');
+    expect(overrides['ip-address']).toBe('>=10.1.1');
+  });
+
+  it('should also pin ip-address in top-level overrides for npm compatibility (issue #115)', () => {
+    const overrides = pkg.overrides as Record<string, string>;
+    expect(overrides).toHaveProperty('ip-address');
+    expect(overrides['ip-address']).toBe('>=10.1.1');
+  });
+});
+
 describe('release.yml safe sync — no destructive reset (issue #89)', () => {
   it('does NOT use git reset --hard in the bump/version step', () => {
     // git reset --hard silently discards any commits that landed between fetch and reset,
