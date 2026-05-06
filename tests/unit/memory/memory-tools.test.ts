@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, mkdir, symlink, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createMemoryTools } from '../../../src/memory/memory-tools.js';
@@ -243,6 +243,57 @@ describe('memory-tools', () => {
       const result = await tool.execute({ filename: 'file\rEVIL.md' }, signal);
       const res = typeof result === 'string' ? { content: result, isError: false } : result;
       expect(res.isError).toBe(true);
+    });
+  });
+
+  describe('memory_write symlink traversal (issue #114)', () => {
+    it('rejects write when target filename is a symlink pointing outside memoryDir', async () => {
+      // Create a separate "outside" directory to be the symlink target
+      const outsideDir = await mkdtemp(join(tmpdir(), 'memtools-outside-'));
+      const outsideFile = join(outsideDir, 'secret.txt');
+      await writeFile(outsideFile, 'original-secret', 'utf-8');
+
+      // Place a symlink inside memoryDir with the name memory_write would generate
+      // for name="User Role" → sanitizeFilename → "user-role.md"
+      const symlinkPath = join(tempDir, 'user-role.md');
+      await symlink(outsideFile, symlinkPath);
+
+      const tool = findTool(tools, 'memory_write');
+      const result = await tool.execute(
+        {
+          name: 'User Role',
+          description: 'Attacker-controlled desc',
+          type: 'user',
+          content: 'MALICIOUS PAYLOAD',
+        },
+        signal,
+      );
+
+      // The operation must be rejected (isError) — symlink escape not allowed
+      const res = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(res.isError).toBe(true);
+
+      // The outside file must NOT have been overwritten
+      const outsideContent = await readFile(outsideFile, 'utf-8');
+      expect(outsideContent).toBe('original-secret');
+
+      await rm(outsideDir, { recursive: true, force: true });
+    });
+
+    it('still creates new files when no symlink conflict exists (regression guard)', async () => {
+      const tool = findTool(tools, 'memory_write');
+      const result = await tool.execute(
+        {
+          name: 'New Memory',
+          description: 'A brand new memory',
+          type: 'project',
+          content: 'Some content.',
+        },
+        signal,
+      );
+      const text = typeof result === 'string' ? result : result.content;
+      expect(text).toContain('new-memory.md');
+      await access(join(tempDir, 'new-memory.md'));
     });
   });
 
