@@ -1,0 +1,23 @@
+[
+  {
+    "name": "dist/ total (raw + gzipped via tar)",
+    "path": "dist/**/*.{js,d.ts}",
+    "limit": "500 KB",
+    "brotli": false,
+    "gzip": false
+  },
+  {
+    "name": "dist/index.js (main entry, raw)",
+    "path": "dist/index.js",
+    "limit": "5 KB",
+    "brotli": false,
+    "gzip": false
+  },
+  {
+    "name": "dist/agent.js (Agent class, raw)",
+    "path": "dist/agent.js",
+    "limit": "50 KB",
+    "brotli": false,
+    "gzip": false
+  }
+]
