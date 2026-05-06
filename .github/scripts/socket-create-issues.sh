@@ -16,16 +16,27 @@ if [ ! -f "$SCAN_FILE" ]; then
 fi
 
 # Severity threshold: ajuste pra incluir 'medium' se quiser mais cobertura
-SEVERITY_FILTER='select(.severity == "critical" or .severity == "high")'
+SEVERITIES='["critical", "high"]'
 
 # Cache existing open issues pra dedup (1 API call vs N)
 gh issue list --label socket-finding --state open --json title --limit 200 \
   | jq -r '.[].title' > existing_titles.txt
 
-# Extract alerts. Defensive: se o shape do JSON mudar, falha graciosamente
-if ! jq -c "(.alerts // [])[] | $SEVERITY_FILTER" "$SCAN_FILE" > filtered_alerts.jsonl; then
-  echo "::warning::Nao foi possivel parsear alerts. Conteudo (500 chars):"
-  head -c 500 "$SCAN_FILE"
+# Extract alerts via recursao — Socket scan view pode aninhar em diferentes shapes
+# (artifacts[].alerts, alerts[], packages.<name>.alerts, etc). A recursao acha
+# qualquer objeto com 'severity' + 'type' (assinatura de alert).
+# Defensive: se nao houver alerts, gera arquivo vazio em vez de falhar.
+jq -c --argjson sev "$SEVERITIES" '
+  [.. | objects | select(.severity != null and .type != null)]
+  | unique
+  | .[]
+  | select(.severity as $s | $sev | index($s))
+' "$SCAN_FILE" > filtered_alerts.jsonl 2>/dev/null || true
+
+if [ ! -s filtered_alerts.jsonl ]; then
+  echo "::notice::Nenhum alert de severity high/critical encontrado"
+  echo "Conteudo do scan (1000 chars):"
+  head -c 1000 "$SCAN_FILE"
   exit 0
 fi
 
