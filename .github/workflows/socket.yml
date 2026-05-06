@@ -40,6 +40,9 @@ jobs:
       - name: Run Socket Security scan
         env:
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+          # SOCKET_ORG: nome da organizacao em socket.dev. Se nao for setado
+          # via repo variable, default eh 'agentx-sdk' (org criada automaticamente).
+          SOCKET_ORG: ${{ vars.SOCKET_ORG || 'agentx-sdk' }}
         run: |
           if [ -z "$SOCKET_SECURITY_API_KEY" ]; then
             echo "::warning title=Socket not configured::SOCKET_SECURITY_API_KEY secret not set."
@@ -48,4 +51,9 @@ jobs:
             echo "::warning::Alternative: register at https://socket.dev and add SOCKET_SECURITY_API_KEY secret."
             exit 0
           fi
-          npx --yes @socketsecurity/cli@1 scan create --json --view
+          # --org evita prompt interativo (CLI bloqueia o run em CI sem isso).
+          # --no-interactive falha em qualquer prompt em vez de pendurar.
+          npx --yes @socketsecurity/cli@1 scan create \
+            --org "$SOCKET_ORG" \
+            --no-interactive \
+            --view
