@@ -201,10 +201,10 @@ describe('createSqlTools', () => {
         query: vi.fn().mockRejectedValue(new Error('connection refused')),
       };
       const [, run] = createSqlTools({ pool, queries: sampleQueries });
-      const result = await run!.execute(
+      const result = (await run!.execute(
         { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
         AbortSignal.timeout(5000),
-      ) as { content: string; isError: boolean };
+      )) as { content: string; isError: boolean };
       expect(result.isError).toBe(true);
       expect(result.content).toMatch(/Query execution failed/);
     });
@@ -217,10 +217,10 @@ describe('createSqlTools', () => {
       );
       const pool: SqlQueryRunner = { query: vi.fn().mockRejectedValue(sensitiveError) };
       const [, run] = createSqlTools({ pool, queries: sampleQueries });
-      const result = await run!.execute(
+      const result = (await run!.execute(
         { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
         AbortSignal.timeout(5000),
-      ) as { content: string; isError: boolean };
+      )) as { content: string; isError: boolean };
 
       expect(result.isError).toBe(true);
       // Sensitive column/table names must not appear in the LLM-facing message
@@ -236,10 +236,10 @@ describe('createSqlTools', () => {
       );
       const pool: SqlQueryRunner = { query: vi.fn().mockRejectedValue(pgError) };
       const [, run] = createSqlTools({ pool, queries: sampleQueries });
-      const result = await run!.execute(
+      const result = (await run!.execute(
         { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
         AbortSignal.timeout(5000),
-      ) as { content: string; isError: boolean };
+      )) as { content: string; isError: boolean };
 
       expect(result.isError).toBe(true);
       // Error code is safe to include — it carries no structural info
@@ -250,5 +250,65 @@ describe('createSqlTools', () => {
     });
 
     // --- end issue #79 ---
+
+    // --- issue #117: sql-tool-factory usa console.error em vez do logger ---
+
+    it('uses injected logger.error instead of console.error on query failure (issue #117)', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const loggerErrorSpy = vi.fn();
+      const logger = { error: loggerErrorSpy };
+
+      const pool: SqlQueryRunner = {
+        query: vi.fn().mockRejectedValue(new Error('connection refused')),
+      };
+      const [, run] = createSqlTools({ pool, queries: sampleQueries, logger });
+
+      await run!.execute(
+        { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
+        AbortSignal.timeout(5000),
+      );
+
+      expect(loggerErrorSpy).toHaveBeenCalled();
+      expect(consoleSpy).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('logger.error receives structured meta with pgCode and message — not raw error (issue #117)', async () => {
+      const loggerErrorSpy = vi.fn();
+      const logger = { error: loggerErrorSpy };
+
+      const pgError = Object.assign(new Error('sensitive db detail'), { code: '23505' });
+      const pool: SqlQueryRunner = { query: vi.fn().mockRejectedValue(pgError) };
+      const [, run] = createSqlTools({ pool, queries: sampleQueries, logger });
+
+      await run!.execute(
+        { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
+        AbortSignal.timeout(5000),
+      );
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ pgCode: '23505' }),
+      );
+    });
+
+    it('falls back to console.error when no logger provided (backward compat) (issue #117)', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const pool: SqlQueryRunner = {
+        query: vi.fn().mockRejectedValue(new Error('connection refused')),
+      };
+      const [, run] = createSqlTools({ pool, queries: sampleQueries });
+
+      await run!.execute(
+        { query_name: 'sales_revenue_by_month', params: { product_id: 1 } },
+        AbortSignal.timeout(5000),
+      );
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    // --- end issue #117 ---
   });
 });
