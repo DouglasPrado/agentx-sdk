@@ -1,0 +1,61 @@
+name: Socket Issues
+
+# Cron diario que escaneia via Socket CLI e cria issues no GitHub pra cada
+# finding novo (severity >= high). Complementa o GitHub App: o App comenta
+# em PRs em tempo real; este workflow rastreia findings long-term.
+#
+# Dedup: titulo eh deterministico (`[socket] <type>: <pkg>@<ver>`). Se issue
+# com mesmo titulo ja existe e ta open, pula. Se foi closed e o problema
+# voltou, recria (sinal de regressao).
+
+on:
+  schedule:
+    # Terca 06:00 UTC — fora dos crons de Semgrep/CodeQL/gitleaks (segunda)
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  scan-and-create-issues:
+    name: Socket → Issues
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+
+      - name: Install jq
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      - name: Run Socket scan
+        id: scan
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+          SOCKET_ORG: ${{ vars.SOCKET_ORG || 'agentx-sdk' }}
+        run: |
+          if [ -z "$SOCKET_SECURITY_API_KEY" ]; then
+            echo "::error::SOCKET_SECURITY_API_KEY nao setado"
+            exit 1
+          fi
+          npx --yes @socketsecurity/cli@1 scan create \
+            --org "$SOCKET_ORG" \
+            --no-interactive \
+            --json > scan.json || {
+              echo "::warning::Scan falhou — pulando criacao de issues"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+
+      - name: Filter findings and create issues
+        if: steps.scan.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/socket-create-issues.sh
