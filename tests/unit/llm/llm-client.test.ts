@@ -466,6 +466,73 @@ describe('LLMClient', () => {
     });
   });
 
+  describe('SSRF protection (issue #113)', () => {
+    it('throws when baseUrl points to cloud metadata endpoint (169.254.169.254)', () => {
+      expect(
+        () =>
+          new LLMClient({
+            apiKey: 'test-key',
+            model: 'test/model',
+            baseUrl: 'http://169.254.169.254/api/v1',
+          }),
+      ).toThrow(/baseUrl bloqueada \(SSRF\)/);
+    });
+
+    it('throws when baseUrl points to private range 10.x.x.x', () => {
+      expect(
+        () =>
+          new LLMClient({
+            apiKey: 'test-key',
+            model: 'test/model',
+            baseUrl: 'http://10.0.0.1/api/v1',
+          }),
+      ).toThrow(/baseUrl bloqueada \(SSRF\)/);
+    });
+
+    it('throws when baseUrl points to private range 192.168.x.x', () => {
+      expect(
+        () =>
+          new LLMClient({
+            apiKey: 'test-key',
+            model: 'test/model',
+            baseUrl: 'http://192.168.1.100/v1',
+          }),
+      ).toThrow(/baseUrl bloqueada \(SSRF\)/);
+    });
+
+    it('throws when baseUrl points to localhost', () => {
+      expect(
+        () =>
+          new LLMClient({
+            apiKey: 'test-key',
+            model: 'test/model',
+            baseUrl: 'http://localhost/api/v1',
+          }),
+      ).toThrow(/baseUrl bloqueada \(SSRF\)/);
+    });
+
+    it('accepts a public HTTPS baseUrl without throwing', () => {
+      expect(
+        () =>
+          new LLMClient({
+            apiKey: 'test-key',
+            model: 'test/model',
+            baseUrl: 'https://openrouter.ai/api/v1',
+          }),
+      ).not.toThrow();
+    });
+
+    it('uses default baseUrl (openrouter.ai) when none provided — no SSRF error', () => {
+      expect(
+        () =>
+          new LLMClient({
+            apiKey: 'test-key',
+            model: 'test/model',
+          }),
+      ).not.toThrow();
+    });
+  });
+
   describe('reasoning', () => {
     it('should convert system messages for o1 models', async () => {
       const o1Client = new LLMClient({
