@@ -30,6 +30,8 @@
     "validate:publish": "publint && attw --pack . --ignore-rules cjs-resolves-to-esm",
     "docs:dev": "cd documentation && npx mintlify@latest dev",
     "docs:build": "cd documentation && npx mintlify@latest build",
+    "docs:api": "typedoc",
+    "docs:api:check": "typedoc --treatWarningsAsErrors --emit none",
     "prepare": "husky"
   },
   "engines": {
@@ -69,6 +71,7 @@
     "lint-staged": "^15.5.2",
     "prettier": "^3.8.3",
     "publint": "^0.3.18",
+    "typedoc": "^0.28.19",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.59.2",
     "vitest": "^3.2.4"
