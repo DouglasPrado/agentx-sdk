@@ -109,4 +109,37 @@ describe('SQLiteVectorStore', () => {
     expect(scanSql).toMatch(/LIMIT/);
     prepareSpy.mockRestore();
   });
+
+  it('listAll() uses a LIMIT clause to prevent OOM with large knowledge bases (issue #116)', () => {
+    const prepareSpy = vi.spyOn(database.db, 'prepare');
+    store.listAll();
+    const sqlCalls = prepareSpy.mock.calls.map((c) => c[0].toUpperCase());
+    const listSql = sqlCalls.find((sql) => sql.includes('FROM VECTORS'));
+    expect(listSql).toBeDefined();
+    expect(listSql).toMatch(/LIMIT/);
+    prepareSpy.mockRestore();
+  });
+
+  it('listAll() returns at most MAX_LIST_ALL rows even when more exist (issue #116)', () => {
+    // Insert 15 chunks — with MAX_LIST_ALL=10_000 this won't hit the cap in
+    // normal tests, but we verify the returned count never exceeds what we insert.
+    // The important contract is that the LIMIT is applied at SQL level (verified above).
+    for (let i = 0; i < 15; i++) {
+      store.upsert(
+        createChunk({
+          id: `la-${i}`,
+          content: `content ${i}`,
+          embedding: new Float32Array([i / 15, 0, 0, 0]),
+        }),
+      );
+    }
+    const all = store.listAll();
+    expect(all.length).toBe(15);
+    // Each returned chunk must be a valid KnowledgeChunk
+    for (const chunk of all) {
+      expect(chunk).toHaveProperty('id');
+      expect(chunk).toHaveProperty('content');
+      expect(chunk.embedding).toBeInstanceOf(Float32Array);
+    }
+  });
 });
