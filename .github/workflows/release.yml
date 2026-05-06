@@ -1,66 +1,52 @@
-name: Release & Publish
+name: Release
+
+# Fluxo PR-based via release-please (Google):
+# 1. Push to main → release-please escaneia commits desde a ultima tag
+# 2. Cria/atualiza "Release PR" com bump de versao + changelog
+# 3. PR passa pelo pr-check.yml (todos os 7 required checks)
+# 4. Voce mergeia manualmente OU `gh pr merge --auto --squash` na propria PR
+# 5. Apos merge: release-please cria GitHub Release + tag, dispara publish + docs jobs
+#
+# Branch protection respeitada — todo bump vai pela mesma porta que humanos.
 
 on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+  pull-requests: write
+
 concurrency:
-  group: release-publish
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  test:
+  release-please:
     runs-on: ubuntu-latest
-    # Skip CI commits to avoid infinite loop
-    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
-    permissions:
-      contents: read
-
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        id: release
         with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: 22
-
-      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6
-        with:
-          version: 10
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
-
-      - name: Validate publish artifacts
-        run: pnpm validate:publish
-
-      - name: Run tests
-        run: pnpm test
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+          # Conventional commits parsing igual ao antigo:
+          # feat: → minor / fix: → patch / BREAKING CHANGE → major
 
   publish:
-    needs: test
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
-    # Manual approval required via Settings → Environments → npm-publish → Required reviewers
     environment: npm-publish
     permissions:
-      contents: write
-      id-token: write # Required for npm provenance attestation
+      contents: read
+      id-token: write # npm provenance
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -77,73 +63,20 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Determine version bump
-        id: bump
-        run: |
-          # Collect all commit messages since last tag (or all if no tag)
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            MESSAGES=$(git log --format='%s%n%b' HEAD)
-          else
-            MESSAGES=$(git log --format='%s%n%b' "${LAST_TAG}..HEAD")
-          fi
+      - name: Validate publish artifacts
+        run: pnpm validate:publish
 
-          if echo "$MESSAGES" | grep -qiE 'BREAKING[ _-]CHANGE'; then
-            echo "type=major" >> "$GITHUB_OUTPUT"
-          elif echo "$MESSAGES" | grep -qE '^feat(\(.+\))?!?:'; then
-            echo "type=minor" >> "$GITHUB_OUTPUT"
-          else
-            echo "type=patch" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Bump version
-        id: version
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Sync with the latest main before bumping so we never start from a
-          # stale SHA when multiple PRs are merged in quick succession.
-          # --ff-only fails loudly if a concurrent commit cannot be fast-forwarded,
-          # preventing silent loss of commits (issue #89).
-          git fetch origin main
-          git checkout main
-          git merge --ff-only origin/main
-
-          NEW_VERSION=$(npm version ${{ steps.bump.outputs.type }} --no-git-tag-version)
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-
-          git add package.json
-          git commit -m "chore: release ${NEW_VERSION}"
-          git tag "$NEW_VERSION"
-          git push origin main --follow-tags
+      - name: Run tests
+        run: pnpm test
 
       - name: Publish to npm
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          # Generate changelog from commits between previous tag and current
-          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${RELEASE_VERSION}$" | head -1 || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            NOTES=$(git log --format='- %s' "${RELEASE_VERSION}")
-          else
-            NOTES=$(git log --format='- %s' "${PREV_TAG}..${RELEASE_VERSION}")
-          fi
-
-          gh release create "$RELEASE_VERSION" \
-            --title "$RELEASE_VERSION" \
-            --notes "$NOTES" \
-            --target main \
-            --latest
-
   docs:
-    needs: publish
+    needs: [release-please, publish]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -156,8 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          fetch-depth: 0
-          ref: main
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6
         with:

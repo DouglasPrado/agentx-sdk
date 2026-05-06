@@ -51,30 +51,35 @@ describe('pnpm overrides — CVE-2026-42338 ip-address XSS (issue #115)', () => 
   });
 });
 
-describe('release.yml safe sync — no destructive reset (issue #89)', () => {
-  it('does NOT use git reset --hard in the bump/version step', () => {
-    // git reset --hard silently discards any commits that landed between fetch and reset,
-    // making concurrent-push races invisible. A fast-forward merge fails loudly instead.
+describe('release.yml — release-please based, no manual git push to main', () => {
+  // O fluxo antigo (custom shell em release.yml) tinha 2 vulnerabilidades historicas:
+  //   - issue #89: `git reset --hard` silenciosamente descartava commits concorrentes
+  //   - issue #51: `${{ steps.version.outputs.version }}` direto em run: era shell injection
+  //
+  // Migramos pra googleapis/release-please-action (PR #138) que faz tudo internamente.
+  // Os checks abaixo garantem que a refatoracao nao reintroduz os antipatterns:
+
+  it('does NOT use git reset --hard (regression: issue #89)', () => {
     expect(releaseYml).not.toMatch(/git\s+reset\s+--hard/);
   });
 
-  it('uses git merge --ff-only to sync with remote main before bumping', () => {
-    // --ff-only aborts if the local HEAD cannot be fast-forwarded, surfacing races as errors
-    // rather than silently overwriting them.
-    expect(releaseYml).toMatch(/git\s+merge\s+--ff-only\s+origin\/main/);
-  });
-});
-
-describe('release.yml shell injection hardening (issue #51)', () => {
-  it('does NOT interpolate ${{ steps.version.outputs.version }} directly in a run: shell command', () => {
-    // Direct interpolation: VERSION=${{ steps.version.outputs.version }} inside run: is a shell injection risk.
-    // The value must be passed via env: instead.
-    const directInterpolation = /VERSION=\$\{\{[^}]*steps\.version\.outputs\.version[^}]*\}\}/;
-    expect(releaseYml).not.toMatch(directInterpolation);
+  it('does NOT execute custom git push to main from a run: step (regression: issue #89)', () => {
+    // release-please cria PRs e GitHub Releases via API — nao precisa push direto.
+    // Push direto bypassa branch protection.
+    expect(releaseYml).not.toMatch(/git\s+push\s+origin\s+main/);
   });
 
-  it('passes version to the release step via env: variable (not inline ${{ }})', () => {
-    // The release step should have RELEASE_VERSION (or similar) in its env: block
-    expect(releaseYml).toMatch(/RELEASE_VERSION:\s*\$\{\{[^}]*steps\.version\.outputs\.version/);
+  it('does NOT interpolate version output directly in run: shell (regression: issue #51)', () => {
+    // Padrao perigoso: VERSION=${{ steps.X.outputs.Y }} em run: bash
+    expect(releaseYml).not.toMatch(/VERSION=\$\{\{[^}]*steps\.[a-z_]+\.outputs/);
+  });
+
+  it('uses release-please-action pinned to a SHA (supply chain)', () => {
+    expect(releaseYml).toMatch(/googleapis\/release-please-action@[a-f0-9]{40}\s*#\s*v\d/);
+  });
+
+  it('publishes to npm only when release-please created a release', () => {
+    // Guard pra evitar publish em todo push — apenas quando ha tag nova
+    expect(releaseYml).toMatch(/release-please\.outputs\.release_created\s*==\s*'true'/);
   });
 });
