@@ -56,18 +56,19 @@ export function createBashTool(options: BashToolOptions = {}): AgentTool {
     async execute(rawArgs: unknown, signal: AbortSignal) {
       const { command, timeout } = BashParams.parse(rawArgs);
 
+      // Reject shell metacharacters unconditionally — prevents chaining/injection
+      // regardless of whether allowedCommands is set (issue #140).
+      const DANGEROUS_METACHAR = /[;&|`$<>()\n\\]/;
+      if (DANGEROUS_METACHAR.test(command)) {
+        return {
+          content: 'Command contains forbidden shell metacharacters',
+          isError: true,
+        };
+      }
+
       if (allowedCommands !== undefined) {
         if (allowedCommands.length === 0) {
           return { content: 'No commands are permitted (empty allowedCommands)', isError: true };
-        }
-        // Reject shell metacharacters that allow command chaining/injection even when the
-        // first token is in the allow-list (e.g. "ls; rm -rf /", "echo hi | cat").
-        const DANGEROUS_METACHAR = /[;&|`$<>()\n\\]/;
-        if (DANGEROUS_METACHAR.test(command)) {
-          return {
-            content: 'Command contains forbidden shell metacharacters',
-            isError: true,
-          };
         }
         const firstToken = command.trimStart().split(/\s+/)[0] ?? '';
         const allowed = allowedCommands.some((prefix) => firstToken === prefix);

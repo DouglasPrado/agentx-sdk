@@ -40,10 +40,10 @@ describe('builtin/bash', () => {
 
   it('should handle multi-line output', async () => {
     const tool = createBashTool();
-    const result = await tool.execute({ command: 'echo "line1" && echo "line2"' }, signal);
+    const result = await tool.execute({ command: 'seq 2 3' }, signal);
     const content = typeof result === 'string' ? result : result.content;
-    expect(content).toContain('line1');
-    expect(content).toContain('line2');
+    expect(content).toContain('2');
+    expect(content).toContain('3');
   });
 
   describe('sandboxing: workingDir + allowedCommands (issue #23)', () => {
@@ -120,15 +120,43 @@ describe('builtin/bash', () => {
       expect(content).toContain('hello');
     });
 
-    it('does NOT block metacharacters when allowedCommands is not set', async () => {
+    it('blocks metacharacters even when allowedCommands is not set (issue #140)', async () => {
       const unrestricted = createBashTool();
-      const result = await unrestricted.execute(
-        { command: 'echo "line1" && echo "line2"' },
-        signal,
-      );
+      const result = await unrestricted.execute({ command: 'echo line1 && echo line2' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/metachar|forbidden/i);
+    });
+  });
+
+  describe('metacharacter protection applies even without allowedCommands (issue #140)', () => {
+    it('blocks ; injection without allowedCommands', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo hi; cat /etc/passwd' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/metachar|forbidden/i);
+    });
+
+    it('blocks | injection without allowedCommands', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo hi | cat' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+
+    it('blocks backtick injection without allowedCommands', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo `whoami`' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+
+    it('still runs safe commands without metacharacters', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo safe' }, signal);
       const content = typeof result === 'string' ? result : result.content;
-      expect(content).toContain('line1');
-      expect(content).toContain('line2');
+      expect(content).toContain('safe');
     });
   });
 
