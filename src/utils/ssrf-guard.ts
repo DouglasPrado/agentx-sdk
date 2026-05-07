@@ -36,6 +36,7 @@ export function validateSsrfUrl(rawUrl: string): string | null {
     if (a === 192 && b === 168) return 'Blocked private range 192.168.0.0/16';
     if (a === 172 && b >= 16 && b <= 31) return 'Blocked private range 172.16.0.0/12';
     if (a === 169 && b === 254) return 'Blocked link-local range (cloud metadata)';
+    if (a === 100 && b >= 64 && b <= 127) return 'Blocked shared address space 100.64.0.0/10';
     if (a === 0) return 'Blocked 0.0.0.0/8';
   }
 
