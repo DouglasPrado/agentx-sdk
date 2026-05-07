@@ -601,24 +601,28 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
     : undefined;
 
   if (config.transport === 'stdio') {
+    if (!config.command) {
+      throw new Error('MCPConnectionConfig: "command" is required for transport "stdio"');
+    }
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
-    return new StdioClientTransport({ command: config.command!, args: config.args ?? [] });
+    return new StdioClientTransport({ command: config.command, args: config.args ?? [] });
   }
 
-  if (config.url) {
+  if (config.transport === 'sse' || config.transport === 'http') {
+    if (!config.url) {
+      throw new Error(`MCPConnectionConfig: "url" is required for transport "${config.transport}"`);
+    }
     const ssrfError = validateSsrfUrl(config.url);
     if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
-  }
 
-  if (config.transport === 'sse') {
-    const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
-    return new SSEClientTransport(new URL(config.url!), { requestInit });
-  }
+    if (config.transport === 'sse') {
+      const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
+      return new SSEClientTransport(new URL(config.url), { requestInit });
+    }
 
-  if (config.transport === 'http') {
     const { StreamableHTTPClientTransport } =
       await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
-    return new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
+    return new StreamableHTTPClientTransport(new URL(config.url), { requestInit });
   }
 
   throw new Error(`Unsupported MCP transport: ${config.transport}`);
