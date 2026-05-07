@@ -1,8 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { StreamingToolExecutor } from '../../../src/core/streaming-tool-executor.js';
 import { ToolExecutor } from '../../../src/tools/tool-executor.js';
+import type { Logger } from '../../../src/utils/logger.js';
 import { z } from 'zod';
 import type { AgentTool } from '../../../src/contracts/entities/agent-tool.js';
+
+function makeLogger(): Logger & { warn: ReturnType<typeof vi.fn> } {
+  return {
+    level: 'warn' as const,
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn().mockReturnThis(),
+  };
+}
 
 function createTool(overrides: Partial<AgentTool> = {}): AgentTool {
   return {
@@ -415,5 +427,72 @@ describe('StreamingToolExecutor', () => {
     const completed = [...streaming.getCompletedResults()];
     expect(completed).toHaveLength(1);
     expect(completed[0]!.id).toBe('c1');
+  });
+
+  // issue #144 — defensive warnings must go through injected logger, not console.warn
+  describe('injected logger instead of console.warn (issue #144)', () => {
+    it('routes defensive warn to injected logger and not to console.warn (getCompletedResults)', () => {
+      const executor = new ToolExecutor();
+      const logger = makeLogger();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Pass logger as 3rd constructor arg (not yet accepted — RED phase)
+      const streaming = new StreamingToolExecutor(executor, undefined, logger);
+
+      // Inject a tool with status='completed' but missing result/duration (invariant violation)
+      // This forces the defensive warn path.
+      (streaming as unknown as { tools: unknown[] }).tools.push({
+        id: 'broken-1',
+        name: 'broken',
+        args: '{}',
+        parsedArgs: {},
+        isSafe: true,
+        status: 'completed',
+        result: undefined,
+        duration: undefined,
+        progressEvents: [],
+      });
+
+      const results = [...streaming.getCompletedResults()];
+      expect(results).toHaveLength(0); // Broken tool skipped
+
+      // After fix: console.warn must NOT be called; logger.warn must BE called
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledOnce();
+
+      warnSpy.mockRestore();
+    });
+
+    it('routes defensive warn to injected logger and not to console.warn (getRemainingResults)', async () => {
+      const executor = new ToolExecutor();
+      const logger = makeLogger();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const streaming = new StreamingToolExecutor(executor, undefined, logger);
+
+      (streaming as unknown as { tools: unknown[] }).tools.push({
+        id: 'broken-2',
+        name: 'broken',
+        args: '{}',
+        parsedArgs: {},
+        isSafe: true,
+        status: 'executing',
+        promise: Promise.resolve(),
+        result: undefined,
+        duration: undefined,
+        progressEvents: [],
+      });
+
+      const results: unknown[] = [];
+      for await (const r of streaming.getRemainingResults()) {
+        results.push(r);
+      }
+      expect(results).toHaveLength(0);
+
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledOnce();
+
+      warnSpy.mockRestore();
+    });
   });
 });
