@@ -1,5 +1,6 @@
 import type { ToolExecutor } from '../tools/tool-executor.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
+import { createLogger, type Logger } from '../utils/logger.js';
 
 export interface ToolExecutionResult {
   id: string;
@@ -39,13 +40,15 @@ export class StreamingToolExecutor {
   private readonly tools: TrackedTool[] = [];
   private readonly executor: ToolExecutor;
   private readonly signal?: AbortSignal;
+  private readonly logger: Logger;
   private processing = false;
   /** Accumulated progress events from all tools (drained by getProgressEvents) */
   private pendingProgress: ToolProgressInfo[] = [];
 
-  constructor(executor: ToolExecutor, signal?: AbortSignal) {
+  constructor(executor: ToolExecutor, signal?: AbortSignal, logger?: Logger) {
     this.executor = executor;
     this.signal = signal;
+    this.logger = logger ?? createLogger({ prefix: 'streaming-tool-executor' });
   }
 
   /** Called during LLM streaming when a tool_call chunk arrives */
@@ -102,9 +105,7 @@ export class StreamingToolExecutor {
           // Defensive: an invariant violation upstream (status='completed' without
           // result/duration) shouldn't crash the whole stream. Mark as yielded so
           // we don't loop on it, log, and skip.
-          console.warn(
-            `[streaming-tool-executor] tool "${tool.id}" completed without result/duration — skipping`,
-          );
+          this.logger.warn(`tool "${tool.id}" completed without result/duration — skipping`);
           tool.status = 'yielded';
           continue;
         }
@@ -140,9 +141,7 @@ export class StreamingToolExecutor {
 
       if (tool.result === undefined || tool.duration === undefined) {
         // Same defensive skip as getCompletedResults — never crash the stream.
-        console.warn(
-          `[streaming-tool-executor] tool "${tool.id}" finished without result/duration — skipping`,
-        );
+        this.logger.warn(`tool "${tool.id}" finished without result/duration — skipping`);
         tool.status = 'yielded';
         continue;
       }
