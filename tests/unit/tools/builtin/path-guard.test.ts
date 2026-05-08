@@ -52,4 +52,33 @@ describe('assertSafePath', () => {
       /symlink|traversal|outside/i,
     );
   });
+
+  // --- issue #157: rootDir as symlink causes false positive ---
+
+  it('allows a legitimate file when rootDir is a symlink to the real workDir (issue #157)', async () => {
+    // workDir is the real directory; we create a symlink to it to simulate
+    // a Docker/CI setup where WORKDIR is mounted at a symlinked path.
+    const symlinkToWorkDir = join(outsideDir, 'symlink-to-workdir');
+    await symlink(workDir, symlinkToWorkDir);
+
+    const file = join(workDir, 'legit.txt');
+    await writeFile(file, 'ok');
+
+    // File is legitimate (inside the real dir), but rootDir is a symlink.
+    // Without canonicalization of rootDir this throws a false-positive traversal error.
+    expect(() => assertSafePath(file, symlinkToWorkDir)).not.toThrow();
+  });
+
+  it('still blocks symlink traversal when rootDir itself is a symlink (issue #157)', async () => {
+    // rootDir is a symlink; a symlink INSIDE workDir pointing outside must still be blocked.
+    const symlinkToWorkDir = join(outsideDir, 'symlink-to-workdir');
+    await symlink(workDir, symlinkToWorkDir);
+
+    const evilTarget = join(outsideDir, 'evil.txt');
+    await writeFile(evilTarget, 'evil');
+    const evilLink = join(workDir, 'evil-link.txt');
+    await symlink(evilTarget, evilLink);
+
+    expect(() => assertSafePath(evilLink, symlinkToWorkDir)).toThrow(/symlink|traversal|outside/i);
+  });
 });
