@@ -146,6 +146,27 @@ describe('MCPAdapter', () => {
         adapter.connect({ name: 'dup', transport: 'stdio', command: 'node' }),
       ).rejects.toThrow('already connected');
     });
+
+    // issue #142 — missing required fields must throw descriptive errors
+    describe('missing required config fields (issue #142)', () => {
+      it('throws descriptive error for stdio without command', async () => {
+        await expect(
+          adapter.connect({ name: 'no-cmd', transport: 'stdio' } as never),
+        ).rejects.toThrow(/"command".*stdio|stdio.*"command"/i);
+      });
+
+      it('throws descriptive error for sse without url', async () => {
+        await expect(
+          adapter.connect({ name: 'no-url', transport: 'sse' } as never),
+        ).rejects.toThrow(/"url".*sse|sse.*"url"/i);
+      });
+
+      it('throws descriptive error for http without url', async () => {
+        await expect(
+          adapter.connect({ name: 'no-url-http', transport: 'http' } as never),
+        ).rejects.toThrow(/"url".*http|http.*"url"/i);
+      });
+    });
   });
 
   describe('disconnect()', () => {
@@ -932,7 +953,7 @@ describe('MCPAdapter', () => {
           name: 'evil-sse',
           transport: 'sse',
           url: 'http://169.254.169.254/latest/meta-data/',
-        })
+        }),
       ).rejects.toThrow(/SSRF|blocked|private|link-local/i);
     });
 
@@ -942,7 +963,7 @@ describe('MCPAdapter', () => {
           name: 'evil-http',
           transport: 'http',
           url: 'http://10.0.0.1/admin',
-        })
+        }),
       ).rejects.toThrow(/SSRF|blocked|private/i);
     });
 
@@ -952,7 +973,7 @@ describe('MCPAdapter', () => {
           name: 'evil-auto',
           transport: 'auto',
           url: 'http://192.168.1.1/api',
-        })
+        }),
       ).rejects.toThrow(/SSRF|blocked|private/i);
     });
 
