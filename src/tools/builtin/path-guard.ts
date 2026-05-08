@@ -36,8 +36,9 @@ export function resolveSearchDir(
  * Throws if the resolved path (including symlinks) escapes the root.
  */
 export function assertSafePath(filePath: string, rootDir: string): void {
+  const resolvedRoot = resolveReal(rootDir);
   const abs = resolve(filePath);
-  const rel = relative(rootDir, abs);
+  const rel = relative(resolvedRoot, abs);
   if (rel.startsWith('..') || isAbsolute(rel)) {
     throw new Error(
       `Path traversal blocked: "${filePath}" is outside working directory "${rootDir}"`,
@@ -45,7 +46,7 @@ export function assertSafePath(filePath: string, rootDir: string): void {
   }
   // Resolve symlinks to catch traversal via symlinks inside workDir
   const real = resolveReal(abs);
-  const realRel = relative(rootDir, real);
+  const realRel = relative(resolvedRoot, real);
   if (realRel.startsWith('..') || isAbsolute(realRel)) {
     throw new Error(
       `Path traversal via symlink blocked: "${filePath}" resolves outside working directory "${rootDir}"`,
