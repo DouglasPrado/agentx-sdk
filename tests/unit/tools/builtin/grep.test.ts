@@ -157,4 +157,66 @@ describe('builtin/grep', () => {
       expect(parsed.isError).toBeFalsy();
     });
   });
+
+  describe('ReDoS filter false positives (issue #145)', () => {
+    it('allows (func\\w+)\\s*\\( — group with internal quantifier but no external one', async () => {
+      const tool = createGrepTool();
+      // Old filter flagged this via \\(.*[+*?]\\) which matched any group containing a quantifier
+      const result = await tool.execute(
+        {
+          pattern: String.raw`(func\w+)\s*\(`,
+          path: tempDir,
+        },
+        signal,
+      );
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBeFalsy();
+    });
+
+    it('allows (https?://\\S+) — ? inside group is a safe quantifier', async () => {
+      const tool = createGrepTool();
+      const result = await tool.execute(
+        {
+          pattern: String.raw`(https?://\S+)`,
+          path: tempDir,
+        },
+        signal,
+      );
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBeFalsy();
+    });
+
+    it('still rejects (a+)+ — genuinely nested quantifier', async () => {
+      const tool = createGrepTool();
+      const result = await tool.execute({ pattern: '(a+)+', path: tempDir }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+
+    it('still rejects (a|ab)* — alternation with external quantifier', async () => {
+      const tool = createGrepTool();
+      const result = await tool.execute({ pattern: '(a|ab)*', path: tempDir }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+  });
+
+  describe('pattern length cap (CodeQL js/polynomial-redos)', () => {
+    it('rejects patterns longer than 1000 chars', async () => {
+      const tool = createGrepTool();
+      const huge = '('.repeat(2000);
+      const result = await tool.execute({ pattern: huge, path: tempDir }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/too long/i);
+    });
+
+    it('still accepts moderately long but safe patterns', async () => {
+      const tool = createGrepTool();
+      const pattern = 'a'.repeat(500);
+      const result = await tool.execute({ pattern, path: tempDir }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBeFalsy();
+    });
+  });
 });
