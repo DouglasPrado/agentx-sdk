@@ -168,6 +168,37 @@ describe('LLMClient', () => {
       expect(errorMessage).toContain('Model context limit exceeded');
       expect(errorMessage).not.toContain('"error"');
     });
+
+    it('should throw a descriptive error when LLM returns empty choices array (issue #154)', async () => {
+      mockFetch(
+        new Response(
+          JSON.stringify({
+            choices: [],
+            usage: { prompt_tokens: 5, completion_tokens: 0, total_tokens: 5 },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await expect(client.chat({ messages: [{ role: 'user', content: 'Hi' }] })).rejects.toThrow(
+        'LLM API returned empty choices',
+      );
+    });
+
+    it('should throw a descriptive error when LLM response has no choices field (issue #154)', async () => {
+      mockFetch(
+        new Response(
+          JSON.stringify({ usage: { prompt_tokens: 5, completion_tokens: 0, total_tokens: 5 } }),
+          {
+            status: 200,
+          },
+        ),
+      );
+
+      await expect(client.chat({ messages: [{ role: 'user', content: 'Hi' }] })).rejects.toThrow(
+        'LLM API returned empty choices',
+      );
+    });
   });
 
   describe('streamChat()', () => {
