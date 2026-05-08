@@ -1,9 +1,8 @@
-// Deliberately failing test — smoke test for pr-fix.sh bot.
-// Bot should detect the failure and fix it (or delete this file).
+// Smoke test for pr-fix.sh bot — fixed by the bot.
 import { describe, it, expect } from 'vitest';
 
 describe('pr-fix-bot smoke test', () => {
-  it('this assertion is wrong on purpose', () => {
-    expect(1).toBe(2);
+  it('passes after pr-fix bot correction', () => {
+    expect(1).toBe(1);
   });
 });
