@@ -200,4 +200,23 @@ describe('builtin/grep', () => {
       expect(parsed.isError).toBe(true);
     });
   });
+
+  describe('pattern length cap (CodeQL js/polynomial-redos)', () => {
+    it('rejects patterns longer than 1000 chars', async () => {
+      const tool = createGrepTool();
+      const huge = '('.repeat(2000);
+      const result = await tool.execute({ pattern: huge, path: tempDir }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/too long/i);
+    });
+
+    it('still accepts moderately long but safe patterns', async () => {
+      const tool = createGrepTool();
+      const pattern = 'a'.repeat(500);
+      const result = await tool.execute({ pattern, path: tempDir }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBeFalsy();
+    });
+  });
 });
