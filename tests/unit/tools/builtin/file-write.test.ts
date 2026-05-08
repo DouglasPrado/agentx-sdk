@@ -110,4 +110,32 @@ describe('builtin/file-write', () => {
     const content = typeof result === 'string' ? result : result.content;
     expect(content).toContain('bytes');
   });
+
+  // --- issue #156: unlimited write size allows disk exhaustion ---
+
+  it('rejects content exceeding MAX_WRITE_SIZE (10 MB) with isError (issue #156)', async () => {
+    const tool = createFileWriteTool(tempDir);
+    const oversized = 'x'.repeat(10_000_001); // 1 byte over the 10 MB limit
+    const result = await tool.execute(
+      { file_path: join(tempDir, 'huge.txt'), content: oversized },
+      signal,
+    );
+    const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+    expect(parsed.isError).toBe(true);
+    expect(parsed.content).toMatch(/exceed|limit|size|large/i);
+  });
+
+  it('accepts content exactly at MAX_WRITE_SIZE (10 MB) (issue #156)', async () => {
+    const tool = createFileWriteTool(tempDir);
+    const exactly = 'x'.repeat(10_000_000);
+    const result = await tool.execute(
+      { file_path: join(tempDir, 'max.txt'), content: exactly },
+      signal,
+    );
+    const content = typeof result === 'string' ? result : result.content;
+    expect(content).toContain('bytes');
+    expect(
+      typeof result === 'string' ? false : (result as { isError?: boolean }).isError,
+    ).toBeFalsy();
+  });
 });

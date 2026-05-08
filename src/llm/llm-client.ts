@@ -133,7 +133,12 @@ export class LLMClient {
       );
     }
 
-    const choice = json.choices[0]!;
+    const choice = json.choices?.[0];
+    if (!choice) {
+      throw new Error(
+        `LLM API returned empty choices (model=${this.model}). Response: ${JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
     const usage: TokenUsage = {
       inputTokens: json.usage?.prompt_tokens ?? 0,
       outputTokens: json.usage?.completion_tokens ?? 0,

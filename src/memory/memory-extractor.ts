@@ -99,9 +99,11 @@ export async function extractMemories(
       .split('\n')
       .filter((l) => /^(user|assistant|tool):/.exec(l)).length;
 
-    // Delimiters isolate conversation text from instructions to mitigate prompt injection.
-    const CONV_BEGIN = '---CONVERSATION-DATA-BEGIN---';
-    const CONV_END = '---CONVERSATION-DATA-END---';
+    // Nonce-based delimiters: each extraction generates unique markers that cannot be
+    // predicted or injected by conversation content (prevents delimiter escape attacks).
+    const nonce = crypto.randomUUID();
+    const CONV_BEGIN = `---CONV-DATA-BEGIN-${nonce}---`;
+    const CONV_END = `---CONV-DATA-END-${nonce}---`;
     const prompt = [
       buildForkedExtractionPrompt(Math.max(messageCount, 2), existingManifest),
       '',
