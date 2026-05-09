@@ -96,3 +96,18 @@ describe('release.yml — release-please based, no manual git push to main', () 
     expect(releaseYml).toMatch(/release-please\.outputs\.release_created\s*==\s*'true'/);
   });
 });
+
+describe('pnpm overrides — CVE-2026-6321 + CVE-2026-6322 fast-uri path-traversal & host-confusion (issue #163)', () => {
+  it('pins fast-uri to >=3.1.2 in pnpm.overrides to fix CVE-2026-6321 and CVE-2026-6322', () => {
+    const pnpmSection = pkg.pnpm as { overrides?: Record<string, string> } | undefined;
+    const overrides = pnpmSection?.overrides ?? {};
+    expect(overrides).toHaveProperty('fast-uri');
+    expect(overrides['fast-uri']).toBe('>=3.1.2');
+  });
+
+  it('pins fast-uri to >=3.1.2 in top-level overrides for npm compatibility (issue #163)', () => {
+    const overrides = pkg.overrides as Record<string, string>;
+    expect(overrides).toHaveProperty('fast-uri');
+    expect(overrides['fast-uri']).toBe('>=3.1.2');
+  });
+});
