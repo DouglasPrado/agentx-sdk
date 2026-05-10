@@ -71,6 +71,8 @@ export class KnowledgeManager {
       }
     }
 
+    this.searchCache.clear();
+
     return chunkObjs.length;
   }
 
