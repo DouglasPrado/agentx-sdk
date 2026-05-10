@@ -52,6 +52,16 @@ export class KnowledgeManager {
     if (chunks.length === 0) return 0;
 
     const embeddings = await this.embeddingService.embed(chunks);
+
+    if (embeddings.length !== chunks.length) {
+      const sid = document.metadata?.sourceId;
+      const sourceId = typeof sid === 'string' ? sid : 'unknown';
+      throw new Error(
+        `EmbeddingService returned ${embeddings.length} embeddings for ${chunks.length} chunks` +
+          ` (document: ${sourceId})`,
+      );
+    }
+
     const now = Date.now();
     const chunkObjs: KnowledgeChunk[] = chunks.map((content, i) => ({
       id: randomUUID(),
