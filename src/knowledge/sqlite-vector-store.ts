@@ -59,7 +59,7 @@ export class SQLiteVectorStore implements VectorStore {
 
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[] {
     const rows = this.database.db
-      .prepare('SELECT * FROM vectors ORDER BY created_at DESC LIMIT ?')
+      .prepare('SELECT * FROM vectors LIMIT ?')
       .all(MAX_SCAN) as VectorRow[];
 
     const scored = rows.map((row) => {
