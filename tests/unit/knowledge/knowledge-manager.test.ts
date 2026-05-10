@@ -71,4 +71,25 @@ describe('KnowledgeManager', () => {
 
     expect(embeddingService.embedSingle).toHaveBeenCalledOnce();
   });
+
+  it('should invalidate search cache after ingest()', async () => {
+    // First search — populates cache
+    vi.mocked(store.search).mockReturnValue([]);
+    await manager.search('query');
+    expect(embeddingService.embedSingle).toHaveBeenCalledOnce();
+
+    // Ingest a new document
+    await manager.ingest({ content: 'New relevant content for the query.' });
+
+    // Now store returns the newly ingested chunk
+    vi.mocked(store.search).mockReturnValue([
+      { id: 'new', content: 'New relevant content', score: 0.9, metadata: {} },
+    ]);
+
+    // Second search — cache must be cleared so store is consulted again
+    const results = await manager.search('query');
+    expect(embeddingService.embedSingle).toHaveBeenCalledTimes(2);
+    expect(results).toHaveLength(1);
+    expect(results[0]!.id).toBe('new');
+  });
 });
