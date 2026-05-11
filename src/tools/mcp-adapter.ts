@@ -479,10 +479,11 @@ export class MCPAdapter {
     }
 
     // Auto-detect: try StreamableHTTP first, fall back to SSE
-    if (config.url) {
-      const ssrfError = validateSsrfUrl(config.url);
-      if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
+    if (!config.url) {
+      throw new Error('MCPConnectionConfig: "url" is required for transport "auto"');
     }
+    const ssrfError = validateSsrfUrl(config.url);
+    if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
 
     const requestInit: RequestInit | undefined = config.headers
       ? { headers: config.headers }
@@ -491,7 +492,7 @@ export class MCPAdapter {
     const client1 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' });
     const { StreamableHTTPClientTransport } =
       await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
-    const httpTransport = new StreamableHTTPClientTransport(new URL(config.url!), { requestInit });
+    const httpTransport = new StreamableHTTPClientTransport(new URL(config.url), { requestInit });
     try {
       await client1.connect(httpTransport);
       return { client: client1, transport: httpTransport };
@@ -502,7 +503,7 @@ export class MCPAdapter {
 
     const client2 = new Client({ name: `agentx-${config.name}`, version: '0.1.0' });
     const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
-    const sseTransport = new SSEClientTransport(new URL(config.url!), { requestInit });
+    const sseTransport = new SSEClientTransport(new URL(config.url), { requestInit });
     try {
       await client2.connect(sseTransport);
       return { client: client2, transport: sseTransport };

@@ -166,6 +166,13 @@ describe('MCPAdapter', () => {
           adapter.connect({ name: 'no-url-http', transport: 'http' } as never),
         ).rejects.toThrow(/"url".*http|http.*"url"/i);
       });
+
+      // issue #164 — auto transport also requires url; previously threw cryptic TypeError
+      it('throws descriptive error for auto without url', async () => {
+        await expect(
+          adapter.connect({ name: 'no-url-auto', transport: 'auto' } as never),
+        ).rejects.toThrow(/"url".*auto|auto.*"url"/i);
+      });
     });
   });
 
