@@ -35,7 +35,7 @@ import {
   sanitizeFilename,
   sanitizeFrontmatterValue,
   validateThreadId,
-  validateMemoryPath,
+  validateMemoryPathResolved,
 } from './memory-paths.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
 import { selectRelevantMemories } from './memory-relevance.js';
@@ -135,7 +135,7 @@ export class FileMemorySystem {
     try {
       const dir = this.resolveDir(threadId);
       const candidate = join(dir, filename);
-      const filePath = validateMemoryPath(candidate, this.memoryDir);
+      const filePath = await validateMemoryPathResolved(candidate, this.memoryDir);
       if (!filePath) return null;
       const content = await readFile(filePath, 'utf-8');
       const fileStat = await stat(filePath);
@@ -166,7 +166,7 @@ export class FileMemorySystem {
     try {
       const dir = this.resolveDir(threadId);
       const candidate = join(dir, filename);
-      const filePath = validateMemoryPath(candidate, this.memoryDir);
+      const filePath = await validateMemoryPathResolved(candidate, this.memoryDir);
       if (!filePath) return false;
       await unlink(filePath);
       await this.removeFromIndex(filename, threadId);

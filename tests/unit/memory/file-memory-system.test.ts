@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -369,6 +369,52 @@ describe('FileMemorySystem — concurrent writes (withWriteLock)', () => {
     for (let i = 0; i < 5; i++) {
       expect(index).toContain(`mem-${i}.md`);
     }
+  });
+});
+
+describe('FileMemorySystem — symlink path traversal in readMemory/deleteMemory (#171)', () => {
+  let tempDir: string;
+  let outsideDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-sym-'));
+    outsideDir = await mkdtemp(join(tmpdir(), 'fms-outside-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+    await rm(outsideDir, { recursive: true, force: true });
+  });
+
+  it('readMemory — rejects symlink pointing outside memory dir', async () => {
+    const victimPath = join(outsideDir, 'secret.md');
+    await writeFile(victimPath, 'sensitive content', 'utf-8');
+
+    // Create symlink inside memory dir pointing to victim outside
+    await symlink(victimPath, join(tempDir, 'evil.md'));
+
+    // Should be blocked — symlink escapes memory dir
+    const result = await system.readMemory('evil.md');
+    expect(result).toBeNull();
+  });
+
+  it('deleteMemory — rejects symlink pointing outside memory dir', async () => {
+    const victimPath = join(outsideDir, 'target.md');
+    await writeFile(victimPath, 'do not delete', 'utf-8');
+
+    await symlink(victimPath, join(tempDir, 'evil.md'));
+
+    const deleted = await system.deleteMemory('evil.md');
+    expect(deleted).toBe(false);
+
+    // Confirm victim file was NOT deleted
+    const content = await readFile(victimPath, 'utf-8');
+    expect(content).toBe('do not delete');
   });
 });
 
