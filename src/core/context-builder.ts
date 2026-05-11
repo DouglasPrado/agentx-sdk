@@ -45,7 +45,8 @@ export function buildContext(options: {
   const sortedInjections = [...injections].sort((a, b) => b.priority - a.priority);
   for (const injection of sortedInjections) {
     if (used + injection.tokens <= budget) {
-      systemContent += `\n\n<system-reminder>\n${injection.content}\n</system-reminder>`;
+      const safe = injection.content.replace(/<\/system-reminder>/gi, '');
+      systemContent += `\n\n<system-reminder>\n${safe}\n</system-reminder>`;
       used += injection.tokens;
       appliedInjections.push(injection);
     }
