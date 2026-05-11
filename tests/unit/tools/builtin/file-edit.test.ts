@@ -162,4 +162,24 @@ describe('builtin/file-edit', () => {
     const content = typeof result === 'string' ? result : result.content;
     expect(content).not.toMatch(/[Tt]raversal|[Bb]locked/);
   });
+
+  // --- issue #189: path guard missing when workingDir is omitted ---
+
+  describe('default cwd guard when workingDir is omitted (issue #189)', () => {
+    it('blocks editing a path outside cwd when no workingDir is set', async () => {
+      // tempDir is in /tmp/... which is outside process.cwd() — guard should block it
+      const tool = createFileEditTool(); // no workingDir — must default to cwd guard
+      const result = await tool.execute(
+        {
+          file_path: join(tempDir, 'code.ts'),
+          old_string: 'return "world"',
+          new_string: 'return "pwned"',
+        },
+        signal,
+      );
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/traversal|outside|blocked/i);
+    });
+  });
 });

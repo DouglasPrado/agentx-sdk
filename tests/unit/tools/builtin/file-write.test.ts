@@ -111,6 +111,22 @@ describe('builtin/file-write', () => {
     expect(content).toContain('bytes');
   });
 
+  // --- issue #189: path guard missing when workingDir is omitted ---
+
+  describe('default cwd guard when workingDir is omitted (issue #189)', () => {
+    it('blocks writing a path outside cwd when no workingDir is set', async () => {
+      // tempDir is in /tmp/... which is outside process.cwd() — guard should block it
+      const tool = createFileWriteTool(); // no workingDir — must default to cwd guard
+      const result = await tool.execute(
+        { file_path: join(tempDir, 'pwn.txt'), content: 'evil' },
+        signal,
+      );
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/traversal|outside|blocked/i);
+    });
+  });
+
   // --- issue #156: unlimited write size allows disk exhaustion ---
 
   it('rejects content exceeding MAX_WRITE_SIZE (10 MB) with isError (issue #156)', async () => {
