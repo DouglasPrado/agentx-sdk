@@ -110,6 +110,19 @@ describe('SQLiteVectorStore', () => {
     prepareSpy.mockRestore();
   });
 
+  it('search() does not apply recency bias — must not use ORDER BY created_at DESC (#173)', () => {
+    const prepareSpy = vi.spyOn(database.db, 'prepare');
+    store.search(new Float32Array([1, 0, 0, 0]), 5);
+    const sqlCalls = prepareSpy.mock.calls.map((c) => c[0].toUpperCase());
+    const scanSql = sqlCalls.find((sql) => sql.includes('FROM VECTORS'));
+    expect(scanSql).toBeDefined();
+    // Memory bound must still exist
+    expect(scanSql).toMatch(/LIMIT/);
+    // Recency bias silently excludes old chunks — must not order by created_at DESC
+    expect(scanSql).not.toMatch(/ORDER BY CREATED_AT DESC/);
+    prepareSpy.mockRestore();
+  });
+
   it('listAll() uses a LIMIT clause to prevent OOM with large knowledge bases (issue #116)', () => {
     const prepareSpy = vi.spyOn(database.db, 'prepare');
     store.listAll();
