@@ -82,6 +82,8 @@ describe('KnowledgeManager', () => {
           'First chunk content here with enough text. Second chunk content here with enough text.',
       }),
     ).rejects.toThrow(/embeddingservice returned/i);
+  });
+
   it('should invalidate search cache after ingest()', async () => {
     // First search — populates cache
     vi.mocked(store.search).mockReturnValue([]);
