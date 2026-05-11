@@ -25,12 +25,10 @@ export function createFileReadTool(workingDir?: string): AgentTool {
     async execute(rawArgs: unknown) {
       const { file_path, offset, limit } = rawArgs as z.infer<typeof FileReadParams>;
 
-      if (workingDir) {
-        try {
-          assertSafePath(file_path, workingDir);
-        } catch (error) {
-          return { content: (error as Error).message, isError: true };
-        }
+      try {
+        assertSafePath(file_path, workingDir ?? process.cwd());
+      } catch (error) {
+        return { content: (error as Error).message, isError: true };
       }
 
       try {
