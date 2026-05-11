@@ -178,7 +178,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
 
       // Map values in schema key order to match $1, $2, ... in SQL
       const schemaKeys = Object.keys(def.parameters.shape);
-      const data = parsed.data as Record<string, unknown>;
+      const data: Record<string, unknown> = parsed.data;
       const values = schemaKeys.map((key) => data[key] ?? null);
 
       try {

@@ -376,7 +376,7 @@ export class MCPAdapter {
     const safeServerName = serverName.replace(/__/g, '_');
     const safeToolName = mcpTool.name.replace(/__/g, '_');
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
-    const parameters = jsonSchemaToZod(mcpTool.inputSchema) as unknown as ZodSchema;
+    const parameters: ZodSchema = jsonSchemaToZod(mcpTool.inputSchema);
     const isolateErrors = config.isolateErrors ?? true;
     const timeout = config.timeout ?? 30_000;
 
