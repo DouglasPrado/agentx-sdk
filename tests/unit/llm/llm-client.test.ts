@@ -341,6 +341,23 @@ describe('LLMClient', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual([0.1, 0.2, 0.3]);
     });
+
+    it('embed() throws informative error when json.data is missing (#172)', async () => {
+      // Simulate provider returning error body with status 200 (OpenRouter edge case)
+      mockFetch(
+        new Response(JSON.stringify({ error: { message: 'rate limit exceeded' } }), {
+          status: 200,
+        }),
+      );
+
+      await expect(client.embed(['hello'])).rejects.toThrow(/unexpected response/i);
+    });
+
+    it('embed() throws informative error when json.data is not an array (#172)', async () => {
+      mockFetch(new Response(JSON.stringify({ data: null }), { status: 200 }));
+
+      await expect(client.embed(['hello'])).rejects.toThrow(/unexpected response/i);
+    });
   });
 
   describe('resilience', () => {

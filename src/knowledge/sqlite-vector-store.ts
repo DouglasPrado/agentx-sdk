@@ -57,17 +57,22 @@ export class SQLiteVectorStore implements VectorStore {
     tx(chunks);
   }
 
+  private bufferToFloat32(buf: Buffer): Float32Array {
+    if (buf.byteLength % 4 !== 0) {
+      throw new Error(
+        `Invalid embedding blob: byteLength ${buf.byteLength} is not a multiple of 4`,
+      );
+    }
+    return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+  }
+
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[] {
     const rows = this.database.db
-      .prepare('SELECT * FROM vectors ORDER BY created_at DESC LIMIT ?')
+      .prepare('SELECT * FROM vectors LIMIT ?')
       .all(MAX_SCAN) as VectorRow[];
 
     const scored = rows.map((row) => {
-      const embedding = new Float32Array(
-        row.embedding.buffer,
-        row.embedding.byteOffset,
-        row.embedding.byteLength / 4,
-      );
+      const embedding = this.bufferToFloat32(row.embedding);
       return {
         id: row.id,
         content: row.content,
@@ -91,11 +96,7 @@ export class SQLiteVectorStore implements VectorStore {
     return rows.map((row) => ({
       id: row.id,
       content: row.content,
-      embedding: new Float32Array(
-        row.embedding.buffer,
-        row.embedding.byteOffset,
-        row.embedding.byteLength / 4,
-      ),
+      embedding: this.bufferToFloat32(row.embedding),
       metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : undefined,
       createdAt: row.created_at,
     }));

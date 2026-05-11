@@ -178,6 +178,13 @@ export class LLMClient {
       );
     }
 
+    if (!json.data || !Array.isArray(json.data)) {
+      throw new Error(
+        `LLM embed API returned unexpected response (model=${model ?? this.model}). ` +
+          `Response: ${JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
+
     return json.data.map((d) => d.embedding);
   }
 
