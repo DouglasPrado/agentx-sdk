@@ -65,4 +65,39 @@ describe('validateSsrfUrl', () => {
       expect(validateSsrfUrl('http://100.128.0.0/')).toBeNull();
     });
   });
+
+  // issue #190 — NAT64 prefix 64:ff9b::/96 (RFC 6146) not blocked
+  describe('NAT64 64:ff9b::/96 (issue #190)', () => {
+    it('blocks NAT64 with embedded private 10.0.0.1 (dot-decimal form)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::10.0.0.1]/')).not.toBeNull();
+    });
+
+    it('blocks NAT64 with embedded private 192.168.1.1 (dot-decimal form)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::192.168.1.1]/')).not.toBeNull();
+    });
+
+    it('blocks NAT64 with embedded loopback 127.0.0.1 (dot-decimal form)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::127.0.0.1]/')).not.toBeNull();
+    });
+
+    it('blocks NAT64 with embedded link-local 169.254.0.1 (dot-decimal form)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::169.254.0.1]/')).not.toBeNull();
+    });
+
+    it('blocks NAT64 with embedded 172.16.0.1 (compact hex form ac10:1)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::ac10:1]/')).not.toBeNull();
+    });
+
+    it('blocks NAT64 with embedded 10.0.0.1 (compact hex form a00:1)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::a00:1]/')).not.toBeNull();
+    });
+
+    it('allows NAT64 with embedded public IP 1.1.1.1 (dot-decimal form)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::1.1.1.1]/')).toBeNull();
+    });
+
+    it('allows NAT64 with embedded public IP 8.8.8.8 (compact hex form 808:808)', () => {
+      expect(validateSsrfUrl('http://[64:ff9b::808:808]/')).toBeNull();
+    });
+  });
 });
