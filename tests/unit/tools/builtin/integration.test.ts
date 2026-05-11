@@ -59,15 +59,16 @@ describe('Builtin tools integration', () => {
       expect(result.content).toMatch(/traversal|outside|blocked/i);
     });
 
-    it('all() without workingDir remains backward compatible', async () => {
+    it('all() without workingDir blocks paths outside cwd (defaults to cwd guard)', async () => {
       const executor = new ToolExecutor();
       builtinTools.all().forEach((t) => executor.register(t));
 
+      // workingDir is in /tmp/... which is outside process.cwd() — must be blocked
       const result = await executor.execute('Write', {
         file_path: join(workingDir, 'compat.txt'),
         content: 'ok',
       });
-      expect(result.isError).toBeFalsy();
+      expect(result.isError).toBe(true);
     });
 
     it('fileOps(workingDir) — Write tool enforces containment', async () => {

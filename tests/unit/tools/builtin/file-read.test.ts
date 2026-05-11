@@ -26,7 +26,7 @@ describe('builtin/file-read', () => {
   });
 
   it('should read file with line numbers', async () => {
-    const tool = createFileReadTool();
+    const tool = createFileReadTool(tempDir);
     const result = await tool.execute({ file_path: join(tempDir, 'test.txt') }, signal);
     const content = typeof result === 'string' ? result : result.content;
     expect(content).toContain('1\tLine 1');
@@ -34,7 +34,7 @@ describe('builtin/file-read', () => {
   });
 
   it('should support offset and limit', async () => {
-    const tool = createFileReadTool();
+    const tool = createFileReadTool(tempDir);
     const result = await tool.execute(
       { file_path: join(tempDir, 'test.txt'), offset: 2, limit: 2 },
       signal,
@@ -47,7 +47,7 @@ describe('builtin/file-read', () => {
   });
 
   it('should return error for non-existent file', async () => {
-    const tool = createFileReadTool();
+    const tool = createFileReadTool(tempDir);
     const result = await tool.execute({ file_path: join(tempDir, 'nope.txt') }, signal);
     const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
     expect(parsed.isError).toBe(true);
@@ -85,11 +85,24 @@ describe('builtin/file-read', () => {
       expect(parsed.isError).toBe(true);
     });
 
-    it('has no path restriction when workingDir is not set', async () => {
-      const tool = createFileReadTool(); // no restriction
+    it('blocks paths outside cwd when workingDir is not set (defaults to cwd)', async () => {
+      const tool = createFileReadTool(); // no workingDir — defaults to process.cwd()
       const result = await tool.execute({ file_path: join(tempDir, 'test.txt') }, signal);
-      const content = typeof result === 'string' ? result : result.content;
-      expect(content).toContain('Line 1');
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+    });
+  });
+
+  // --- issue #189: path guard missing when workingDir is omitted ---
+
+  describe('default cwd guard when workingDir is omitted (issue #189)', () => {
+    it('blocks reading a path outside cwd when no workingDir is set', async () => {
+      // tempDir is in /tmp/... which is outside process.cwd() — guard should block it
+      const tool = createFileReadTool(); // no workingDir — must default to cwd guard
+      const result = await tool.execute({ file_path: join(tempDir, 'test.txt') }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/traversal|outside|blocked/i);
     });
   });
 });

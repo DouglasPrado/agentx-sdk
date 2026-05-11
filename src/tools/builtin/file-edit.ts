@@ -26,12 +26,10 @@ export function createFileEditTool(workingDir?: string): AgentTool {
         typeof FileEditParams
       >;
 
-      if (workingDir) {
-        try {
-          assertSafePath(file_path, workingDir);
-        } catch (error) {
-          return { content: (error as Error).message, isError: true };
-        }
+      try {
+        assertSafePath(file_path, workingDir ?? process.cwd());
+      } catch (error) {
+        return { content: (error as Error).message, isError: true };
       }
 
       let content: string;

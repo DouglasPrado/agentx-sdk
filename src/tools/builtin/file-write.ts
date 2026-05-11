@@ -23,12 +23,10 @@ export function createFileWriteTool(workingDir?: string): AgentTool {
     async execute(rawArgs: unknown) {
       const { file_path, content } = rawArgs as z.infer<typeof FileWriteParams>;
 
-      if (workingDir) {
-        try {
-          assertSafePath(file_path, workingDir);
-        } catch (error) {
-          return { content: (error as Error).message, isError: true };
-        }
+      try {
+        assertSafePath(file_path, workingDir ?? process.cwd());
+      } catch (error) {
+        return { content: (error as Error).message, isError: true };
       }
 
       const byteSize = Buffer.byteLength(content, 'utf-8');

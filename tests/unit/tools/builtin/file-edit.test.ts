@@ -24,7 +24,7 @@ describe('builtin/file-edit', () => {
   });
 
   it('should replace exact string match', async () => {
-    const tool = createFileEditTool();
+    const tool = createFileEditTool(tempDir);
     await tool.execute(
       {
         file_path: join(tempDir, 'code.ts'),
@@ -40,7 +40,7 @@ describe('builtin/file-edit', () => {
   });
 
   it('should fail if old_string not found', async () => {
-    const tool = createFileEditTool();
+    const tool = createFileEditTool(tempDir);
     const result = await tool.execute(
       {
         file_path: join(tempDir, 'code.ts'),
@@ -57,7 +57,7 @@ describe('builtin/file-edit', () => {
 
   it('should fail if old_string matches multiple times without replace_all', async () => {
     await writeFile(join(tempDir, 'dup.ts'), 'foo\nbar\nfoo\n');
-    const tool = createFileEditTool();
+    const tool = createFileEditTool(tempDir);
     const result = await tool.execute(
       {
         file_path: join(tempDir, 'dup.ts'),
@@ -74,7 +74,7 @@ describe('builtin/file-edit', () => {
 
   it('should replace all occurrences with replace_all', async () => {
     await writeFile(join(tempDir, 'dup.ts'), 'foo\nbar\nfoo\n');
-    const tool = createFileEditTool();
+    const tool = createFileEditTool(tempDir);
     await tool.execute(
       {
         file_path: join(tempDir, 'dup.ts'),
@@ -149,8 +149,8 @@ describe('builtin/file-edit', () => {
     expect(content).not.toMatch(/[Tt]raversal|[Bb]locked/);
   });
 
-  it('allows any path when no workingDir is set (backward compat)', async () => {
-    const tool = createFileEditTool();
+  it('blocks paths outside cwd when workingDir is not set (defaults to cwd)', async () => {
+    const tool = createFileEditTool(); // no workingDir — defaults to process.cwd()
     const result = await tool.execute(
       {
         file_path: join(tempDir, 'code.ts'),
@@ -159,7 +159,27 @@ describe('builtin/file-edit', () => {
       },
       signal,
     );
-    const content = typeof result === 'string' ? result : result.content;
-    expect(content).not.toMatch(/[Tt]raversal|[Bb]locked/);
+    const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+    expect(parsed.isError).toBe(true);
+  });
+
+  // --- issue #189: path guard missing when workingDir is omitted ---
+
+  describe('default cwd guard when workingDir is omitted (issue #189)', () => {
+    it('blocks editing a path outside cwd when no workingDir is set', async () => {
+      // tempDir is in /tmp/... which is outside process.cwd() — guard should block it
+      const tool = createFileEditTool(); // no workingDir — must default to cwd guard
+      const result = await tool.execute(
+        {
+          file_path: join(tempDir, 'code.ts'),
+          old_string: 'return "world"',
+          new_string: 'return "pwned"',
+        },
+        signal,
+      );
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/traversal|outside|blocked/i);
+    });
   });
 });

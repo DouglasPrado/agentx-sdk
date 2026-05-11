@@ -24,7 +24,7 @@ describe('builtin/file-write', () => {
   });
 
   it('should write a new file', async () => {
-    const tool = createFileWriteTool();
+    const tool = createFileWriteTool(tempDir);
     const filePath = join(tempDir, 'new.txt');
     await tool.execute({ file_path: filePath, content: 'Hello world' }, signal);
 
@@ -33,7 +33,7 @@ describe('builtin/file-write', () => {
   });
 
   it('should create parent directories', async () => {
-    const tool = createFileWriteTool();
+    const tool = createFileWriteTool(tempDir);
     const filePath = join(tempDir, 'deep', 'nested', 'file.txt');
     await tool.execute({ file_path: filePath, content: 'nested content' }, signal);
 
@@ -42,7 +42,7 @@ describe('builtin/file-write', () => {
   });
 
   it('should overwrite existing file', async () => {
-    const tool = createFileWriteTool();
+    const tool = createFileWriteTool(tempDir);
     const filePath = join(tempDir, 'existing.txt');
     await tool.execute({ file_path: filePath, content: 'first' }, signal);
     await tool.execute({ file_path: filePath, content: 'second' }, signal);
@@ -52,7 +52,7 @@ describe('builtin/file-write', () => {
   });
 
   it('should return bytes written', async () => {
-    const tool = createFileWriteTool();
+    const tool = createFileWriteTool(tempDir);
     const result = await tool.execute(
       { file_path: join(tempDir, 'a.txt'), content: 'abc' },
       signal,
@@ -103,12 +103,30 @@ describe('builtin/file-write', () => {
     expect(content).not.toMatch(/[Tt]raversal|[Bb]locked/);
   });
 
-  it('allows any path when no workingDir is set (backward compat)', async () => {
-    const tool = createFileWriteTool();
-    const filePath = join(tempDir, 'no-guard.txt');
-    const result = await tool.execute({ file_path: filePath, content: 'ok' }, signal);
-    const content = typeof result === 'string' ? result : result.content;
-    expect(content).toContain('bytes');
+  it('blocks paths outside cwd when workingDir is not set (defaults to cwd)', async () => {
+    const tool = createFileWriteTool(); // no workingDir — defaults to process.cwd()
+    const result = await tool.execute(
+      { file_path: join(tempDir, 'no-guard.txt'), content: 'ok' },
+      signal,
+    );
+    const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+    expect(parsed.isError).toBe(true);
+  });
+
+  // --- issue #189: path guard missing when workingDir is omitted ---
+
+  describe('default cwd guard when workingDir is omitted (issue #189)', () => {
+    it('blocks writing a path outside cwd when no workingDir is set', async () => {
+      // tempDir is in /tmp/... which is outside process.cwd() — guard should block it
+      const tool = createFileWriteTool(); // no workingDir — must default to cwd guard
+      const result = await tool.execute(
+        { file_path: join(tempDir, 'pwn.txt'), content: 'evil' },
+        signal,
+      );
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/traversal|outside|blocked/i);
+    });
   });
 
   // --- issue #156: unlimited write size allows disk exhaustion ---
