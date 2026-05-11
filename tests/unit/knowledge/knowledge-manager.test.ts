@@ -72,6 +72,18 @@ describe('KnowledgeManager', () => {
     expect(embeddingService.embedSingle).toHaveBeenCalledOnce();
   });
 
+  it('throws informative error when EmbeddingService returns fewer vectors than chunks (#174)', async () => {
+    // Simulate buggy/truncated provider: only 1 embedding returned for multiple chunks
+    vi.mocked(embeddingService.embed).mockResolvedValueOnce([[0.1, 0.2, 0.3]]);
+
+    await expect(
+      manager.ingest({
+        content:
+          'First chunk content here with enough text. Second chunk content here with enough text.',
+      }),
+    ).rejects.toThrow(/embeddingservice returned/i);
+  });
+
   it('should invalidate search cache after ingest()', async () => {
     // First search — populates cache
     vi.mocked(store.search).mockReturnValue([]);
