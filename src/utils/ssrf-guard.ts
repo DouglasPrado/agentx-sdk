@@ -68,5 +68,25 @@ export function validateSsrfUrl(rawUrl: string): string | null {
     if (embeddedResult) return `Blocked IPv4-mapped IPv6 (compact form): ${embeddedResult}`;
   }
 
+  // NAT64: 64:ff9b::/96 (RFC 6146) — translates IPv4 addresses to IPv6 on NAT64 networks.
+  // Dot-decimal form: 64:ff9b::a.b.c.d
+  const nat64Dot = /^64:ff9b::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(ipv6Bare);
+  if (nat64Dot) {
+    const embeddedResult = validateSsrfUrl(`http://${nat64Dot[1]}/`);
+    if (embeddedResult) return `Blocked NAT64 address: ${embeddedResult}`;
+  }
+  // Compact hex form: 64:ff9b::HHHH:HHHH (Node.js URL parser canonicalises dot-decimal to this)
+  const nat64Hex = /^64:ff9b::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(ipv6Bare);
+  if (nat64Hex) {
+    const high = parseInt(nat64Hex[1]!, 16);
+    const low = parseInt(nat64Hex[2]!, 16);
+    const a = (high >> 8) & 0xff;
+    const b = high & 0xff;
+    const c = (low >> 8) & 0xff;
+    const d = low & 0xff;
+    const embeddedResult = validateSsrfUrl(`http://${a}.${b}.${c}.${d}/`);
+    if (embeddedResult) return `Blocked NAT64 address (compact form): ${embeddedResult}`;
+  }
+
   return null;
 }
