@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.5](https://github.com/DouglasPrado/agentx-sdk/compare/v0.7.4...v0.7.5) (2026-05-11)
+
+
+### Bug Fixes
+
+* bloqueia symlink path traversal em readMemory/deleteMemory (closes [#171](https://github.com/DouglasPrado/agentx-sdk/issues/171)) ([#176](https://github.com/DouglasPrado/agentx-sdk/issues/176)) ([45f43ef](https://github.com/DouglasPrado/agentx-sdk/commit/45f43efd6f88c9eec48d3464584d1db31b42e7da))
+* file tools usam process.cwd() como raiz padrão quando workingDir é omitido (closes [#189](https://github.com/DouglasPrado/agentx-sdk/issues/189)) ([#192](https://github.com/DouglasPrado/agentx-sdk/issues/192)) ([ebb920a](https://github.com/DouglasPrado/agentx-sdk/commit/ebb920afa6e0aaacbbf3b0761f8fda5ccc442cbe))
+* guard em LLMClient.embed() para json.data ausente/inválido (closes [#172](https://github.com/DouglasPrado/agentx-sdk/issues/172)) ([#177](https://github.com/DouglasPrado/agentx-sdk/issues/177)) ([099a477](https://github.com/DouglasPrado/agentx-sdk/commit/099a47709fd0140a091bb80fa2f2075f3f110c8c))
+* guard url obrigatória em transport=auto (closes [#164](https://github.com/DouglasPrado/agentx-sdk/issues/164)) ([#167](https://github.com/DouglasPrado/agentx-sdk/issues/167)) ([284debe](https://github.com/DouglasPrado/agentx-sdk/commit/284debe0640a9fb2360cd6338c176ffd9e700782))
+* invalida searchCache após ingest() no KnowledgeManager (closes [#170](https://github.com/DouglasPrado/agentx-sdk/issues/170)) ([#175](https://github.com/DouglasPrado/agentx-sdk/issues/175)) ([3e9b2e0](https://github.com/DouglasPrado/agentx-sdk/commit/3e9b2e0bc997848e0095b7558916ca39ad0602ea))
+* override fast-uri &gt;=3.1.2 (closes [#163](https://github.com/DouglasPrado/agentx-sdk/issues/163)) ([#166](https://github.com/DouglasPrado/agentx-sdk/issues/166)) ([d1d03c0](https://github.com/DouglasPrado/agentx-sdk/commit/d1d03c036a5046a5c50192056168a0649f01ff14))
+* remove viés de recência em SQLiteVectorStore.search() (closes [#173](https://github.com/DouglasPrado/agentx-sdk/issues/173)) ([#178](https://github.com/DouglasPrado/agentx-sdk/issues/178)) ([53fdf29](https://github.com/DouglasPrado/agentx-sdk/commit/53fdf2978c7abf27b4296ae80904673ced15b142))
+* sanitiza &lt;/system-reminder&gt; do conteúdo de injeções em context-builder (closes [#191](https://github.com/DouglasPrado/agentx-sdk/issues/191)) ([#194](https://github.com/DouglasPrado/agentx-sdk/issues/194)) ([fb01c2c](https://github.com/DouglasPrado/agentx-sdk/commit/fb01c2c8a81de276aa89c9b6aaa680d996201f43))
+* SSRF guard bloqueia prefixo NAT64 64:ff9b::/96 (closes [#190](https://github.com/DouglasPrado/agentx-sdk/issues/190)) ([#193](https://github.com/DouglasPrado/agentx-sdk/issues/193)) ([ed0a052](https://github.com/DouglasPrado/agentx-sdk/commit/ed0a052aa10bdc9b62a678f7171ee7c7c49e4189))
+* valida alinhamento do buffer Float32Array (closes [#165](https://github.com/DouglasPrado/agentx-sdk/issues/165)) ([#168](https://github.com/DouglasPrado/agentx-sdk/issues/168)) ([c8579f4](https://github.com/DouglasPrado/agentx-sdk/commit/c8579f42bb2f3ac5201251548fb60dcb8f81f984))
+* valida comprimento de embeddings antes do map em KnowledgeManager.ingest() (closes [#174](https://github.com/DouglasPrado/agentx-sdk/issues/174)) ([#179](https://github.com/DouglasPrado/agentx-sdk/issues/179)) ([83427b8](https://github.com/DouglasPrado/agentx-sdk/commit/83427b80fd42b24522b68d28ebaab2d14e9310e3))
+
 ## [0.7.4](https://github.com/DouglasPrado/agentx-sdk/compare/v0.7.3...v0.7.4) (2026-05-08)
 
 
