@@ -142,4 +142,31 @@ describe('SQLiteVectorStore', () => {
       expect(chunk.embedding).toBeInstanceOf(Float32Array);
     }
   });
+
+  // issue #165 — corrupt blob (byteLength not multiple of 4) must throw descriptive error
+  describe('corrupt embedding blob validation (issue #165)', () => {
+    function insertCorruptBlob(db: SQLiteDatabase, id: string): void {
+      // 5 bytes is not a multiple of 4 — simulates DB corruption or bad migration
+      const corruptBlob = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05]);
+      db.db
+        .prepare(
+          'INSERT INTO vectors (id, content, embedding, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(id, 'corrupt content', corruptBlob, null, Date.now());
+    }
+
+    it('search() throws descriptive error when embedding blob byteLength is not multiple of 4', () => {
+      insertCorruptBlob(database, 'corrupt-search');
+
+      expect(() => store.search(new Float32Array([0.1, 0.2, 0.3, 0.4]), 10)).toThrow(
+        /byteLength.*multiple of 4|multiple of 4.*byteLength/i,
+      );
+    });
+
+    it('listAll() throws descriptive error when embedding blob byteLength is not multiple of 4', () => {
+      insertCorruptBlob(database, 'corrupt-listall');
+
+      expect(() => store.listAll()).toThrow(/byteLength.*multiple of 4|multiple of 4.*byteLength/i);
+    });
+  });
 });
