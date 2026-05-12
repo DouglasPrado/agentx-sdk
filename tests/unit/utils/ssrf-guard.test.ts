@@ -66,6 +66,34 @@ describe('validateSsrfUrl', () => {
     });
   });
 
+  // issue #213 — missing IANA reserved ranges
+  describe('missing IANA reserved ranges (#213)', () => {
+    it('blocks 198.18.0.0/15 (benchmarking, RFC 2544)', () => {
+      expect(validateSsrfUrl('http://198.18.0.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://198.19.255.255/')).not.toBeNull();
+    });
+
+    it('allows addresses just outside 198.18.0.0/15', () => {
+      expect(validateSsrfUrl('http://198.17.255.255/')).toBeNull();
+      expect(validateSsrfUrl('http://198.20.0.0/')).toBeNull();
+    });
+
+    it('blocks 192.0.2.0/24 (TEST-NET-1, RFC 5737)', () => {
+      expect(validateSsrfUrl('http://192.0.2.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://192.0.2.255/')).not.toBeNull();
+    });
+
+    it('blocks 198.51.100.0/24 (TEST-NET-2, RFC 5737)', () => {
+      expect(validateSsrfUrl('http://198.51.100.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://198.51.100.255/')).not.toBeNull();
+    });
+
+    it('blocks 203.0.113.0/24 (TEST-NET-3, RFC 5737)', () => {
+      expect(validateSsrfUrl('http://203.0.113.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://203.0.113.255/')).not.toBeNull();
+    });
+  });
+
   // issue #190 — NAT64 prefix 64:ff9b::/96 (RFC 6146) not blocked
   describe('NAT64 64:ff9b::/96 (issue #190)', () => {
     it('blocks NAT64 with embedded private 10.0.0.1 (dot-decimal form)', () => {
