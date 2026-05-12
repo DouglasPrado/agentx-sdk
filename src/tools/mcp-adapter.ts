@@ -605,6 +605,14 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
     if (!config.command) {
       throw new Error('MCPConnectionConfig: "command" is required for transport "stdio"');
     }
+    if (
+      config.allowedStdioCommands !== undefined &&
+      !config.allowedStdioCommands.includes(config.command)
+    ) {
+      throw new Error(
+        `MCP stdio command "${config.command}" is not in allowedStdioCommands: [${config.allowedStdioCommands.join(', ')}]`,
+      );
+    }
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
     return new StdioClientTransport({ command: config.command, args: config.args ?? [] });
   }
