@@ -367,6 +367,7 @@ export class FileMemorySystem {
 
       const safeDescription = sanitizeFrontmatterValue(description);
       const linkText = safeDescription
+        .replace(/\\/g, '\\\\')
         .replace(/\[/g, '\\[')
         .replace(/\]\(/g, '\\]\\(')
         .replace(/\]/g, '\\]');
