@@ -127,7 +127,10 @@ export class SkillManager {
   /**
    * Matches skills against input. Returns top skills sorted by priority.
    */
-  async match(input: string, context: { threadId: string }): Promise<AgentSkill[]> {
+  async match(
+    input: string,
+    context: { threadId: string; recentMessages?: number },
+  ): Promise<AgentSkill[]> {
     const matches: SkillMatchResult[] = [];
     const matchedNames = new Set<string>();
     const eligible = this.getEligibleSkills();
@@ -176,7 +179,12 @@ export class SkillManager {
       }
 
       // 3. Custom match function
-      if (skill.match?.(input, { threadId: context.threadId, recentMessages: 0 })) {
+      if (
+        skill.match?.(input, {
+          threadId: context.threadId,
+          recentMessages: context.recentMessages ?? 0,
+        })
+      ) {
         matches.push({ skill, matchType: 'custom', score: 0.8 });
         matchedNames.add(skill.name);
       }

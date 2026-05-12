@@ -780,7 +780,8 @@ export class Agent {
     // Skills injection
     const skillToolNames: string[] = [];
     if (this.skillManager) {
-      const matchedSkills = await this.skillManager.match(userInput, { threadId });
+      const recentMessages = this.conversations.getHistory(threadId).length;
+      const matchedSkills = await this.skillManager.match(userInput, { threadId, recentMessages });
 
       for (const skill of matchedSkills) {
         // Resolve instructions (dynamic getPrompt or static with arg substitution)

@@ -20,6 +20,7 @@ export interface ExecuteOptions {
   signal?: AbortSignal;
   toolCallId?: string;
   threadId?: string;
+  recentMessages?: number;
   onProgress?: ToolProgressCallback;
 }
 
@@ -108,7 +109,7 @@ export class ToolExecutor {
       try {
         const validationError = await tool.validate(validatedArgs, {
           threadId: opts.threadId ?? 'default',
-          recentMessages: 0,
+          recentMessages: opts.recentMessages ?? 0,
         });
         if (validationError) {
           return { content: `Validation error: ${validationError}`, isError: true };
