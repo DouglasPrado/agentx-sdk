@@ -47,6 +47,7 @@ describe('EmbeddingService', () => {
 
     it('should pass custom model to client.embed', async () => {
       const svc = new EmbeddingService(client, { model: 'custom-model' });
+      vi.mocked(client.embed).mockResolvedValueOnce([[0.1, 0.2]]);
       await svc.embed(['test']);
 
       expect(client.embed).toHaveBeenCalledWith(['test'], 'custom-model');
@@ -92,6 +93,30 @@ describe('EmbeddingService', () => {
 
       expect(client.embed).toHaveBeenCalledWith(['single'], undefined);
       expect(results).toEqual([[0.5, 0.6, 0.7]]);
+    });
+  });
+
+  describe('embed() count validation (#221)', () => {
+    it('throws when provider returns fewer embeddings than requested', async () => {
+      // Provider returns only 1 embedding for 3 texts
+      vi.mocked(client.embed).mockResolvedValueOnce([[0.1, 0.2]]);
+
+      await expect(service.embed(['text-a', 'text-b', 'text-c'])).rejects.toThrow(
+        /EmbeddingService.*provider returned 1.*3 were requested|count mismatch/i,
+      );
+    });
+
+    it('throws when provider returns more embeddings than requested', async () => {
+      // Provider returns 3 embeddings for 2 texts
+      vi.mocked(client.embed).mockResolvedValueOnce([
+        [0.1, 0.2],
+        [0.3, 0.4],
+        [0.5, 0.6],
+      ]);
+
+      await expect(service.embed(['text-a', 'text-b'])).rejects.toThrow(
+        /EmbeddingService.*provider returned 3.*2 were requested|count mismatch/i,
+      );
     });
   });
 
