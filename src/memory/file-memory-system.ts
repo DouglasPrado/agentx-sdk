@@ -366,7 +366,11 @@ export class FileMemorySystem {
       if (existing.includes(`(${filename})`)) return;
 
       const safeDescription = sanitizeFrontmatterValue(description);
-      const newEntry = `- [${safeDescription}](${filename}) — ${safeDescription}`;
+      const linkText = safeDescription
+        .replace(/\[/g, '\\[')
+        .replace(/\]\(/g, '\\]\\(')
+        .replace(/\]/g, '\\]');
+      const newEntry = `- [${linkText}](${filename}) — ${safeDescription}`;
       const updated = existing ? `${existing.trimEnd()}\n${newEntry}\n` : `${newEntry}\n`;
       await writeFile(entrypoint, updated, 'utf-8');
     });
