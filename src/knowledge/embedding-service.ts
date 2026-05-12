@@ -34,14 +34,24 @@ export class EmbeddingService {
 
     // Fetch uncached
     if (uncached.length > 0) {
-      const embeddings = await this.client.embed(
-        uncached.map((u) => u.text),
-        this.model,
-      );
+      const uncachedTexts = uncached.map((u) => u.text);
+      const embeddings = await this.client.embed(uncachedTexts, this.model);
+
+      if (embeddings.length !== uncached.length) {
+        throw new Error(
+          `EmbeddingService: provider returned ${embeddings.length} embeddings ` +
+            `but ${uncached.length} were requested (model=${this.model})`,
+        );
+      }
+
       for (let i = 0; i < uncached.length; i++) {
         const entry = uncached[i]!;
-        results[entry.index] = embeddings[i]!;
-        this.cache.set(entry.text, embeddings[i]!);
+        const embedding = embeddings[i];
+        if (!embedding) {
+          throw new Error(`EmbeddingService: missing embedding at index ${i}`);
+        }
+        results[entry.index] = embedding;
+        this.cache.set(entry.text, embedding);
       }
     }
 
