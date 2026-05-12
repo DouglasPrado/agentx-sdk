@@ -173,6 +173,31 @@ describe('MCPAdapter', () => {
           adapter.connect({ name: 'no-url-auto', transport: 'auto' } as never),
         ).rejects.toThrow(/"url".*auto|auto.*"url"/i);
       });
+
+      // issue #212 — stdio command not in allowedStdioCommands must be rejected
+      it('throws when stdio command is not in allowedStdioCommands (#212)', async () => {
+        await expect(
+          adapter.connect({
+            name: 'blocked-cmd',
+            transport: 'stdio',
+            command: 'bash',
+            allowedStdioCommands: ['npx', 'node'],
+          }),
+        ).rejects.toThrow(/allowedStdioCommands|not allowed|blocked/i);
+      });
+
+      it('allows stdio command when it is in allowedStdioCommands (#212)', async () => {
+        await expect(
+          adapter.connect({
+            name: 'allowed-cmd',
+            transport: 'stdio',
+            command: 'npx',
+            allowedStdioCommands: ['npx', 'node'],
+          }),
+        ).resolves.not.toThrow();
+
+        await adapter.disconnect('allowed-cmd');
+      });
     });
   });
 
