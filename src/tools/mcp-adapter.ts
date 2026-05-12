@@ -77,6 +77,17 @@ const MCPToolContentSchema = z.array(
     .passthrough(),
 );
 
+/** Sanitizes untrusted MCP text (names/descriptions) before embedding in system prompts. */
+function sanitizeForPrompt(value: string): string {
+  return (
+    value
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip controls (except \t and \n)
+      .replace(/\n{2,}/g, '\n') // collapse multiple newlines
+      .slice(0, 512)
+  ); // cap length
+}
+
 export interface MCPHealthStatus {
   servers: {
     name: string;
@@ -385,9 +396,11 @@ export class MCPAdapter {
     const isReadOnly = annotations.readOnlyHint ?? false;
     const isDestructive = annotations.destructiveHint ?? false;
 
+    const rawDescription = mcpTool.description ?? `MCP tool: ${mcpTool.name}`;
+
     return {
       name: namespacedName,
-      description: mcpTool.description?.slice(0, 2048) ?? `MCP tool: ${mcpTool.name}`,
+      description: sanitizeForPrompt(rawDescription),
       parameters,
       isReadOnly,
       isDestructive,
