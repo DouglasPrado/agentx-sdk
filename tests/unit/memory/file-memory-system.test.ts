@@ -128,6 +128,22 @@ describe('FileMemorySystem', () => {
     });
   });
 
+  describe('saveMemory — markdown link escaping in MEMORY.md index (#216)', () => {
+    it('escapes ] in description so it does not break the markdown link text', async () => {
+      await system.saveMemory({
+        name: 'tricky',
+        description: 'Callback called with ](evil',
+        type: 'user',
+        content: 'body',
+      });
+
+      const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
+      // Unescaped ](evil]( in the line would mean the link text closes prematurely.
+      // e.g. "- [Callback called with ](evil](tricky.md)" is a broken link.
+      expect(index).not.toContain('](evil](');
+    });
+  });
+
   describe('deleteMemory', () => {
     it('should delete the file and remove from index', async () => {
       const filename = await system.saveMemory({
