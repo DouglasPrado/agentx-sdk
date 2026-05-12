@@ -27,13 +27,19 @@ export class SQLiteDatabase {
       mkdirSync(dirname(this.path), { recursive: true });
     }
 
-    this._db = new Database(this.path);
+    const db = new Database(this.path);
 
     // Enable WAL mode for concurrent reads
-    this._db.pragma('journal_mode = WAL');
-    this._db.pragma('synchronous = NORMAL');
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
 
-    this.migrateV1();
+    try {
+      this.migrateV1(db);
+      this._db = db;
+    } catch (err) {
+      db.close();
+      throw err;
+    }
   }
 
   close(): void {
@@ -43,9 +49,7 @@ export class SQLiteDatabase {
     }
   }
 
-  private migrateV1(): void {
-    const db = this.db;
-
+  private migrateV1(db: BetterSqlite3.Database): void {
     db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
