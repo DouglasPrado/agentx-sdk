@@ -198,7 +198,12 @@ export async function* executeReactLoop(
     const earlyToolResults: LLMMessage[] = []; // Tool results completed during streaming
 
     // --- Stream from LLM ---
-    const streamingExecutor = new StreamingToolExecutor(toolExecutor, signal);
+    const streamingExecutor = new StreamingToolExecutor(
+      toolExecutor,
+      signal,
+      undefined,
+      messages.length,
+    );
     const effectiveMaxTokens = state.maxOutputTokensOverride ?? maxOutputTokens;
 
     try {
