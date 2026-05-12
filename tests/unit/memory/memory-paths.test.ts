@@ -2,12 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   resolveMemoryDir,
   validateMemoryPath,
+  validateMemoryPathResolved,
   sanitizeFilename,
   ensureMemoryDir,
   isMemoryPath,
   validateThreadId,
 } from '../../../src/memory/memory-paths.js';
-import { sep } from 'node:path';
+import { sep, join } from 'node:path';
+import { mkdir, symlink, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 describe('memory-paths', () => {
   const originalEnv = process.env;
@@ -133,6 +136,34 @@ describe('memory-paths', () => {
   describe('ensureMemoryDir', () => {
     it('should be a function', () => {
       expect(typeof ensureMemoryDir).toBe('function');
+    });
+  });
+
+  describe('validateMemoryPathResolved (#215)', () => {
+    it('rejects a dangling symlink inside the memory dir', async () => {
+      const memoryDir = join(tmpdir(), `agentx-test-215-${Date.now()}`);
+      await mkdir(memoryDir, { recursive: true });
+      const symlinkPath = join(memoryDir, 'evil.md');
+      // Create a symlink whose target does not exist (dangling symlink)
+      await symlink('/tmp/nonexistent-target-agentx-issue-215', symlinkPath);
+      try {
+        const result = await validateMemoryPathResolved(symlinkPath, memoryDir);
+        expect(result).toBeUndefined();
+      } finally {
+        await rm(memoryDir, { recursive: true, force: true });
+      }
+    });
+
+    it('returns cheap path for a genuinely nonexistent file (safe for creates)', async () => {
+      const memoryDir = join(tmpdir(), `agentx-test-215-${Date.now()}`);
+      await mkdir(memoryDir, { recursive: true });
+      const nonexistent = join(memoryDir, 'new-file.md');
+      try {
+        const result = await validateMemoryPathResolved(nonexistent, memoryDir);
+        expect(result).toBe(nonexistent);
+      } finally {
+        await rm(memoryDir, { recursive: true, force: true });
+      }
     });
   });
 
