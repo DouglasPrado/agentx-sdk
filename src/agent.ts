@@ -66,6 +66,8 @@ export class Agent {
   private lastEmittedDate?: string;
   /** Turn-end hooks — run after each completed assistant turn. */
   private readonly turnEndHooks: TurnEndHook[] = [];
+  /** AbortControllers for background forks — aborted in destroy(). */
+  private readonly backgroundForks = new Set<AbortController>();
 
   private constructor(config: AgentConfig) {
     this.config = config;
@@ -570,7 +572,7 @@ export class Agent {
   ): Promise<string> {
     if (this.destroyed) throw new Error('Agent is destroyed');
 
-    const run = async () => {
+    const run = async (signal?: AbortSignal) => {
       const child = Agent.create({
         apiKey: this.config.apiKey,
         model: options?.model ?? this.config.model,
@@ -591,16 +593,24 @@ export class Agent {
       }
 
       try {
-        return await child.chat(prompt);
+        return await child.chat(prompt, signal ? { signal } : undefined);
       } finally {
         await child.destroy();
       }
     };
 
     if (options?.background) {
-      void run().catch((err) => {
-        this.logger.debug('Background fork failed', { error: String(err) });
-      });
+      const ctrl = new AbortController();
+      this.backgroundForks.add(ctrl);
+      void run(ctrl.signal)
+        .catch((err) => {
+          if ((err as { name?: string }).name !== 'AbortError') {
+            this.logger.debug('Background fork failed', { error: String(err) });
+          }
+        })
+        .finally(() => {
+          this.backgroundForks.delete(ctrl);
+        });
       return ''; // fire-and-forget — returns immediately
     }
 
@@ -704,6 +714,8 @@ export class Agent {
 
   async destroy(): Promise<void> {
     this.destroyed = true;
+    for (const ctrl of this.backgroundForks) ctrl.abort();
+    this.backgroundForks.clear();
     this.skillManager?.clearAllStickySessions();
     this.skillManager?.clearInvokedSkills();
     this.surfacedMemories.clear();
