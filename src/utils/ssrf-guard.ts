@@ -30,13 +30,17 @@ export function validateSsrfUrl(rawUrl: string): string | null {
   // IPv4 literal checks (loopback, private ranges, link-local metadata)
   const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
   if (ipv4) {
-    const [a, b] = ipv4.slice(1).map(Number) as [number, number, number, number];
+    const [a, b, c] = ipv4.slice(1).map(Number) as [number, number, number, number];
     if (a === 127) return 'Blocked loopback address';
     if (a === 10) return 'Blocked private range 10.0.0.0/8';
     if (a === 192 && b === 168) return 'Blocked private range 192.168.0.0/16';
     if (a === 172 && b >= 16 && b <= 31) return 'Blocked private range 172.16.0.0/12';
     if (a === 169 && b === 254) return 'Blocked link-local range (cloud metadata)';
     if (a === 100 && b >= 64 && b <= 127) return 'Blocked shared address space 100.64.0.0/10';
+    if (a === 198 && b >= 18 && b <= 19) return 'Blocked benchmarking range 198.18.0.0/15';
+    if (a === 192 && b === 0 && c === 2) return 'Blocked documentation range 192.0.2.0/24';
+    if (a === 198 && b === 51 && c === 100) return 'Blocked documentation range 198.51.100.0/24';
+    if (a === 203 && b === 0 && c === 113) return 'Blocked documentation range 203.0.113.0/24';
     if (a === 0) return 'Blocked 0.0.0.0/8';
   }
 
