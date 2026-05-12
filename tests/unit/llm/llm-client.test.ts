@@ -350,13 +350,13 @@ describe('LLMClient', () => {
         }),
       );
 
-      await expect(client.embed(['hello'])).rejects.toThrow(/unexpected response/i);
+      await expect(client.embed(['hello'])).rejects.toThrow(/invalid response/i);
     });
 
     it('embed() throws informative error when json.data is not an array (#172)', async () => {
       mockFetch(new Response(JSON.stringify({ data: null }), { status: 200 }));
 
-      await expect(client.embed(['hello'])).rejects.toThrow(/unexpected response/i);
+      await expect(client.embed(['hello'])).rejects.toThrow(/invalid response/i);
     });
   });
 
