@@ -514,6 +514,24 @@ describe('LLMClient', () => {
     });
   });
 
+  describe('Zod response validation (#217)', () => {
+    it('chat() throws a descriptive error when choices[0] lacks a message field', async () => {
+      mockFetch(
+        new Response(JSON.stringify({ choices: [{ finish_reason: 'stop' }] }), { status: 200 }),
+      );
+
+      await expect(client.chat({ messages: [{ role: 'user', content: 'Hi' }] })).rejects.toThrow(
+        /invalid response/i,
+      );
+    });
+
+    it('embed() throws a descriptive error when data entries have no embedding field', async () => {
+      mockFetch(new Response(JSON.stringify({ data: [{}] }), { status: 200 }));
+
+      await expect(client.embed(['hello'])).rejects.toThrow(/invalid response/i);
+    });
+  });
+
   describe('SSRF protection (issue #113)', () => {
     it('throws when baseUrl points to cloud metadata endpoint (169.254.169.254)', () => {
       expect(
