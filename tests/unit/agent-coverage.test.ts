@@ -344,6 +344,55 @@ describe('Agent — additional coverage', () => {
   // loadSkillsDir()
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Per-thread state isolation (#220)
+  // ---------------------------------------------------------------------------
+
+  it('turnsSinceExtraction is tracked per-thread, not globally (#220)', async () => {
+    const sseData = [
+      'data: {"choices":[{"delta":{"content":"ok"},"index":0}]}\n\n',
+      'data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6}}\n\n',
+    ].join('');
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const urlStr = typeof url === 'string' ? url : url.toString();
+      if (urlStr.includes('/embeddings')) {
+        return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { status: 200 });
+      }
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(sseData));
+            controller.close();
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    });
+
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
+
+    // Two turns on thread-a, one turn on thread-b
+    await agent.chat('hello', { threadId: 'thread-a' });
+    await agent.chat('world', { threadId: 'thread-a' });
+    await agent.chat('hi', { threadId: 'thread-b' });
+
+    // With per-thread tracking, each thread's counter must be independent
+    const raw = agent as unknown as Record<string, unknown>;
+    const byThread = raw.turnsSinceExtractionByThread as Map<string, number>;
+
+    // After the fix, the Map must exist and hold per-thread counts
+    expect(byThread).toBeInstanceOf(Map);
+    expect(byThread.get('thread-a')).toBe(2);
+    expect(byThread.get('thread-b')).toBe(1);
+
+    await agent.destroy();
+  });
+
   it('loadSkillsDir() returns the count reported by the skill manager', async () => {
     const { SkillManager } = await import('../../src/skills/skill-manager.js');
     const loadSpy = vi.spyOn(SkillManager.prototype, 'loadFromDirectory').mockResolvedValue(3);
