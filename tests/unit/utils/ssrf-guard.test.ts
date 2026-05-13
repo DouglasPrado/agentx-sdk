@@ -94,6 +94,25 @@ describe('validateSsrfUrl', () => {
     });
   });
 
+  // issue #236 — IPv6 unspecified address [::] not blocked (host === '::' is dead code)
+  describe('IPv6 unspecified address [::] blocked (issue #236)', () => {
+    it('blocks http://[::] — IPv6 all-zeros unspecified address', () => {
+      expect(validateSsrfUrl('http://[::]/')).not.toBeNull();
+    });
+
+    it('blocks https://[::] as well', () => {
+      expect(validateSsrfUrl('https://[::]/')).not.toBeNull();
+    });
+
+    it('still blocks [::1] loopback IPv6', () => {
+      expect(validateSsrfUrl('http://[::1]/')).not.toBeNull();
+    });
+
+    it('still allows a public IPv6 address', () => {
+      expect(validateSsrfUrl('https://[2606:4700:4700::1111]/')).toBeNull();
+    });
+  });
+
   // issue #190 — NAT64 prefix 64:ff9b::/96 (RFC 6146) not blocked
   describe('NAT64 64:ff9b::/96 (issue #190)', () => {
     it('blocks NAT64 with embedded private 10.0.0.1 (dot-decimal form)', () => {
