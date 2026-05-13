@@ -25,6 +25,19 @@ function killTree(pid: number | undefined, signal: NodeJS.Signals = 'SIGTERM'): 
 const DEFAULT_TIMEOUT = 120_000;
 const MAX_OUTPUT = 500_000; // 500KB
 
+const ALLOWED_SHELLS = new Set([
+  '/bin/sh',
+  '/bin/bash',
+  '/usr/bin/bash',
+  '/bin/dash',
+  '/usr/bin/dash',
+]);
+
+function resolveShell(): string {
+  const envShell = process.env.SHELL?.trim();
+  return envShell && ALLOWED_SHELLS.has(envShell) ? envShell : '/bin/sh';
+}
+
 const BashParams = z.object({
   command: z.string().describe('Shell command to execute'),
   timeout: z
@@ -88,7 +101,7 @@ export function createBashTool(options: BashToolOptions = {}): AgentTool {
           {
             timeout: effectiveTimeout,
             maxBuffer: MAX_OUTPUT,
-            shell: process.env.SHELL?.trim() ? process.env.SHELL : '/bin/sh',
+            shell: resolveShell(),
             ...(workingDir ? { cwd: workingDir } : {}),
             // Detach on POSIX so the child gets its own process group —
             // lets us kill the whole tree (including backgrounded grandchildren).
