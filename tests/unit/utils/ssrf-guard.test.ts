@@ -38,6 +38,20 @@ describe('validateSsrfUrl', () => {
     expect(validateSsrfUrl('http://localhost/')).not.toBeNull();
   });
 
+  // issue #239 — dead code: '::1' (without brackets) never matches WHATWG URL hostname
+  describe('IPv6 loopback blocked via bracket form only (issue #239)', () => {
+    it('blocks http://[::1]/ — WHATWG URL hostname is [::1] with brackets', () => {
+      expect(validateSsrfUrl('http://[::1]/')).not.toBeNull();
+    });
+
+    it('http://::1/ is an invalid URL — covered by invalid-URL guard, not the ::1 check', () => {
+      // Without brackets, ::1 is not a valid HTTP URL; the URL parser rejects it.
+      // The dead-code check host === '::1' can never be true for a valid URL.
+      const result = validateSsrfUrl('http://::1/');
+      expect(result).toBe('Invalid URL');
+    });
+  });
+
   it('blocks non-http/https schemes', () => {
     expect(validateSsrfUrl('file:///etc/passwd')).not.toBeNull();
     expect(validateSsrfUrl('ftp://example.com/')).not.toBeNull();
