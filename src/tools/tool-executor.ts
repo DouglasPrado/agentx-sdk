@@ -1,5 +1,4 @@
-import { ZodError } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z, ZodError } from 'zod';
 import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { ToolDefinition } from '../llm/message-types.js';
@@ -68,7 +67,7 @@ export class ToolExecutor {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: zodToJsonSchema(tool.parameters, { target: 'openApi3' }),
+        parameters: z.toJSONSchema(tool.parameters, { target: 'draft-7' }),
       },
     }));
   }
@@ -96,7 +95,7 @@ export class ToolExecutor {
     } catch (error) {
       if (error instanceof ZodError) {
         return {
-          content: `Validation error: ${error.errors.map((e) => e.message).join(', ')}`,
+          content: `Validation error: ${error.issues.map((e) => e.message).join(', ')}`,
           isError: true,
         };
       }

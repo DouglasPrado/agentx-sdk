@@ -15,13 +15,14 @@ import { validateSsrfUrl } from '../utils/ssrf-guard.js';
  * (`invalid resource shape …`, `invalid prompt shape …`).
  */
 class MCPInvalidShapeError extends ZodError {
-  private readonly _customMessage: string;
   constructor(issues: ZodIssue[], customMessage: string) {
     super(issues);
-    this._customMessage = customMessage;
-  }
-  override get message(): string {
-    return this._customMessage;
+    Object.defineProperty(this, 'message', {
+      value: customMessage,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
   }
 }
 
