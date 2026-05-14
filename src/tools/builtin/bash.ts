@@ -58,7 +58,7 @@ export function createBashTool(options: BashToolOptions = {}): AgentTool {
 
       // Reject shell metacharacters unconditionally — prevents chaining/injection
       // regardless of whether allowedCommands is set (issue #140).
-      const DANGEROUS_METACHAR = /[;&|`$<>()\n\\]/;
+      const DANGEROUS_METACHAR = /[;&|`$<>()\n\\{}]/;
       if (DANGEROUS_METACHAR.test(command)) {
         return {
           content: 'Command contains forbidden shell metacharacters',
