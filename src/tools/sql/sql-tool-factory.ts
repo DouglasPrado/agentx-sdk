@@ -97,7 +97,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
       }
 
       const results = matches.map((q) => {
-        const shape = q.parameters.shape;
+        const shape = q.parameters.shape as Record<string, z.ZodTypeAny>;
         const params: Record<string, { type: string; nullable: boolean; description: string }> = {};
         for (const [key, schema] of Object.entries(shape)) {
           const s = schema;
@@ -122,7 +122,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
   // Build inline catalog for run_query description so the LLM knows all queries upfront
   const catalog = queries
     .map((q) => {
-      const shape = q.parameters.shape;
+      const shape = q.parameters.shape as Record<string, z.ZodTypeAny>;
       const paramList = Object.entries(shape)
         .map(([key, schema]) => {
           const s = schema;
@@ -144,7 +144,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
     parameters: z.object({
       query_name: z.string().describe('Name of the query to execute'),
       params: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe('Parameters as key-value pairs. Use null for nullable params you want to skip'),
     }),
     isConcurrencySafe: !hasWriteQueries,
@@ -178,7 +178,7 @@ export function createSqlTools(options: SqlToolFactoryOptions): AgentTool[] {
 
       // Map values in schema key order to match $1, $2, ... in SQL
       const schemaKeys = Object.keys(def.parameters.shape);
-      const data = parsed.data as Record<string, unknown>;
+      const data: Record<string, unknown> = parsed.data;
       const values = schemaKeys.map((key) => data[key] ?? null);
 
       try {

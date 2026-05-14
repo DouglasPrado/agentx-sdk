@@ -225,6 +225,36 @@ describe('builtin/bash', () => {
         if (saved !== undefined) process.env.SHELL = saved;
         else delete process.env.SHELL;
       }
+  describe('brace expansion blocked (issue #235)', () => {
+    it('blocks { in command — brace expansion bypass', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'cat {/etc/passwd,/etc/hostname}' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/metachar|forbidden/i);
+    });
+
+    it('blocks } in command', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo }' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/metachar|forbidden/i);
+    });
+
+    it('blocks brace expansion even with allowedCommands set', async () => {
+      const tool = createBashTool({ allowedCommands: ['git'] });
+      const result = await tool.execute({ command: 'git {log,--exec-path}' }, signal);
+      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+      expect(parsed.isError).toBe(true);
+      expect(parsed.content).toMatch(/metachar|forbidden/i);
+    });
+
+    it('still allows commands without braces', async () => {
+      const tool = createBashTool();
+      const result = await tool.execute({ command: 'echo hello' }, signal);
+      const content = typeof result === 'string' ? result : result.content;
+      expect(content).toContain('hello');
     });
   });
 
