@@ -15,13 +15,14 @@ import { validateSsrfUrl } from '../utils/ssrf-guard.js';
  * (`invalid resource shape …`, `invalid prompt shape …`).
  */
 class MCPInvalidShapeError extends ZodError {
-  private readonly _customMessage: string;
   constructor(issues: ZodIssue[], customMessage: string) {
     super(issues);
-    this._customMessage = customMessage;
-  }
-  override get message(): string {
-    return this._customMessage;
+    Object.defineProperty(this, 'message', {
+      value: customMessage,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
   }
 }
 
@@ -82,7 +83,10 @@ function sanitizeForPrompt(value: string): string {
   return (
     value
       // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip controls (except \t and \n)
+      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip ASCII controls (except \t and \n)
+      // strip bidi/zero-width: U+200B-U+200F, U+202A-U+202E, U+2066-U+2069, U+FEFF
+      .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+      .replace(/[\u{e0000}-\u{e007f}]/gu, '') // strip Unicode tag block (invisible in UIs)
       .replace(/\n{2,}/g, '\n') // collapse multiple newlines
       .slice(0, 512)
   ); // cap length
@@ -387,7 +391,7 @@ export class MCPAdapter {
     const safeServerName = serverName.replace(/__/g, '_');
     const safeToolName = mcpTool.name.replace(/__/g, '_');
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
-    const parameters = jsonSchemaToZod(mcpTool.inputSchema) as unknown as ZodSchema;
+    const parameters: ZodSchema = jsonSchemaToZod(mcpTool.inputSchema);
     const isolateErrors = config.isolateErrors ?? true;
     const timeout = config.timeout ?? 30_000;
 

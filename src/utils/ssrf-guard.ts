@@ -17,7 +17,7 @@ export function validateSsrfUrl(rawUrl: string): string | null {
   const host = parsed.hostname.toLowerCase();
 
   // Loopback and wildcard hostnames
-  if (host === 'localhost' || host === '0.0.0.0' || host === '[::1]' || host === '::') {
+  if (host === 'localhost' || host === '0.0.0.0' || host === '[::1]' || host === '[::]') {
     return `Blocked hostname: ${host}`;
   }
 
