@@ -83,7 +83,10 @@ function sanitizeForPrompt(value: string): string {
   return (
     value
       // eslint-disable-next-line no-control-regex
-      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip controls (except \t and \n)
+      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip ASCII controls (except \t and \n)
+      // strip bidi/zero-width: U+200B-U+200F, U+202A-U+202E, U+2066-U+2069, U+FEFF
+      .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+      .replace(/[\u{e0000}-\u{e007f}]/gu, '') // strip Unicode tag block (invisible in UIs)
       .replace(/\n{2,}/g, '\n') // collapse multiple newlines
       .slice(0, 512)
   ); // cap length
