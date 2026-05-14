@@ -388,8 +388,8 @@ export class MCPAdapter {
     client: MCPClient,
     config: MCPConnectionConfig,
   ): AgentTool {
-    const safeServerName = serverName.replace(/__/g, '_');
-    const safeToolName = mcpTool.name.replace(/__/g, '_');
+    const safeServerName = sanitizeForPrompt(serverName.replace(/__/g, '_')).replace(/\n/g, '');
+    const safeToolName = sanitizeForPrompt(mcpTool.name.replace(/__/g, '_')).replace(/\n/g, '');
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
     const parameters: ZodSchema = jsonSchemaToZod(mcpTool.inputSchema);
     const isolateErrors = config.isolateErrors ?? true;
