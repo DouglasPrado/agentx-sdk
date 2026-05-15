@@ -30,6 +30,10 @@ import { buildContext } from './core/context-builder.js';
 import { executeReactLoop } from './core/react-loop.js';
 import { createLogger, type Logger } from './utils/logger.js';
 import { runTurnEndHooks, type TurnEndHook } from './core/turn-end-hooks.js';
+import { Evaluator } from './evaluation/evaluator.js';
+import { runEvaluation } from './evaluation/run-evaluation.js';
+import { SQLiteEvaluationStore } from './evaluation/sqlite-evaluation-store.js';
+import type { EvaluationStore } from './contracts/entities/evaluation.js';
 import { estimateTokens } from './utils/token-counter.js';
 import { getModelContextWindow } from './utils/model-context.js';
 import { buildToolUsagePrompt, buildEnvironmentPrompt } from './core/prompt-builders.js';
@@ -67,6 +71,12 @@ export class Agent {
   private lastEmittedDate?: string;
   /** Turn-end hooks — run after each completed assistant turn. */
   private readonly turnEndHooks: TurnEndHook[] = [];
+  /** Evaluator (G-Eval) — present when config.evaluator.enabled. */
+  private readonly evaluator?: Evaluator;
+  /** Store backing the evaluator. Lifecycle is owned by Agent when default. */
+  private readonly evaluationStore?: EvaluationStore;
+  /** Per-thread turn counter — used as turnIndex in evaluations. */
+  private readonly turnIndexByThread = new Map<string, number>();
   /** AbortControllers for background forks — aborted in destroy(). */
   private readonly backgroundForks = new Set<AbortController>();
 
@@ -154,6 +164,33 @@ export class Agent {
           error: String(err),
         });
       });
+    }
+
+    // Evaluator (G-Eval) — disabled by default; consumer opts in via config.evaluator.enabled
+    if (config.evaluator?.enabled) {
+      const evalCfg = config.evaluator;
+      const judgeApiKey = evalCfg.judgeApiKey ?? config.apiKey;
+      const judgeBaseUrl = evalCfg.judgeBaseUrl ?? config.baseUrl;
+      if (evalCfg.judgeModel === config.model) {
+        this.logger.warn(
+          'evaluator.judgeModel matches generator model — risk of self-grading bias',
+          { judgeModel: evalCfg.judgeModel },
+        );
+      }
+      const judgeClient = new LLMClient({
+        apiKey: judgeApiKey,
+        model: evalCfg.judgeModel,
+        baseUrl: judgeBaseUrl,
+        timeoutMs: evalCfg.timeout,
+      });
+      this.evaluator = new Evaluator({
+        judgeClient,
+        judgeModel: evalCfg.judgeModel,
+        criteria: [...evalCfg.criteria],
+        sampleRate: evalCfg.sampleRate,
+        scoreAggregation: evalCfg.scoreAggregation,
+      });
+      this.evaluationStore = evalCfg.store ?? this.getDefaultEvaluationStore();
     }
 
     this.logger.info('Agent initialized', { model: config.model });
@@ -497,6 +534,26 @@ export class Agent {
         this.logger.debug('Turn-end hooks failed', { error: String(err) });
       });
     }
+
+    // Evaluator (G-Eval) — fire-and-forget post-turn evaluation
+    if (this.evaluator && this.evaluationStore && assistantText) {
+      const turnIndex = this.turnIndexByThread.get(threadId) ?? 0;
+      this.turnIndexByThread.set(threadId, turnIndex + 1);
+      const evaluator = this.evaluator;
+      const store = this.evaluationStore;
+      const logger = this.logger;
+      const traceId = ctx.traceId;
+      void runEvaluation({
+        traceId,
+        threadId,
+        turnIndex,
+        userInput: userContent,
+        assistantText,
+        evaluator,
+        store,
+        logger,
+      });
+    }
   }
 
   /**
@@ -737,6 +794,16 @@ export class Agent {
   private getDefaultVectorStore() {
     this.ensureDatabase();
     return new SQLiteVectorStore(this.database!);
+  }
+
+  private getDefaultEvaluationStore(): EvaluationStore {
+    this.ensureDatabase();
+    return new SQLiteEvaluationStore(this.database!);
+  }
+
+  /** Returns the evaluation store when the evaluator is enabled. */
+  getEvaluationStore(): EvaluationStore | undefined {
+    return this.evaluationStore;
   }
 
   private ensureDatabase(): void {
