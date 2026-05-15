@@ -199,4 +199,73 @@ describe('Stop Hooks', () => {
     // Hook only called once (on the final text response, not on tool call iteration)
     expect(hookExecute).toHaveBeenCalledOnce();
   });
+
+  it('should increment attempt counter on each stop_hook_blocking recovery (issue #255)', async () => {
+    // Bug: attempt was hardcoded to 1 on every iteration; it should increment like other counters.
+    const hook: StopHook = {
+      name: 'always-blocking',
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ blockingErrors: ['err1'], preventContinuation: false })
+        .mockResolvedValueOnce({ blockingErrors: ['err2'], preventContinuation: false })
+        .mockResolvedValueOnce({ blockingErrors: ['err3'], preventContinuation: false })
+        .mockResolvedValue({ blockingErrors: [], preventContinuation: false }),
+    };
+
+    const client = createMockClient([
+      [
+        { type: 'content', data: 'attempt 1' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+      [
+        { type: 'content', data: 'attempt 2' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+      [
+        { type: 'content', data: 'attempt 3' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+      [
+        { type: 'content', data: 'done' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+        },
+      ],
+    ]);
+
+    const executor = new ToolExecutor();
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      stopHooks: [hook],
+    });
+
+    const { events } = await consumeLoop(gen);
+    const recoveryEvents = events.filter(
+      (e) => e.type === 'recovery' && (e as { reason?: string }).reason === 'stop_hook_blocking',
+    );
+
+    expect(recoveryEvents).toHaveLength(3);
+    expect((recoveryEvents[0] as { attempt: number }).attempt).toBe(1);
+    expect((recoveryEvents[1] as { attempt: number }).attempt).toBe(2);
+    expect((recoveryEvents[2] as { attempt: number }).attempt).toBe(3);
+  });
 });
