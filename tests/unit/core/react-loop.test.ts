@@ -358,4 +358,69 @@ describe('executeReactLoop', () => {
     const { terminal } = await consumeLoop(gen);
     expect(terminal.reason).toBe('error');
   });
+
+  it('should emit cost_warning exactly once when onLimitReached is warn (issue #253)', async () => {
+    // Bug: cost_warning was emitted on EVERY iteration after limit is exceeded, not just once.
+    // Turn 1 returns 300 tokens (exceeds limit of 200) via tool_calls so the loop continues.
+    // Turn 2 and 3 also return tool_calls, keeping the loop alive past the limit.
+    // Turn 4 returns stop. With the bug, turns 2, 3, and 4 each emit a separate cost_warning.
+    const client = createMockClient([
+      [
+        { type: 'tool_call', id: 't1', name: 'noop', arguments: '{}' },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 150, outputTokens: 150, totalTokens: 300 },
+        },
+      ],
+      [
+        { type: 'tool_call', id: 't2', name: 'noop', arguments: '{}' },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 150, outputTokens: 150, totalTokens: 300 },
+        },
+      ],
+      [
+        { type: 'tool_call', id: 't3', name: 'noop', arguments: '{}' },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: { inputTokens: 150, outputTokens: 150, totalTokens: 300 },
+        },
+      ],
+      [
+        { type: 'content', data: 'done' },
+        {
+          type: 'done',
+          finishReason: 'stop',
+          usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+        },
+      ],
+    ]);
+
+    const executor = new ToolExecutor();
+    executor.register({
+      name: 'noop',
+      description: 'No-op',
+      parameters: z.object({}),
+      execute: vi.fn().mockResolvedValue('ok'),
+    });
+
+    const gen = executeReactLoop([{ role: 'user', content: 'test' }], {
+      client,
+      toolExecutor: executor,
+      model: 'test',
+      maxIterations: 10,
+      maxConsecutiveErrors: 3,
+      onToolError: 'continue',
+      costPolicy: { maxTokensPerExecution: 200, onLimitReached: 'warn' },
+    });
+
+    const { events } = await consumeLoop(gen);
+    const warnings = events.filter(
+      (e) => e.type === 'warning' && (e as { code?: string }).code === 'cost_warning',
+    );
+    expect(warnings).toHaveLength(1);
+  });
 });
