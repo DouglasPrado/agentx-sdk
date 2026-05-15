@@ -12,13 +12,15 @@ const GlobParams = z.object({
   path: z.string().optional().describe('Directory to search in. Defaults to cwd.'),
 });
 
-async function walkDir(dir: string, results: string[]): Promise<void> {
+async function walkDir(dir: string, results: string[], signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return;
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
+    if (signal.aborted) return;
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      await walkDir(full, results);
+      await walkDir(full, results, signal);
     } else {
       results.push(full);
     }
@@ -34,7 +36,7 @@ export function createGlobTool(workingDir?: string): AgentTool {
     isConcurrencySafe: true,
     isReadOnly: true,
 
-    async execute(rawArgs: unknown, _signal: AbortSignal) {
+    async execute(rawArgs: unknown, signal: AbortSignal) {
       const { pattern, path: searchPath } = rawArgs as z.infer<typeof GlobParams>;
 
       let baseDir: string;
@@ -46,7 +48,7 @@ export function createGlobTool(workingDir?: string): AgentTool {
 
       const allFiles: string[] = [];
       try {
-        await walkDir(baseDir, allFiles);
+        await walkDir(baseDir, allFiles, signal);
       } catch {
         return { content: `Cannot read directory: ${baseDir}`, isError: true };
       }
