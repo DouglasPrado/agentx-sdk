@@ -1,14 +1,34 @@
-import type {
-  StreamChatParams,
-  ChatParams,
-  StreamChunk,
-  ChatResponse,
-  LLMToolCall,
-} from './message-types.js';
+import { z } from 'zod';
+import type { StreamChatParams, ChatParams, StreamChunk, ChatResponse } from './message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import { retry } from '../utils/retry.js';
 import { buildReasoningArgs, isReasoningModel, requiresNoSystemRole } from './reasoning.js';
 import { validateSsrfUrl } from '../utils/ssrf-guard.js';
+
+const ChatJsonSchema = z.object({
+  choices: z
+    .array(
+      z.object({
+        message: z.object({
+          content: z.string().nullish(),
+          tool_calls: z.array(z.unknown()).optional(),
+        }),
+        finish_reason: z.string().nullish(),
+      }),
+    )
+    .optional(),
+  usage: z
+    .object({
+      prompt_tokens: z.number(),
+      completion_tokens: z.number(),
+      total_tokens: z.number(),
+    })
+    .optional(),
+});
+
+const EmbedJsonSchema = z.object({
+  data: z.array(z.object({ embedding: z.array(z.number()) })),
+});
 
 export interface LLMClientConfig {
   apiKey: string;
@@ -113,16 +133,9 @@ export class LLMClient {
   async chat(params: ChatParams): Promise<ChatResponse> {
     const response = await this.sendChatRequest(params, false);
 
-    interface ChatJson {
-      choices: {
-        message: { content?: string; tool_calls?: LLMToolCall[] };
-        finish_reason: string;
-      }[];
-      usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
-    }
-    let json: ChatJson;
+    let rawJson: unknown;
     try {
-      json = (await response.json()) as ChatJson;
+      rawJson = await response.json();
     } catch (e) {
       // Ensure body is fully consumed so the HTTP connection is returned to the pool
       await response.body?.cancel().catch(() => {
@@ -132,6 +145,13 @@ export class LLMClient {
         `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
+    const chatParsed = ChatJsonSchema.safeParse(rawJson);
+    if (!chatParsed.success) {
+      throw new Error(
+        `LLM API returned invalid response (model=${this.model}): ${chatParsed.error.message.slice(0, 300)}`,
+      );
+    }
+    const json = chatParsed.data;
 
     const choice = json.choices?.[0];
     if (!choice) {
@@ -163,12 +183,9 @@ export class LLMClient {
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
     );
 
-    interface EmbedJson {
-      data: { embedding: number[] }[];
-    }
-    let json: EmbedJson;
+    let rawJson: unknown;
     try {
-      json = (await response.json()) as EmbedJson;
+      rawJson = await response.json();
     } catch (e) {
       await response.body?.cancel().catch(() => {
         /* swallow — already in error path */
@@ -177,15 +194,14 @@ export class LLMClient {
         `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
-
-    if (!json.data || !Array.isArray(json.data)) {
+    const embedParsed = EmbedJsonSchema.safeParse(rawJson);
+    if (!embedParsed.success) {
       throw new Error(
-        `LLM embed API returned unexpected response (model=${model ?? this.model}). ` +
-          `Response: ${JSON.stringify(json).slice(0, 200)}`,
+        `LLM API returned invalid response (model=${model ?? this.model}): ${embedParsed.error.message.slice(0, 300)}`,
       );
     }
 
-    return json.data.map((d) => d.embedding);
+    return embedParsed.data.data.map((d) => d.embedding);
   }
 
   private async fetchAPI(

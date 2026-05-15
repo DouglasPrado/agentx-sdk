@@ -350,13 +350,13 @@ describe('LLMClient', () => {
         }),
       );
 
-      await expect(client.embed(['hello'])).rejects.toThrow(/unexpected response/i);
+      await expect(client.embed(['hello'])).rejects.toThrow(/invalid response/i);
     });
 
     it('embed() throws informative error when json.data is not an array (#172)', async () => {
       mockFetch(new Response(JSON.stringify({ data: null }), { status: 200 }));
 
-      await expect(client.embed(['hello'])).rejects.toThrow(/unexpected response/i);
+      await expect(client.embed(['hello'])).rejects.toThrow(/invalid response/i);
     });
   });
 
@@ -511,6 +511,24 @@ describe('LLMClient', () => {
         .map((c) => c.data)
         .join('');
       expect(content).toContain('😀');
+    });
+  });
+
+  describe('Zod response validation (#217)', () => {
+    it('chat() throws a descriptive error when choices[0] lacks a message field', async () => {
+      mockFetch(
+        new Response(JSON.stringify({ choices: [{ finish_reason: 'stop' }] }), { status: 200 }),
+      );
+
+      await expect(client.chat({ messages: [{ role: 'user', content: 'Hi' }] })).rejects.toThrow(
+        /invalid response/i,
+      );
+    });
+
+    it('embed() throws a descriptive error when data entries have no embedding field', async () => {
+      mockFetch(new Response(JSON.stringify({ data: [{}] }), { status: 200 }));
+
+      await expect(client.embed(['hello'])).rejects.toThrow(/invalid response/i);
     });
   });
 
