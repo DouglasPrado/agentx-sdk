@@ -342,7 +342,8 @@ export async function* executeReactLoop(
           }
 
           if (hookResult.blockingErrors.length > 0) {
-            yield { type: 'recovery', reason: 'stop_hook_blocking', attempt: 1 };
+            const stopHookRetryCount = state.stopHookRetryCount + 1;
+            yield { type: 'recovery', reason: 'stop_hook_blocking', attempt: stopHookRetryCount };
 
             const errorMessages: LLMMessage[] = hookResult.blockingErrors.map((err) => ({
               role: 'user' as const,
@@ -353,6 +354,7 @@ export async function* executeReactLoop(
               ...state,
               messages: [...messages, assistantMessage, ...errorMessages],
               turnCount: turnCount + 1,
+              stopHookRetryCount,
               transition: { reason: 'stop_hook_blocking' },
             };
             continue;
