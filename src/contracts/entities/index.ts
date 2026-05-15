@@ -7,6 +7,22 @@ export type { TokenUsage } from './token-usage.js';
 export type { AgentTool, ToolValidationContext, ToolProgressCallback } from './agent-tool.js';
 export type { AgentSkill, SkillMatchContext, SkillPromptContext } from './agent-skill.js';
 export type { VectorStore, ConversationStore } from './stores.js';
+export {
+  EVALUATION_CRITERIA,
+  EvaluationCriterionSchema,
+  EvaluationScoreSchema,
+  EvaluationSchema,
+  aggregateScore,
+} from './evaluation.js';
+export type {
+  EvaluationCriterion,
+  EvaluationScore,
+  Evaluation,
+  EvaluationStore,
+  EvaluationAggregate,
+  EvaluationJudgeUsage,
+  ScoreAggregation,
+} from './evaluation.js';
 export type {
   AgentEvent,
   AgentStartEvent,

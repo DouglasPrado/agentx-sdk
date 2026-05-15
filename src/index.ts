@@ -13,6 +13,8 @@ export type {
   MCPConnectionConfig,
   MCPConnectionConfigInput,
   CostPolicy,
+  EvaluatorConfig,
+  EvaluatorConfigInput,
 } from './config/config.js';
 
 // File-based memory system
@@ -29,6 +31,18 @@ export type {
 export { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 export { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
 export { SQLiteDatabase } from './storage/sqlite-database.js';
+
+// Evaluation (G-Eval)
+export { Evaluator, EvaluatorParseError } from './evaluation/evaluator.js';
+export type { EvaluatorConfig as EvaluatorOptions, EvaluateInput } from './evaluation/evaluator.js';
+export { runEvaluation } from './evaluation/run-evaluation.js';
+export type { RunEvaluationDeps } from './evaluation/run-evaluation.js';
+export { SQLiteEvaluationStore } from './evaluation/sqlite-evaluation-store.js';
+export {
+  buildJudgeSystemPrompt,
+  buildJudgeUserPrompt,
+  escapeDelimitedContent,
+} from './evaluation/evaluation-prompts.js';
 
 // Builtin tools
 export { builtinTools } from './tools/builtin/index.js';

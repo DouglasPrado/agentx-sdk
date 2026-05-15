@@ -19,6 +19,12 @@
 | ExecutionContext | Contexto de rastreamento com traceId unico por execucao chat/stream | Context de request HTTP | Observabilidade, tracing |
 | MCP | Model Context Protocol — protocolo para conectar tools externas via stdio ou SSE | RPC / gRPC (MCP e especifico para tools de LLM) | MCPAdapter |
 | Embedding | Representacao vetorial de texto para busca por similaridade semantica | Encoding / tokenizacao | EmbeddingService, VectorStore |
+| Evaluator | Subsistema que avalia a qualidade de uma resposta do Agent usando um LLM-juiz separado, no estilo G-Eval | Validador de schema / linter (Evaluator e qualitativo) | Evaluator, EvaluationStore |
+| Evaluation | Resultado da avaliacao de um turno — conjunto de scores por criterio mais finalScore agregado | TestRun / log de qualidade | EvaluationStore, run-evaluation |
+| EvaluationCriterion | Dimensao avaliada pelo juiz (factuality, coherence, safety, completeness, helpfulness) | Tag / categoria de log | Evaluator, EvaluationScore |
+| Judge | LLM separado usado pelo Evaluator para pontuar respostas, geralmente menor e mais barato que o generator | Generator (o LLM que produziu a resposta) | EvaluatorConfig.judgeModel |
+| G-Eval | Padrao de avaliacao "LLM-as-a-judge" com rubricas e CoT no avaliador | BLEU / ROUGE (G-Eval correlaciona melhor com humano) | Evaluator |
+| CoT | Chain-of-Thought — raciocinio passo a passo, usado tanto pelo generator quanto pelo Evaluator para sustentar scores | Streaming de tokens | Evaluator, reasoning models |
 
 <!-- APPEND:termos -->
 
@@ -29,6 +35,8 @@
 | Sigla | Significado | Contexto |
 | --- | --- | --- |
 | RAG | Retrieval-Augmented Generation | Knowledge, busca vetorial |
+| CoT | Chain-of-Thought | Evaluator (juiz), reasoning models |
+| G-Eval | GPT-based Evaluation | Evaluator |
 | FTS | Full-Text Search | MemoryStore, SQLite FTS5 |
 | RRF | Reciprocal Rank Fusion | Busca hibrida (FTS + embeddings) |
 | SSE | Server-Sent Events | OpenRouter streaming, MCP transport |

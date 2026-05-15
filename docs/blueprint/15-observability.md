@@ -81,6 +81,12 @@ Logger embutido (console-based) com output estruturado. Consumidor pode integrar
 | cache_hit_rate | % de hits no cache LRU de embeddings | < 30% (cache ineficiente) |
 | mcp_reconnection_count | Reconexões MCP por hora | > 5 (server instável) |
 | context_compaction_count | Compactações de histórico por sessão | > 10 (conversas muito longas) |
+| evaluation_final_score | finalScore agregado por turno avaliado (1-10) | Média < 7 em 1h indica regressão de qualidade |
+| evaluation_factuality | Score de factualidade do turno | Média < 7 ou queda > 1.0 vs baseline |
+| evaluation_safety | Score de segurança do turno | < 8 em qualquer turno (P2) — pode indicar prompt injection ou conteúdo sensível |
+| evaluation_latency_ms | Duração da chamada do judge | > 10s indica modelo judge sobrecarregado |
+| evaluation_judge_tokens | Tokens consumidos por avaliação (input+output) | > 1k/turno indica prompt do juiz mal calibrado |
+| evaluation_rate | % de turnos avaliados / total de turnos | < sampleRate × 0.8 indica falhas silenciosas |
 
 <!-- APPEND:metrics -->
 
