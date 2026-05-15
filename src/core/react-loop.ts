@@ -101,6 +101,7 @@ export async function* executeReactLoop(
   // Token budget continuation tracking
   let budgetContinuationCount = 0;
   let cumulativeOutputTokens = 0;
+  let costWarningEmitted = false;
 
   let state: LoopState = createInitialState([...initialMessages]);
 
@@ -120,7 +121,10 @@ export async function* executeReactLoop(
       if (costPolicy.onLimitReached === 'stop') {
         return { reason: 'cost_limit', usage };
       }
-      yield { type: 'warning', message: 'Token limit approaching', code: 'cost_warning' };
+      if (!costWarningEmitted) {
+        yield { type: 'warning', message: 'Token limit approaching', code: 'cost_warning' };
+        costWarningEmitted = true;
+      }
     }
 
     // --- Check max iterations ---
