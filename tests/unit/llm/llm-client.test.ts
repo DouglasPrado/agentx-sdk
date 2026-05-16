@@ -514,6 +514,60 @@ describe('LLMClient', () => {
     });
   });
 
+  describe('toolCalls Map cap (issue #265)', () => {
+    it('ignores tool_call chunks with indices beyond 128 to prevent unbounded Map growth', async () => {
+      // Simulate a malformed SSE stream that sends tool calls with indices 0..199
+      // (200 distinct indices, above the 128-entry cap). Without the fix, all 200
+      // entries would be stored in the Map; with the fix, only the first 128 are kept.
+      const chunks: string[] = [];
+      // First chunk: 130 new tool call indices (only first 128 should be stored)
+      for (let i = 0; i < 130; i++) {
+        chunks.push(
+          `data: {"choices":[{"delta":{"tool_calls":[{"index":${i},"id":"id_${i}","function":{"name":"tool_${i}","arguments":""}}]},"index":0}]}`,
+        );
+      }
+      chunks.push('data: {"choices":[{"finish_reason":"tool_calls","index":0}]}');
+      chunks.push('data: [DONE]');
+
+      const sseResponse = createSSEResponse(chunks);
+      mockFetch(sseResponse);
+
+      const yielded: StreamChunk[] = [];
+      for await (const chunk of client.streamChat({
+        messages: [{ role: 'user', content: 'Hi' }],
+      })) {
+        yielded.push(chunk);
+      }
+
+      const toolCallChunks = yielded.filter((c) => c.type === 'tool_call');
+      // Must be capped at ≤ 128, not 130
+      expect(toolCallChunks.length).toBeLessThanOrEqual(128);
+    });
+
+    it('accumulates arguments for tool calls within the cap normally', async () => {
+      // Normal case: 2 tool calls with incremental argument chunks — must still work
+      const sseResponse = createSSEResponse([
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"fn_a","arguments":""}}]},"index":0}]}',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"x\\":1}"}}]},"index":0}]}',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_b","function":{"name":"fn_b","arguments":"{\\"y\\":2}"}}]},"index":0}]}',
+        'data: {"choices":[{"finish_reason":"tool_calls","index":0}]}',
+      ]);
+      mockFetch(sseResponse);
+
+      const yielded: StreamChunk[] = [];
+      for await (const chunk of client.streamChat({
+        messages: [{ role: 'user', content: 'Hi' }],
+      })) {
+        yielded.push(chunk);
+      }
+
+      const toolCalls = yielded.filter((c) => c.type === 'tool_call');
+      expect(toolCalls).toHaveLength(2);
+      expect(toolCalls[0]).toMatchObject({ name: 'fn_a', arguments: '{"x":1}' });
+      expect(toolCalls[1]).toMatchObject({ name: 'fn_b', arguments: '{"y":2}' });
+    });
+  });
+
   describe('SSRF protection (issue #113)', () => {
     it('throws when baseUrl points to cloud metadata endpoint (169.254.169.254)', () => {
       expect(
