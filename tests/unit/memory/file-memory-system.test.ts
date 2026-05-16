@@ -126,6 +126,18 @@ describe('FileMemorySystem', () => {
       const result = await system.readMemory('nonexistent.md');
       expect(result).toBeNull();
     });
+
+    it('returns null and does not load content for memory file exceeding 512 KB (issue #262)', async () => {
+      // Write a memory file that is exactly over 512 KB
+      const oversized =
+        '---\nname: Big\ndescription: oversized\ntype: user\n---\n\n' + 'x'.repeat(512 * 1024 + 1);
+      await writeFile(join(tempDir, 'big.md'), oversized);
+
+      // Before fix: readFile is called without size check — the whole content is loaded.
+      // After fix: stat() is called first; size > 512 KB returns null without reading.
+      const result = await system.readMemory('big.md');
+      expect(result).toBeNull();
+    });
   });
 
   describe('deleteMemory', () => {
