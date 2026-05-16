@@ -16,6 +16,8 @@ const MCPConnectionConfigSchema = z.object({
   maxRetries: z.number().int().min(0).default(3),
   healthCheckInterval: z.number().positive().default(60_000),
   isolateErrors: z.boolean().default(true),
+  /** Maximum number of tools to register from this server. Prevents DoS via tool flooding. */
+  maxTools: z.number().int().positive().optional(),
 });
 
 /** Cost policy — limits per execution and per session */
