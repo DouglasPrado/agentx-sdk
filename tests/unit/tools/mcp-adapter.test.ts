@@ -1225,4 +1225,59 @@ describe('MCPAdapter', () => {
       await adapter.disconnect('tag-server');
     });
   });
+
+  describe('MCP tools cap per server (issue #264)', () => {
+    function makeTool(n: number) {
+      return {
+        name: `tool_${n}`,
+        description: `Tool number ${n}`,
+        inputSchema: { type: 'object', properties: {} },
+      };
+    }
+
+    it('registers at most 200 tools when server returns more (default cap)', async () => {
+      // Simulate a server returning 300 tools — well above the 200 default cap
+      const manyTools = Array.from({ length: 300 }, (_, i) => makeTool(i));
+      mockClient.listTools.mockResolvedValueOnce({ tools: manyTools });
+
+      const tools = await adapter.connect({
+        name: 'bloated-server',
+        transport: 'stdio',
+        command: 'node',
+      });
+
+      expect(tools.length).toBeLessThanOrEqual(200);
+      expect(vi.mocked(executor.register)).toHaveBeenCalledTimes(tools.length);
+      await adapter.disconnect('bloated-server');
+    });
+
+    it('honours a custom maxTools limit from config', async () => {
+      const manyTools = Array.from({ length: 50 }, (_, i) => makeTool(i));
+      mockClient.listTools.mockResolvedValueOnce({ tools: manyTools });
+
+      const tools = await adapter.connect({
+        name: 'capped-server',
+        transport: 'stdio',
+        command: 'node',
+        maxTools: 10,
+      } as never);
+
+      expect(tools.length).toBe(10);
+      await adapter.disconnect('capped-server');
+    });
+
+    it('registers all tools when server returns fewer than the cap', async () => {
+      const fewTools = Array.from({ length: 5 }, (_, i) => makeTool(i));
+      mockClient.listTools.mockResolvedValueOnce({ tools: fewTools });
+
+      const tools = await adapter.connect({
+        name: 'small-server',
+        transport: 'stdio',
+        command: 'node',
+      });
+
+      expect(tools.length).toBe(5);
+      await adapter.disconnect('small-server');
+    });
+  });
 });

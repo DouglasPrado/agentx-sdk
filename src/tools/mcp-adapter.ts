@@ -196,8 +196,12 @@ export class MCPAdapter {
     // List tools from server
     const { tools: mcpTools } = await client.listTools();
 
+    const MAX_TOOLS_PER_SERVER = 200;
+    const toolLimit = config.maxTools ?? MAX_TOOLS_PER_SERVER;
+    const cappedTools = mcpTools.length > toolLimit ? mcpTools.slice(0, toolLimit) : mcpTools;
+
     // Convert MCP tools to AgentTools
-    const agentTools = mcpTools.map((mcpTool) =>
+    const agentTools = cappedTools.map((mcpTool) =>
       this.convertTool(config.name, mcpTool, client, config),
     );
 
