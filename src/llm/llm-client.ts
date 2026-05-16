@@ -321,9 +321,11 @@ export class LLMClient {
 
           // Tool calls (accumulated incrementally)
           if (delta?.tool_calls) {
+            const MAX_TOOL_CALLS = 128;
             for (const tc of delta.tool_calls) {
               const existing = toolCalls.get(tc.index);
               if (!existing) {
+                if (toolCalls.size >= MAX_TOOL_CALLS) continue;
                 const entry = {
                   id: tc.id ?? '',
                   name: tc.function?.name ?? '',
