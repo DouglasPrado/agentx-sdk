@@ -78,6 +78,22 @@ const MCPToolContentSchema = z.array(
     .passthrough(),
 );
 
+/**
+ * Normalizes a string to a valid function-name identifier per the OpenAI spec:
+ * ^[a-zA-Z0-9_-]{1,N}$
+ * Replaces any character outside that set with '_', collapses runs of '_', and
+ * strips leading/trailing '_'. Falls back to 'x' for an empty result.
+ */
+function toSafeIdentifier(raw: string, maxLen = 50): string {
+  return (
+    raw
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, maxLen) || 'x'
+  );
+}
+
 /** Sanitizes untrusted MCP text (names/descriptions) before embedding in system prompts. */
 function sanitizeForPrompt(value: string): string {
   return (
@@ -388,8 +404,12 @@ export class MCPAdapter {
     client: MCPClient,
     config: MCPConnectionConfig,
   ): AgentTool {
-    const safeServerName = sanitizeForPrompt(serverName.replace(/__/g, '_')).replace(/\n/g, '');
-    const safeToolName = sanitizeForPrompt(mcpTool.name.replace(/__/g, '_')).replace(/\n/g, '');
+    const safeServerName = toSafeIdentifier(
+      sanitizeForPrompt(serverName.replace(/__/g, '_')).replace(/\n/g, ''),
+    );
+    const safeToolName = toSafeIdentifier(
+      sanitizeForPrompt(mcpTool.name.replace(/__/g, '_')).replace(/\n/g, ''),
+    );
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
     const parameters: ZodSchema = jsonSchemaToZod(mcpTool.inputSchema);
     const isolateErrors = config.isolateErrors ?? true;
