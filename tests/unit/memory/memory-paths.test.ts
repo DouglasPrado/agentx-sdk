@@ -50,6 +50,56 @@ describe('memory-paths', () => {
       expect(result).not.toContain('~');
       expect(result).toContain('my-memory');
     });
+
+    // Issue #271: AGENT_MEMORY_DIR should reject sensitive system paths
+    it('should reject /etc via AGENT_MEMORY_DIR and fall back to default', () => {
+      process.env.AGENT_MEMORY_DIR = '/etc';
+      const result = resolveMemoryDir();
+      expect(result).not.toContain('/etc');
+      expect(result).toContain('.agentx');
+    });
+
+    it('should reject /proc via AGENT_MEMORY_DIR and fall back to default', () => {
+      process.env.AGENT_MEMORY_DIR = '/proc';
+      const result = resolveMemoryDir();
+      expect(result).not.toContain('/proc');
+      expect(result).toContain('.agentx');
+    });
+
+    it('should reject /sys via AGENT_MEMORY_DIR and fall back to default', () => {
+      process.env.AGENT_MEMORY_DIR = '/sys';
+      const result = resolveMemoryDir();
+      expect(result).not.toContain('/sys');
+      expect(result).toContain('.agentx');
+    });
+
+    it('should reject /dev via AGENT_MEMORY_DIR and fall back to default', () => {
+      process.env.AGENT_MEMORY_DIR = '/dev';
+      const result = resolveMemoryDir();
+      expect(result).not.toContain('/dev');
+      expect(result).toContain('.agentx');
+    });
+
+    it('should reject /bin via AGENT_MEMORY_DIR and fall back to default', () => {
+      process.env.AGENT_MEMORY_DIR = '/bin';
+      const result = resolveMemoryDir();
+      expect(result).not.toContain('/bin');
+      expect(result).toContain('.agentx');
+    });
+
+    it('should reject /tmp via AGENT_MEMORY_DIR and fall back to default', () => {
+      process.env.AGENT_MEMORY_DIR = '/tmp';
+      const result = resolveMemoryDir();
+      expect(result).not.toContain('/tmp');
+      expect(result).toContain('.agentx');
+    });
+
+    it('should still accept a valid absolute path via AGENT_MEMORY_DIR', () => {
+      process.env.AGENT_MEMORY_DIR = '/home/user/projects/myapp/memory';
+      const result = resolveMemoryDir();
+      expect(result).toContain('myapp');
+      expect(result).toContain('memory');
+    });
   });
 
   describe('validateMemoryPath', () => {
