@@ -4,7 +4,7 @@
  */
 
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import {
   type MemoryHeader,
   type MemoryFrontmatter,
@@ -14,6 +14,21 @@ import {
 } from './memory-types.js';
 
 const FRONTMATTER_MAX_LINES = 30;
+
+async function readdirNoFollow(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) {
+      const sub = await readdirNoFollow(join(dir, entry.name));
+      results.push(...sub.map((f) => entry.name + sep + f));
+    } else {
+      results.push(entry.name);
+    }
+  }
+  return results;
+}
 
 /**
  * Parse YAML frontmatter from markdown content.
@@ -65,11 +80,12 @@ export async function scanMemoryFiles(
 ): Promise<MemoryHeader[]> {
   try {
     if (signal?.aborted) return [];
-    const entries = await readdir(memoryDir, { recursive: true });
+    const entries = await readdirNoFollow(memoryDir);
     const mdFiles = entries.filter(
       (f) =>
         f.endsWith('.md') &&
         basename(f) !== ENTRYPOINT_NAME &&
+        !f.startsWith('threads' + sep) &&
         !f.startsWith('threads/') &&
         !f.startsWith('threads\\'),
     );
