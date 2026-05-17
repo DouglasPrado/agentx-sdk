@@ -245,7 +245,7 @@ export class FileMemorySystem {
 
     // Global MEMORY.md
     try {
-      const globalContent = await readFile(join(this.memoryDir, ENTRYPOINT_NAME), 'utf-8');
+      const globalContent = await safeReadIndexFile(join(this.memoryDir, ENTRYPOINT_NAME));
       if (globalContent.trim()) parts.push(globalContent.trim());
     } catch {
       /* no global index */
@@ -254,9 +254,8 @@ export class FileMemorySystem {
     // Thread MEMORY.md
     if (threadId) {
       try {
-        const threadContent = await readFile(
+        const threadContent = await safeReadIndexFile(
           join(this.resolveDir(threadId), ENTRYPOINT_NAME),
-          'utf-8',
         );
         if (threadContent.trim()) parts.push(threadContent.trim());
       } catch {
@@ -397,6 +396,18 @@ export class FileMemorySystem {
       },
     );
     return result;
+  }
+}
+
+const MAX_INDEX_FILE_BYTES = 512 * 1024;
+
+async function safeReadIndexFile(filePath: string): Promise<string> {
+  try {
+    const fileStat = await stat(filePath);
+    if (fileStat.size > MAX_INDEX_FILE_BYTES) return '';
+    return await readFile(filePath, 'utf-8');
+  } catch {
+    return '';
   }
 }
 
