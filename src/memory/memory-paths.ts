@@ -27,12 +27,34 @@ export function getDefaultMemoryDir(): string {
  * Config paths support ~/ expansion (user-friendly).
  * Env var paths must be absolute (set programmatically).
  */
+const BLOCKED_PATH_PREFIXES = [
+  '/etc',
+  '/proc',
+  '/sys',
+  '/dev',
+  '/boot',
+  '/bin',
+  '/sbin',
+  '/usr/bin',
+  '/usr/sbin',
+  '/run',
+  '/var/run',
+  '/tmp',
+];
+
+function isSensitivePath(normalizedPath: string): boolean {
+  const withSep = normalizedPath.endsWith(sep) ? normalizedPath : normalizedPath + sep;
+  return BLOCKED_PATH_PREFIXES.some(
+    (blocked) => withSep.startsWith(blocked + sep) || normalizedPath === blocked,
+  );
+}
+
 export function resolveMemoryDir(memoryDir?: string): string {
   // Env var: no tilde expansion (must be absolute)
   if (!memoryDir && process.env.AGENT_MEMORY_DIR) {
     const envPath = process.env.AGENT_MEMORY_DIR;
     const normalized = normalize(envPath).replace(/[/\\]+$/, '');
-    if (isAbsolute(normalized) && normalized.length >= 3) {
+    if (isAbsolute(normalized) && normalized.length >= 3 && !isSensitivePath(normalized)) {
       return (normalized + sep).normalize('NFC');
     }
   }
