@@ -348,11 +348,16 @@ export class MCPAdapter {
       throw new Error(`MCP server "${serverName}" not connected`);
     }
 
-    const parsedArgs: Record<string, string> = {};
+    const parsedArgs = Object.create(null) as Record<string, string>;
     if (args) {
+      const SAFE_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+      const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
       for (const part of args.split(/\s+/)) {
-        const [k, ...v] = part.split('=');
-        if (k && v.length > 0) parsedArgs[k] = v.join('=');
+        const eqIdx = part.indexOf('=');
+        if (eqIdx <= 0) continue;
+        const k = part.slice(0, eqIdx);
+        const v = part.slice(eqIdx + 1);
+        if (SAFE_KEY_RE.test(k) && !BLOCKED_KEYS.has(k)) parsedArgs[k] = v;
       }
     }
 
