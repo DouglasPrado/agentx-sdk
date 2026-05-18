@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { Evaluator } from '../../../src/evaluation/evaluator.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
 import type { ChatParams, ChatResponse } from '../../../src/llm/message-types.js';
-import type { EvaluationCriterion } from '../../../src/contracts/entities/evaluation.js';
 
 function makeJudgeResponse(
   json: string,
@@ -354,7 +353,7 @@ describe('Evaluator', () => {
           new Evaluator({
             judgeClient: client,
             judgeModel: 'judge-x',
-            criteria: [] as unknown as EvaluationCriterion[],
+            criteria: [],
             sampleRate: 1.0,
           }),
       ).toThrow();
