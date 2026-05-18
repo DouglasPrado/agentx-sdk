@@ -1225,4 +1225,70 @@ describe('MCPAdapter', () => {
       await adapter.disconnect('tag-server');
     });
   });
+
+  describe('tool name charset normalization (issue #263)', () => {
+    it('replaces spaces in server name with underscores so tool name matches ^[a-zA-Z0-9_-]+$', async () => {
+      mockClient.listTools.mockResolvedValueOnce({
+        tools: [
+          {
+            name: 'list_files',
+            description: 'list',
+            inputSchema: { type: 'object', properties: {} },
+          },
+        ],
+      });
+
+      const tools = await adapter.connect({
+        name: 'my server',
+        transport: 'stdio',
+        command: 'node',
+      });
+
+      const toolName = tools[0]!.name;
+      expect(toolName).toMatch(/^[a-zA-Z0-9_-]+$/);
+      expect(toolName).toBe('mcp__my_server__list_files');
+      await adapter.disconnect('my server');
+    });
+
+    it('replaces dots in server name with underscores so tool name matches ^[a-zA-Z0-9_-]+$', async () => {
+      mockClient.listTools.mockResolvedValueOnce({
+        tools: [
+          { name: 'ping', description: 'ping', inputSchema: { type: 'object', properties: {} } },
+        ],
+      });
+
+      const tools = await adapter.connect({
+        name: 'server.prod',
+        transport: 'stdio',
+        command: 'node',
+      });
+
+      const toolName = tools[0]!.name;
+      expect(toolName).toMatch(/^[a-zA-Z0-9_-]+$/);
+      expect(toolName).toBe('mcp__server_prod__ping');
+      await adapter.disconnect('server.prod');
+    });
+
+    it('collapses consecutive underscores in server name after charset normalization', async () => {
+      mockClient.listTools.mockResolvedValueOnce({
+        tools: [
+          { name: 'do_thing', description: 'do', inputSchema: { type: 'object', properties: {} } },
+        ],
+      });
+
+      const tools = await adapter.connect({
+        name: 'my  server',
+        transport: 'stdio',
+        command: 'node',
+      });
+
+      const toolName = tools[0]!.name;
+      expect(toolName).toMatch(/^[a-zA-Z0-9_-]+$/);
+      // double space → double underscore after char replace → collapsed to single '_' in server part
+      // tool name format: mcp__<server>__<tool>; server part must NOT have double underscore
+      const serverPart = toolName.replace(/^mcp__/, '').replace(/__[^_].*$/, '');
+      expect(serverPart).not.toContain('__');
+      await adapter.disconnect('my  server');
+    });
+  });
 });
