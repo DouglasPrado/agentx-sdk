@@ -514,6 +514,51 @@ describe('LLMClient', () => {
     });
   });
 
+  describe('SSE buffer limit (issue #261)', () => {
+    it('throws when a single SSE line exceeds 1 MB without a newline', async () => {
+      // Simulate a malformed/malicious SSE stream that sends a chunk > 1 MB with no newline,
+      // causing the buffer to grow unbounded. The fix must detect this and abort the stream.
+      const encoder = new TextEncoder();
+      // Build a chunk of 1.1 MB with no newline — this is one huge line with no SSE delimiter.
+      const hugeLine = 'data: ' + 'x'.repeat(1_100_000);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(hugeLine));
+          controller.close();
+        },
+      });
+      const response = new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      mockFetch(response);
+
+      await expect(async () => {
+        for await (const _ of client.streamChat({
+          messages: [{ role: 'user', content: 'Hi' }],
+        })) {
+          /* consume */
+        }
+      }).rejects.toThrow(/SSE buffer limit exceeded/i);
+    });
+
+    it('does not throw for normal SSE traffic well under 1 MB', async () => {
+      const sseResponse = createSSEResponse([
+        'data: {"choices":[{"delta":{"content":"Hello"},"index":0}]}',
+        'data: {"choices":[{"finish_reason":"stop","index":0}]}',
+      ]);
+      mockFetch(sseResponse);
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of client.streamChat({
+        messages: [{ role: 'user', content: 'Hi' }],
+      })) {
+        chunks.push(chunk);
+      }
+      expect(chunks.some((c) => c.type === 'content')).toBe(true);
+    });
+  });
+
   describe('SSRF protection (issue #113)', () => {
     it('throws when baseUrl points to cloud metadata endpoint (169.254.169.254)', () => {
       expect(
