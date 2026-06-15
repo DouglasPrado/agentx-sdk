@@ -239,6 +239,8 @@ export class LLMClient {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    const MAX_SSE_BUFFER = 1 * 1024 * 1024; // 1 MB
+
     // Accumulate tool calls incrementally
     const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
 
@@ -272,7 +274,16 @@ export class LLMClient {
           break;
         }
 
-        buffer += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        if (buffer.length + chunk.length > MAX_SSE_BUFFER) {
+          reader.cancel().catch(() => {
+            /* swallow */
+          });
+          throw new Error(
+            `SSE buffer limit exceeded (${MAX_SSE_BUFFER} bytes) — possible malformed stream`,
+          );
+        }
+        buffer += chunk;
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
 

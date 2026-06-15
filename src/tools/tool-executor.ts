@@ -1,5 +1,4 @@
-import { ZodError } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z, ZodError } from 'zod';
 import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { ToolDefinition } from '../llm/message-types.js';
@@ -20,6 +19,7 @@ export interface ExecuteOptions {
   signal?: AbortSignal;
   toolCallId?: string;
   threadId?: string;
+  recentMessages?: number;
   onProgress?: ToolProgressCallback;
 }
 
@@ -68,7 +68,7 @@ export class ToolExecutor {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: zodToJsonSchema(tool.parameters, { target: 'openApi3' }),
+        parameters: z.toJSONSchema(tool.parameters, { target: 'draft-7' }),
       },
     }));
   }
@@ -96,7 +96,7 @@ export class ToolExecutor {
     } catch (error) {
       if (error instanceof ZodError) {
         return {
-          content: `Validation error: ${error.errors.map((e) => e.message).join(', ')}`,
+          content: `Validation error: ${error.issues.map((e) => e.message).join(', ')}`,
           isError: true,
         };
       }
@@ -108,7 +108,7 @@ export class ToolExecutor {
       try {
         const validationError = await tool.validate(validatedArgs, {
           threadId: opts.threadId ?? 'default',
-          recentMessages: 0,
+          recentMessages: opts.recentMessages ?? 0,
         });
         if (validationError) {
           return { content: `Validation error: ${validationError}`, isError: true };

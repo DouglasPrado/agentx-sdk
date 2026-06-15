@@ -58,14 +58,17 @@ export class Agent {
   private readonly mcpAdapter: MCPAdapter;
   private database?: SQLiteDatabase;
   private costAccumulator: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-  private turnsSinceExtraction = 0;
+  /** Per-thread turn count for memory extraction scheduling. */
+  private readonly turnsSinceExtractionByThread = new Map<string, number>();
   private destroyed = false;
-  /** Filenames already injected in this session — avoids re-surfacing the same memory. */
-  private surfacedMemories = new Set<string>();
+  /** Per-thread filenames already injected — avoids re-surfacing the same memory per thread. */
+  private readonly surfacedMemoriesByThread = new Map<string, Set<string>>();
   /** Last date emitted to model — for midnight change detection. */
   private lastEmittedDate?: string;
   /** Turn-end hooks — run after each completed assistant turn. */
   private readonly turnEndHooks: TurnEndHook[] = [];
+  /** AbortControllers for background forks — aborted in destroy(). */
+  private readonly backgroundForks = new Set<AbortController>();
 
   private constructor(config: AgentConfig) {
     this.config = config;
@@ -449,17 +452,19 @@ export class Agent {
       usage: terminal.usage,
     };
 
-    // Built-in: memory extraction hook
-    this.turnsSinceExtraction++;
+    // Built-in: memory extraction hook (counter is per-thread to avoid cross-thread interference)
+    const prevTurns = this.turnsSinceExtractionByThread.get(threadId) ?? 0;
+    const nextTurns = prevTurns + 1;
+    this.turnsSinceExtractionByThread.set(threadId, nextTurns);
     if (
       this.fileMemorySystem &&
       this.config.memory?.extractionEnabled !== false &&
-      shouldExtract(userContent, this.turnsSinceExtraction, {
+      shouldExtract(userContent, nextTurns, {
         samplingRate: this.config.memory?.samplingRate,
         extractionInterval: this.config.memory?.extractionInterval,
       })
     ) {
-      this.turnsSinceExtraction = 0;
+      this.turnsSinceExtractionByThread.set(threadId, 0);
       const memSystem = this.fileMemorySystem;
       const logger = this.logger;
       const conversations = this.conversations;
@@ -570,7 +575,7 @@ export class Agent {
   ): Promise<string> {
     if (this.destroyed) throw new Error('Agent is destroyed');
 
-    const run = async () => {
+    const run = async (signal?: AbortSignal) => {
       const child = Agent.create({
         apiKey: this.config.apiKey,
         model: options?.model ?? this.config.model,
@@ -591,16 +596,24 @@ export class Agent {
       }
 
       try {
-        return await child.chat(prompt);
+        return await child.chat(prompt, signal ? { signal } : undefined);
       } finally {
         await child.destroy();
       }
     };
 
     if (options?.background) {
-      void run().catch((err) => {
-        this.logger.debug('Background fork failed', { error: String(err) });
-      });
+      const ctrl = new AbortController();
+      this.backgroundForks.add(ctrl);
+      void run(ctrl.signal)
+        .catch((err) => {
+          if ((err as { name?: string }).name !== 'AbortError') {
+            this.logger.debug('Background fork failed', { error: String(err) });
+          }
+        })
+        .finally(() => {
+          this.backgroundForks.delete(ctrl);
+        });
       return ''; // fire-and-forget — returns immediately
     }
 
@@ -620,8 +633,9 @@ export class Agent {
     const tid = threadId ?? 'default';
     this.conversations.clearThread(tid);
     this.skillManager?.clearStickySkills(tid);
-    // Prevent unbounded growth of the surfaced-memory set across long sessions.
-    this.surfacedMemories.clear();
+    // Clear per-thread state to prevent unbounded growth across long sessions.
+    this.surfacedMemoriesByThread.delete(tid);
+    this.turnsSinceExtractionByThread.delete(tid);
     this.logger.info('Thread cleared', { threadId: tid });
   }
 
@@ -704,9 +718,12 @@ export class Agent {
 
   async destroy(): Promise<void> {
     this.destroyed = true;
+    for (const ctrl of this.backgroundForks) ctrl.abort();
+    this.backgroundForks.clear();
     this.skillManager?.clearAllStickySessions();
     this.skillManager?.clearInvokedSkills();
-    this.surfacedMemories.clear();
+    this.surfacedMemoriesByThread.clear();
+    this.turnsSinceExtractionByThread.clear();
     await this.mcpAdapter.disconnectAll();
     this.database?.close();
     this.logger.info('Agent destroyed');
@@ -746,12 +763,9 @@ export class Agent {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Agent.MEMORY_PREFETCH_TIMEOUT);
 
-    return this.fileMemorySystem!.findRelevant(
-      userInput,
-      controller.signal,
-      this.surfacedMemories,
-      threadId,
-    )
+    const tid = threadId ?? 'default';
+    const surfaced = this.surfacedMemoriesByThread.get(tid) ?? new Set<string>();
+    return this.fileMemorySystem!.findRelevant(userInput, controller.signal, surfaced, threadId)
       .catch(() => [] as MemoryFile[])
       .finally(() => clearTimeout(timeout));
   }
@@ -766,7 +780,8 @@ export class Agent {
     // Skills injection
     const skillToolNames: string[] = [];
     if (this.skillManager) {
-      const matchedSkills = await this.skillManager.match(userInput, { threadId });
+      const recentMessages = this.conversations.getHistory(threadId).length;
+      const matchedSkills = await this.skillManager.match(userInput, { threadId, recentMessages });
 
       for (const skill of matchedSkills) {
         // Resolve instructions (dynamic getPrompt or static with arg substitution)
@@ -890,9 +905,13 @@ export class Agent {
             tokens,
           });
 
-          // Track surfaced filenames to avoid re-injection in subsequent turns
+          // Track surfaced filenames per-thread to avoid re-injection in subsequent turns
+          if (!this.surfacedMemoriesByThread.has(threadId)) {
+            this.surfacedMemoriesByThread.set(threadId, new Set<string>());
+          }
+          const threadSurfaced = this.surfacedMemoriesByThread.get(threadId)!;
           for (const m of relevant) {
-            this.surfacedMemories.add(m.filename);
+            threadSurfaced.add(m.filename);
           }
         }
       } catch {

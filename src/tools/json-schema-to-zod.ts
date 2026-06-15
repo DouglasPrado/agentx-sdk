@@ -129,7 +129,7 @@ function buildEnum(values: unknown[], nullable?: boolean): z.ZodTypeAny {
     return e;
   }
   // Mixed types — fall back to union of literals
-  const literals = values.map((v) => z.literal(v as z.Primitive));
+  const literals = values.map((v) => z.literal(v as string | number | bigint | boolean | null));
   if (literals.length >= 2) {
     return z.union(literals as unknown as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
   }

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { SQLiteDatabase } from '../../../src/storage/sqlite-database.js';
 
 describe('SQLiteDatabase', () => {
@@ -69,6 +69,30 @@ describe('SQLiteDatabase', () => {
     db = new SQLiteDatabase(':memory:');
     db.initialize();
     db.initialize(); // should not throw
+  });
+
+  it('leaves _db null when migration throws so reinitialize can recover (#218)', () => {
+    db = new SQLiteDatabase(':memory:');
+
+    // Force the private migration method to throw on first call
+    vi.spyOn(db as unknown as Record<string, () => void>, 'migrateV1').mockImplementationOnce(
+      () => {
+        throw new Error('Simulated migration failure');
+      },
+    );
+
+    expect(() => db.initialize()).toThrow('Simulated migration failure');
+
+    // Bug: with the old code _db is already set, so db.db would NOT throw here.
+    // After the fix, _db must remain null after a failed migration.
+    expect(() => db.db).toThrow('not initialized');
+
+    // A second initialize() attempt must succeed now that the spy is restored.
+    expect(() => db.initialize()).not.toThrow();
+    const tables = db.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all() as { name: string }[];
+    expect(tables.map((t) => t.name)).toContain('conversations');
   });
 
   it('should close cleanly', () => {

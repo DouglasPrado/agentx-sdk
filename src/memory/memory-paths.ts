@@ -9,7 +9,7 @@
 
 import { homedir } from 'node:os';
 import { isAbsolute, join, normalize, sep } from 'node:path';
-import { mkdir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, realpath } from 'node:fs/promises';
 
 /**
  * Default memory directory: `<cwd>/.agentx/memory/`.
@@ -122,6 +122,21 @@ export async function validateMemoryPathResolved(
 ): Promise<string | undefined> {
   const cheap = validateMemoryPath(path, memoryDir);
   if (!cheap) return undefined;
+
+  // lstat does not follow symlinks — it succeeds even for dangling symlinks.
+  // Use it to distinguish "entry exists (possibly dangling)" from "no entry".
+  try {
+    await lstat(cheap);
+  } catch (e: unknown) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      // File genuinely doesn't exist — safe to use cheap path for creates.
+      return cheap;
+    }
+    return undefined;
+  }
+
+  // Entry exists on disk; resolve and validate the real path.
+  // If realpath throws here (e.g. dangling symlink, ELOOP), reject.
   try {
     const real = await realpath(cheap);
     const realDir = await realpath(normalize(memoryDir).replace(/[/\\]+$/, ''));
@@ -129,10 +144,7 @@ export async function validateMemoryPathResolved(
     if (real !== realDir && !real.startsWith(realDirWithSep)) return undefined;
     return real;
   } catch {
-    // realpath fails when the target doesn't exist yet — that's normal for
-    // creates. Fall back to the cheap (string) check, which still guards
-    // against traversal inside the memory directory.
-    return cheap;
+    return undefined;
   }
 }
 

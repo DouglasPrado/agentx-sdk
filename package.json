@@ -1,6 +1,6 @@
 {
   "name": "agentx-sdk",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "AgentX SDK - Standalone TypeScript agent library with streaming, tools, memory, knowledge (RAG), and skills",
   "type": "module",
   "main": "dist/index.js",
@@ -49,8 +49,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
-    "zod": "^3.23.0",
-    "zod-to-json-schema": "^3.23.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

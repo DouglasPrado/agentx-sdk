@@ -15,13 +15,14 @@ import { validateSsrfUrl } from '../utils/ssrf-guard.js';
  * (`invalid resource shape …`, `invalid prompt shape …`).
  */
 class MCPInvalidShapeError extends ZodError {
-  private readonly _customMessage: string;
   constructor(issues: ZodIssue[], customMessage: string) {
     super(issues);
-    this._customMessage = customMessage;
-  }
-  override get message(): string {
-    return this._customMessage;
+    Object.defineProperty(this, 'message', {
+      value: customMessage,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
   }
 }
 
@@ -76,6 +77,36 @@ const MCPToolContentSchema = z.array(
     })
     .passthrough(),
 );
+
+/**
+ * Normalizes a string to a valid function-name identifier per the OpenAI spec:
+ * ^[a-zA-Z0-9_-]{1,N}$
+ * Replaces any character outside that set with '_', collapses runs of '_', and
+ * strips leading/trailing '_'. Falls back to 'x' for an empty result.
+ */
+function toSafeIdentifier(raw: string, maxLen = 50): string {
+  return (
+    raw
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, maxLen) || 'x'
+  );
+}
+
+/** Sanitizes untrusted MCP text (names/descriptions) before embedding in system prompts. */
+function sanitizeForPrompt(value: string): string {
+  return (
+    value
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip ASCII controls (except \t and \n)
+      // strip bidi/zero-width: U+200B-U+200F, U+202A-U+202E, U+2066-U+2069, U+FEFF
+      .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+      .replace(/[\u{e0000}-\u{e007f}]/gu, '') // strip Unicode tag block (invisible in UIs)
+      .replace(/\n{2,}/g, '\n') // collapse multiple newlines
+      .slice(0, 512)
+  ); // cap length
+}
 
 export interface MCPHealthStatus {
   servers: {
@@ -373,10 +404,14 @@ export class MCPAdapter {
     client: MCPClient,
     config: MCPConnectionConfig,
   ): AgentTool {
-    const safeServerName = serverName.replace(/__/g, '_');
-    const safeToolName = mcpTool.name.replace(/__/g, '_');
+    const safeServerName = toSafeIdentifier(
+      sanitizeForPrompt(serverName.replace(/__/g, '_')).replace(/\n/g, ''),
+    );
+    const safeToolName = toSafeIdentifier(
+      sanitizeForPrompt(mcpTool.name.replace(/__/g, '_')).replace(/\n/g, ''),
+    );
     const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
-    const parameters = jsonSchemaToZod(mcpTool.inputSchema) as unknown as ZodSchema;
+    const parameters: ZodSchema = jsonSchemaToZod(mcpTool.inputSchema);
     const isolateErrors = config.isolateErrors ?? true;
     const timeout = config.timeout ?? 30_000;
 
@@ -385,9 +420,11 @@ export class MCPAdapter {
     const isReadOnly = annotations.readOnlyHint ?? false;
     const isDestructive = annotations.destructiveHint ?? false;
 
+    const rawDescription = mcpTool.description ?? `MCP tool: ${mcpTool.name}`;
+
     return {
       name: namespacedName,
-      description: mcpTool.description?.slice(0, 2048) ?? `MCP tool: ${mcpTool.name}`,
+      description: sanitizeForPrompt(rawDescription),
       parameters,
       isReadOnly,
       isDestructive,
@@ -604,6 +641,14 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
   if (config.transport === 'stdio') {
     if (!config.command) {
       throw new Error('MCPConnectionConfig: "command" is required for transport "stdio"');
+    }
+    if (
+      config.allowedStdioCommands !== undefined &&
+      !config.allowedStdioCommands.includes(config.command)
+    ) {
+      throw new Error(
+        `MCP stdio command "${config.command}" is not in allowedStdioCommands: [${config.allowedStdioCommands.join(', ')}]`,
+      );
     }
     const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
     return new StdioClientTransport({ command: config.command, args: config.args ?? [] });

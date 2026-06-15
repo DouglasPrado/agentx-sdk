@@ -122,4 +122,36 @@ describe('Agent.fork()', () => {
 
     await expect(agent.fork('test')).rejects.toThrow('destroyed');
   });
+
+  it('destroy() aborts in-flight background forks (#219)', async () => {
+    let forkSignal: AbortSignal | undefined;
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_res, rej) => {
+          forkSignal = init?.signal ?? undefined;
+          init?.signal?.addEventListener('abort', () =>
+            rej(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
+
+    // Start a background fork that will never complete on its own
+    void agent.fork('hang forever', { background: true });
+
+    // Wait for the fork to start and reach the fetch mock
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Destroy parent — the fix must abort background forks
+    await agent.destroy();
+
+    // The abort signal injected by the fix must be triggered after destroy()
+    expect(forkSignal?.aborted).toBe(true);
+  });
 });

@@ -101,6 +101,7 @@ export async function* executeReactLoop(
   // Token budget continuation tracking
   let budgetContinuationCount = 0;
   let cumulativeOutputTokens = 0;
+  let costWarningEmitted = false;
 
   let state: LoopState = createInitialState([...initialMessages]);
 
@@ -120,7 +121,10 @@ export async function* executeReactLoop(
       if (costPolicy.onLimitReached === 'stop') {
         return { reason: 'cost_limit', usage };
       }
-      yield { type: 'warning', message: 'Token limit approaching', code: 'cost_warning' };
+      if (!costWarningEmitted) {
+        yield { type: 'warning', message: 'Token limit approaching', code: 'cost_warning' };
+        costWarningEmitted = true;
+      }
     }
 
     // --- Check max iterations ---
@@ -198,7 +202,12 @@ export async function* executeReactLoop(
     const earlyToolResults: LLMMessage[] = []; // Tool results completed during streaming
 
     // --- Stream from LLM ---
-    const streamingExecutor = new StreamingToolExecutor(toolExecutor, signal);
+    const streamingExecutor = new StreamingToolExecutor(
+      toolExecutor,
+      signal,
+      undefined,
+      messages.length,
+    );
     const effectiveMaxTokens = state.maxOutputTokensOverride ?? maxOutputTokens;
 
     try {
@@ -337,7 +346,8 @@ export async function* executeReactLoop(
           }
 
           if (hookResult.blockingErrors.length > 0) {
-            yield { type: 'recovery', reason: 'stop_hook_blocking', attempt: 1 };
+            const stopHookRetryCount = state.stopHookRetryCount + 1;
+            yield { type: 'recovery', reason: 'stop_hook_blocking', attempt: stopHookRetryCount };
 
             const errorMessages: LLMMessage[] = hookResult.blockingErrors.map((err) => ({
               role: 'user' as const,
@@ -348,6 +358,7 @@ export async function* executeReactLoop(
               ...state,
               messages: [...messages, assistantMessage, ...errorMessages],
               turnCount: turnCount + 1,
+              stopHookRetryCount,
               transition: { reason: 'stop_hook_blocking' },
             };
             continue;

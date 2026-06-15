@@ -51,6 +51,31 @@ describe('builtin/glob', () => {
     expect(content).toContain('No files found');
   });
 
+  describe('issue #254 — AbortSignal and node_modules', () => {
+    it('should not traverse node_modules directories', async () => {
+      // Bug: walkDir only skipped entries starting with '.'; node_modules was traversed in full.
+      await mkdir(join(tempDir, 'node_modules', 'some-pkg'), { recursive: true });
+      await writeFile(join(tempDir, 'node_modules', 'some-pkg', 'lib.ts'), 'export {}');
+
+      const tool = createGlobTool(tempDir);
+      const result = await tool.execute({ pattern: '**/*.ts' }, signal);
+      const content = typeof result === 'string' ? result : result.content;
+      expect(content).not.toContain('node_modules');
+    });
+
+    it('should stop walkDir early when AbortSignal is already aborted', async () => {
+      // Bug: _signal parameter was ignored; walkDir completed full traversal even after abort.
+      const ac = new AbortController();
+      ac.abort();
+
+      const tool = createGlobTool(tempDir);
+      const result = await tool.execute({ pattern: '**/*.ts', path: tempDir }, ac.signal);
+      const content = typeof result === 'string' ? result : result.content;
+      // When aborted before traversal starts, no files should be collected.
+      expect(content).toContain('No files found');
+    });
+  });
+
   describe('path containment (issue #70)', () => {
     it('should block path outside workingDir when workingDir is set', async () => {
       const tool = createGlobTool(tempDir);

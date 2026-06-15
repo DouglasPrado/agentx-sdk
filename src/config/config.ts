@@ -8,8 +8,10 @@ const MCPConnectionConfigSchema = z.object({
   transport: z.enum(['stdio', 'sse', 'http', 'auto']),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
+  /** Optional allowlist for stdio commands. When set, only listed commands are permitted. */
+  allowedStdioCommands: z.array(z.string()).optional(),
   url: z.string().url().optional(),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   timeout: z.number().positive().default(30_000),
   maxRetries: z.number().int().min(0).default(3),
   healthCheckInterval: z.number().positive().default(60_000),

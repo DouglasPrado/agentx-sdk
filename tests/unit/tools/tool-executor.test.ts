@@ -393,4 +393,22 @@ describe('ToolExecutor', () => {
 
     expect(result.isError).toBeFalsy();
   });
+
+  it('should pass recentMessages from ExecuteOptions to validate() (#214)', async () => {
+    const executor = new ToolExecutor();
+    let capturedRecentMessages: number | undefined;
+
+    executor.register(
+      createTool({
+        validate: async (_args, context) => {
+          capturedRecentMessages = context.recentMessages;
+          return null;
+        },
+      }),
+    );
+
+    await executor.execute('test_tool', { input: 'hi' }, { recentMessages: 7 });
+
+    expect(capturedRecentMessages).toBe(7);
+  });
 });

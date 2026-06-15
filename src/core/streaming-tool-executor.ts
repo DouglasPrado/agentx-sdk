@@ -41,13 +41,15 @@ export class StreamingToolExecutor {
   private readonly executor: ToolExecutor;
   private readonly signal?: AbortSignal;
   private readonly logger: Logger;
+  private readonly recentMessages: number;
   private processing = false;
   /** Accumulated progress events from all tools (drained by getProgressEvents) */
   private pendingProgress: ToolProgressInfo[] = [];
 
-  constructor(executor: ToolExecutor, signal?: AbortSignal, logger?: Logger) {
+  constructor(executor: ToolExecutor, signal?: AbortSignal, logger?: Logger, recentMessages = 0) {
     this.executor = executor;
     this.signal = signal;
+    this.recentMessages = recentMessages;
     this.logger = logger ?? createLogger({ prefix: 'streaming-tool-executor' });
   }
 
@@ -212,6 +214,7 @@ export class StreamingToolExecutor {
       const result = await this.executor.execute(tracked.name, parsedArgs, {
         signal: this.signal,
         toolCallId: tracked.id,
+        recentMessages: this.recentMessages,
         onProgress,
       });
       tracked.result = result;

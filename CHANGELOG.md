@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.7.6](https://github.com/DouglasPrado/agentx-sdk/compare/v0.7.5...v0.7.6) (2026-05-15)
+
+
+### Bug Fixes
+
+* cost_warning emitido apenas uma vez com onLimitReached warn (closes [#253](https://github.com/DouglasPrado/agentx-sdk/issues/253)) ([#256](https://github.com/DouglasPrado/agentx-sdk/issues/256)) ([5f1df44](https://github.com/DouglasPrado/agentx-sdk/commit/5f1df44510c00bc3a19b338bc6e702b6627ccddb))
+* glob respeita AbortSignal e pula node_modules (closes [#254](https://github.com/DouglasPrado/agentx-sdk/issues/254)) ([#257](https://github.com/DouglasPrado/agentx-sdk/issues/257)) ([9ddaaf3](https://github.com/DouglasPrado/agentx-sdk/commit/9ddaaf3b57201ad781f2cdaed9d0994478166314))
+* **memory-paths:** reject dangling symlinks in validateMemoryPathResolved ([#215](https://github.com/DouglasPrado/agentx-sdk/issues/215)) ([d6e2405](https://github.com/DouglasPrado/agentx-sdk/commit/d6e24056f5afc58202a09d7c8829378d236000b9))
+* resolve [#211](https://github.com/DouglasPrado/agentx-sdk/issues/211) — sanitizar nomes e descrições MCP para prevenir prompt injection ([09072a3](https://github.com/DouglasPrado/agentx-sdk/commit/09072a33c9d166d05f091d8ff96f7c888f60aa03))
+* resolve [#212](https://github.com/DouglasPrado/agentx-sdk/issues/212) — validar comando stdio contra allowedStdioCommands ([6413650](https://github.com/DouglasPrado/agentx-sdk/commit/6413650ac90ae86a3d7d9c298e9e1de6289a813d))
+* resolve [#218](https://github.com/DouglasPrado/agentx-sdk/issues/218) — atribuir _db apenas após migração bem-sucedida ([7e786d1](https://github.com/DouglasPrado/agentx-sdk/commit/7e786d11115bd78b652734877a79e3f3d60b9134))
+* resolve [#219](https://github.com/DouglasPrado/agentx-sdk/issues/219) — rastrear e abortar forks em background ao destruir Agent ([f55a83a](https://github.com/DouglasPrado/agentx-sdk/commit/f55a83aba6fc444233a3d6a68f4b897c4169c4fb))
+* resolve [#220](https://github.com/DouglasPrado/agentx-sdk/issues/220) — isolar turnsSinceExtraction e surfacedMemories por thread ([d6789cc](https://github.com/DouglasPrado/agentx-sdk/commit/d6789cc4aa8e32ff0a6696c38f1a95cbcf698b07))
+* resolve [#221](https://github.com/DouglasPrado/agentx-sdk/issues/221) — validar contagem de embeddings após chamada à API ([03c4111](https://github.com/DouglasPrado/agentx-sdk/commit/03c411171cc44e0c9a9b49ca9d68a6295aedb8b4))
+* resolve [#236](https://github.com/DouglasPrado/agentx-sdk/issues/236) — bloqueia endereço IPv6 unspecified [::]  no SSRF guard ([#242](https://github.com/DouglasPrado/agentx-sdk/issues/242)) ([0297e72](https://github.com/DouglasPrado/agentx-sdk/commit/0297e72de296bbd0da038ad51a4b7daeaa61549a))
+* resolve [#237](https://github.com/DouglasPrado/agentx-sdk/issues/237) — strip Unicode bidi/zero-width/tag chars em sanitizeForPrompt ([#243](https://github.com/DouglasPrado/agentx-sdk/issues/243)) ([f160b38](https://github.com/DouglasPrado/agentx-sdk/commit/f160b382397c0501d9837a31180a5bf998f8bb42))
+* resolve [#239](https://github.com/DouglasPrado/agentx-sdk/issues/239) — remove dead-code '::1' (sem colchetes) no SSRF guard ([#245](https://github.com/DouglasPrado/agentx-sdk/issues/245)) ([9486997](https://github.com/DouglasPrado/agentx-sdk/commit/948699780882836dfe26455aa172b0be2ebd45fe))
+* sanitiza nome de tool MCP antes de inserir no system prompt (closes [#248](https://github.com/DouglasPrado/agentx-sdk/issues/248)) ([#250](https://github.com/DouglasPrado/agentx-sdk/issues/250)) ([f0c20c8](https://github.com/DouglasPrado/agentx-sdk/commit/f0c20c80527b8e7a5fa4d8a653fd0bdab3b5ed3f))
+* **ssrf-guard:** block missing IANA reserved ranges ([#213](https://github.com/DouglasPrado/agentx-sdk/issues/213)) ([8e687cc](https://github.com/DouglasPrado/agentx-sdk/commit/8e687cc3705f3b5a907c40bc34ff929bf10abfd4))
+* stop_hook_blocking recovery incrementa attempt corretamente (closes [#255](https://github.com/DouglasPrado/agentx-sdk/issues/255)) ([#258](https://github.com/DouglasPrado/agentx-sdk/issues/258)) ([e5b323c](https://github.com/DouglasPrado/agentx-sdk/commit/e5b323c5757c31dd3172b0527757929652cd3ccb))
+* stripa tag &lt;system-reminder&gt; de abertura em injections de contexto (closes [#249](https://github.com/DouglasPrado/agentx-sdk/issues/249)) ([#251](https://github.com/DouglasPrado/agentx-sdk/issues/251)) ([579bce9](https://github.com/DouglasPrado/agentx-sdk/commit/579bce9ca4a3100272f39f80581a68658b446072))
+* **tool-executor,skill-manager:** pass real recentMessages to validate/match contexts ([#214](https://github.com/DouglasPrado/agentx-sdk/issues/214)) ([7c95114](https://github.com/DouglasPrado/agentx-sdk/commit/7c95114f0a054a0ce66bc917226269a3f167d910))
+* **vitest:** add resolve alias agentx-sdk → src/index.ts (closes [#188](https://github.com/DouglasPrado/agentx-sdk/issues/188)) ([#234](https://github.com/DouglasPrado/agentx-sdk/issues/234)) ([a81f397](https://github.com/DouglasPrado/agentx-sdk/commit/a81f397875d92a2f27eb09b133c21b033c3875a5))
+
 ## [0.7.5](https://github.com/DouglasPrado/agentx-sdk/compare/v0.7.4...v0.7.5) (2026-05-11)
 
 

@@ -55,6 +55,8 @@ export interface LoopState {
   readonly transition: Continue | undefined;
   /** Tracks tool-level retry attempts (onToolError: 'retry'). */
   readonly toolRetryCount: number;
+  /** Tracks consecutive stop_hook_blocking recovery attempts. */
+  readonly stopHookRetryCount: number;
 }
 
 /** Create initial loop state from the starting messages */
@@ -69,5 +71,6 @@ export function createInitialState(messages: LLMMessage[]): LoopState {
     autoCompactTracking: undefined,
     transition: undefined,
     toolRetryCount: 0,
+    stopHookRetryCount: 0,
   };
 }

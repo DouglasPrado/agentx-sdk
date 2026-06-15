@@ -600,4 +600,24 @@ Review TS code.`,
       expect(count).toBe(0);
     });
   });
+
+  describe('match() — recentMessages propagation (#214)', () => {
+    it('passes recentMessages from context to skill.match()', async () => {
+      let capturedRecentMessages: number | undefined;
+
+      manager.register(
+        createSkill({
+          name: 'ctx-skill',
+          match: (_input, ctx) => {
+            capturedRecentMessages = ctx.recentMessages;
+            return true;
+          },
+        }),
+      );
+
+      await manager.match('anything', { threadId: 't1', recentMessages: 5 });
+
+      expect(capturedRecentMessages).toBe(5);
+    });
+  });
 });

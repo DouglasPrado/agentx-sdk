@@ -38,6 +38,20 @@ describe('validateSsrfUrl', () => {
     expect(validateSsrfUrl('http://localhost/')).not.toBeNull();
   });
 
+  // issue #239 — dead code: '::1' (without brackets) never matches WHATWG URL hostname
+  describe('IPv6 loopback blocked via bracket form only (issue #239)', () => {
+    it('blocks http://[::1]/ — WHATWG URL hostname is [::1] with brackets', () => {
+      expect(validateSsrfUrl('http://[::1]/')).not.toBeNull();
+    });
+
+    it('http://::1/ is an invalid URL — covered by invalid-URL guard, not the ::1 check', () => {
+      // Without brackets, ::1 is not a valid HTTP URL; the URL parser rejects it.
+      // The dead-code check host === '::1' can never be true for a valid URL.
+      const result = validateSsrfUrl('http://::1/');
+      expect(result).toBe('Invalid URL');
+    });
+  });
+
   it('blocks non-http/https schemes', () => {
     expect(validateSsrfUrl('file:///etc/passwd')).not.toBeNull();
     expect(validateSsrfUrl('ftp://example.com/')).not.toBeNull();
@@ -63,6 +77,53 @@ describe('validateSsrfUrl', () => {
 
     it('allows 100.128.0.0 (just above CGNAT range)', () => {
       expect(validateSsrfUrl('http://100.128.0.0/')).toBeNull();
+    });
+  });
+
+  // issue #213 — missing IANA reserved ranges
+  describe('missing IANA reserved ranges (#213)', () => {
+    it('blocks 198.18.0.0/15 (benchmarking, RFC 2544)', () => {
+      expect(validateSsrfUrl('http://198.18.0.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://198.19.255.255/')).not.toBeNull();
+    });
+
+    it('allows addresses just outside 198.18.0.0/15', () => {
+      expect(validateSsrfUrl('http://198.17.255.255/')).toBeNull();
+      expect(validateSsrfUrl('http://198.20.0.0/')).toBeNull();
+    });
+
+    it('blocks 192.0.2.0/24 (TEST-NET-1, RFC 5737)', () => {
+      expect(validateSsrfUrl('http://192.0.2.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://192.0.2.255/')).not.toBeNull();
+    });
+
+    it('blocks 198.51.100.0/24 (TEST-NET-2, RFC 5737)', () => {
+      expect(validateSsrfUrl('http://198.51.100.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://198.51.100.255/')).not.toBeNull();
+    });
+
+    it('blocks 203.0.113.0/24 (TEST-NET-3, RFC 5737)', () => {
+      expect(validateSsrfUrl('http://203.0.113.1/')).not.toBeNull();
+      expect(validateSsrfUrl('http://203.0.113.255/')).not.toBeNull();
+    });
+  });
+
+  // issue #236 — IPv6 unspecified address [::] not blocked (host === '::' is dead code)
+  describe('IPv6 unspecified address [::] blocked (issue #236)', () => {
+    it('blocks http://[::] — IPv6 all-zeros unspecified address', () => {
+      expect(validateSsrfUrl('http://[::]/')).not.toBeNull();
+    });
+
+    it('blocks https://[::] as well', () => {
+      expect(validateSsrfUrl('https://[::]/')).not.toBeNull();
+    });
+
+    it('still blocks [::1] loopback IPv6', () => {
+      expect(validateSsrfUrl('http://[::1]/')).not.toBeNull();
+    });
+
+    it('still allows a public IPv6 address', () => {
+      expect(validateSsrfUrl('https://[2606:4700:4700::1111]/')).toBeNull();
     });
   });
 
