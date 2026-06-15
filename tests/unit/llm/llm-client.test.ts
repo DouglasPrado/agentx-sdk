@@ -565,6 +565,9 @@ describe('LLMClient', () => {
       expect(toolCalls).toHaveLength(2);
       expect(toolCalls[0]).toMatchObject({ name: 'fn_a', arguments: '{"x":1}' });
       expect(toolCalls[1]).toMatchObject({ name: 'fn_b', arguments: '{"y":2}' });
+    });
+  });
+
   describe('SSE buffer limit (issue #261)', () => {
     it('throws when a single SSE line exceeds 1 MB without a newline', async () => {
       // Simulate a malformed/malicious SSE stream that sends a chunk > 1 MB with no newline,
