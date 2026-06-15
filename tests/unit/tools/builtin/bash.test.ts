@@ -225,6 +225,9 @@ describe('builtin/bash', () => {
         if (saved !== undefined) process.env.SHELL = saved;
         else delete process.env.SHELL;
       }
+    });
+  });
+
   describe('brace expansion blocked (issue #235)', () => {
     it('blocks { in command — brace expansion bypass', async () => {
       const tool = createBashTool();
