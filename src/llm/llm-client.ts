@@ -5,13 +5,19 @@ import { retry } from '../utils/retry.js';
 import { buildReasoningArgs, isReasoningModel, requiresNoSystemRole } from './reasoning.js';
 import { validateSsrfUrl } from '../utils/ssrf-guard.js';
 
+const ToolCallSchema = z.object({
+  id: z.string(),
+  type: z.literal('function'),
+  function: z.object({ name: z.string(), arguments: z.string() }),
+});
+
 const ChatJsonSchema = z.object({
   choices: z
     .array(
       z.object({
         message: z.object({
           content: z.string().nullish(),
-          tool_calls: z.array(z.unknown()).optional(),
+          tool_calls: z.array(ToolCallSchema).optional(),
         }),
         finish_reason: z.string().nullish(),
       }),
@@ -168,7 +174,7 @@ export class LLMClient {
     return {
       content: choice.message.content ?? '',
       toolCalls: choice.message.tool_calls,
-      finishReason: choice.finish_reason,
+      finishReason: choice.finish_reason ?? 'stop',
       usage,
     };
   }
