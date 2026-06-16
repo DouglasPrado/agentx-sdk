@@ -1,8 +1,12 @@
 export default {
   extends: ['@commitlint/config-conventional'],
-  // Dependabot escreve commits com URLs longas no body (release notes, links de comparação).
-  // Não relaxa body-max-line-length pra todo mundo — só pula a validação dos commits do bot.
-  ignores: [(message) => /^Signed-off-by: dependabot\[bot\]/m.test(message)],
+  // Bots escrevem commits que não seguem conventional commits (URLs longas no body,
+  // subject sem "type:"). Pula a validação só desses commits, sem relaxar as regras
+  // para commits escritos por humanos.
+  ignores: [
+    (message) => /^Signed-off-by: dependabot\[bot\]/m.test(message),
+    (message) => /Co-authored-by:.*Copilot Autofix/m.test(message),
+  ],
   rules: {
     // Convenção do repo: "fix: resolve #N — descrição em português detalhada" estoura
     // os 100 chars default. Histórico do main tem múltiplos commits em 100-105 chars
