@@ -9,7 +9,7 @@
  *   skillsDir/skill-name.md           (flat — single file per skill)
  */
 
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, stat, open } from 'node:fs/promises';
 import { join, basename, dirname } from 'node:path';
 import type { AgentSkill } from '../contracts/entities/agent-skill.js';
 import { substituteArgs } from './skill-args.js';
@@ -120,9 +120,19 @@ const MAX_SKILL_FILE_BYTES = 512 * 1024; // 512 KB
 
 export async function loadSkillFile(filePath: string): Promise<AgentSkill | null> {
   try {
-    const fileInfo = await stat(filePath);
-    if (fileInfo.size > MAX_SKILL_FILE_BYTES) return null;
-    const content = await readFile(filePath, 'utf-8');
+    // Open once and stat+read through the same descriptor to avoid a TOCTOU
+    // race (js/file-system-race) between the size check and the read.
+    const handle = await open(filePath, 'r');
+    let content = '';
+    try {
+      const fileInfo = await handle.stat();
+      if (fileInfo.size > MAX_SKILL_FILE_BYTES) return null;
+      const buffer = Buffer.alloc(fileInfo.size);
+      await handle.read(buffer, 0, buffer.length, 0);
+      content = buffer.toString('utf-8');
+    } finally {
+      await handle.close();
+    }
     const fm = parseSkillFrontmatter(content);
     const body = extractBody(content);
 
