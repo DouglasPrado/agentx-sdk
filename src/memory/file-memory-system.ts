@@ -18,7 +18,7 @@
  *         ...
  */
 
-import { readFile, writeFile, unlink, stat, readdir, mkdir } from 'node:fs/promises';
+import { open, readFile, writeFile, unlink, stat, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LLMClient } from '../llm/llm-client.js';
 import type { Logger } from '../utils/logger.js';
@@ -138,9 +138,21 @@ export class FileMemorySystem {
       const candidate = join(dir, filename);
       const filePath = await validateMemoryPathResolved(candidate, this.memoryDir);
       if (!filePath) return null;
-      const fileStat = await stat(filePath);
-      if (fileStat.size > MAX_MEMORY_FILE_BYTES) return null;
-      const content = await readFile(filePath, 'utf-8');
+      // Open the file once and stat through the same descriptor to avoid a
+      // TOCTOU race (js/file-system-race) between checking size and reading.
+      const handle = await open(filePath, 'r');
+      let content = '';
+      let mtimeMs = 0;
+      try {
+        const fileStat = await handle.stat();
+        if (fileStat.size > MAX_MEMORY_FILE_BYTES) return null;
+        mtimeMs = fileStat.mtimeMs;
+        const buffer = Buffer.alloc(fileStat.size);
+        await handle.read(buffer, 0, buffer.length, 0);
+        content = buffer.toString('utf-8');
+      } finally {
+        await handle.close();
+      }
       const frontmatter = parseFrontmatter(content);
 
       const bodyMatch = /^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/.exec(content);
@@ -149,7 +161,7 @@ export class FileMemorySystem {
       return {
         filename,
         filePath,
-        mtimeMs: fileStat.mtimeMs,
+        mtimeMs,
         name: frontmatter.name ?? null,
         description: frontmatter.description ?? null,
         type: parseMemoryType(frontmatter.type),
