@@ -18,7 +18,7 @@
  *         ...
  */
 
-import { readFile, writeFile, unlink, stat, readdir, mkdir } from 'node:fs/promises';
+import { open, readFile, writeFile, unlink, stat, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LLMClient } from '../llm/llm-client.js';
 import type { Logger } from '../utils/logger.js';
@@ -402,12 +402,20 @@ export class FileMemorySystem {
 const MAX_INDEX_FILE_BYTES = 512 * 1024;
 
 async function safeReadIndexFile(filePath: string): Promise<string> {
+  // Open once and stat+read through the same descriptor to avoid a TOCTOU
+  // race (js/file-system-race) between the size check and the read.
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    const fileStat = await stat(filePath);
+    handle = await open(filePath, 'r');
+    const fileStat = await handle.stat();
     if (fileStat.size > MAX_INDEX_FILE_BYTES) return '';
-    return await readFile(filePath, 'utf-8');
+    const buffer = Buffer.alloc(fileStat.size);
+    await handle.read(buffer, 0, buffer.length, 0);
+    return buffer.toString('utf-8');
   } catch {
     return '';
+  } finally {
+    await handle?.close();
   }
 }
 
