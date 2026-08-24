@@ -1,5 +1,25 @@
 # AgentX SDK
 
+> [!IMPORTANT]
+> **Este repositorio foi arquivado. O projeto agora e [`@gba/harness`](https://github.com/DouglasPrado/gba.dev/tree/main/packages/harness), mantido no monorepo [gba.dev](https://github.com/DouglasPrado/gba.dev).**
+>
+> Todo o historico de commits foi preservado la (importado sem squash). Issues,
+> PRs e releases continuam visiveis aqui, em modo somente-leitura.
+>
+> ```diff
+> - import { Agent } from 'agentx-sdk';
+> + import { Agent } from '@gba/harness';
+> ```
+>
+> A API publica e a mesma: `Agent`, seus metodos e os tipos exportados nao
+> mudaram de nome. Duas coisas mudaram:
+>
+> - o pacote npm: `agentx-sdk` -> `@gba/harness`
+> - o diretorio de dados: `.agentx` -> `.harness` (rode `mv .agentx .harness`
+>   para preservar memoria e banco)
+>
+> `agentx-sdk` fica congelado em `0.7.6` e nao recebera novas versoes.
+
 TypeScript library for building conversational agents with LLMs. Streaming-first, tools, memory, knowledge/RAG, skills and MCP — all in-process, no frameworks.
 
 ```bash
