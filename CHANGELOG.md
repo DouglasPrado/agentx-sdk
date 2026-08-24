@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.7](https://github.com/DouglasPrado/agentx-sdk/compare/v0.7.6...v0.7.7) (2026-08-24)
+
+
+### Bug Fixes
+
+* limite de 1 MB no buffer SSE em parseSSEStream (closes [#261](https://github.com/DouglasPrado/agentx-sdk/issues/261)) ([#266](https://github.com/DouglasPrado/agentx-sdk/issues/266)) ([8305520](https://github.com/DouglasPrado/agentx-sdk/commit/8305520839cfb86e2a6b7d48ba9f7727e1db646e))
+* normaliza nomes de tools MCP para charset válido [a-zA-Z0-9_-] (closes [#263](https://github.com/DouglasPrado/agentx-sdk/issues/263)) ([#268](https://github.com/DouglasPrado/agentx-sdk/issues/268)) ([cc64fce](https://github.com/DouglasPrado/agentx-sdk/commit/cc64fce7e4c290e21bc0a7cb7f5f5bff447672f8))
+
+
+### Documentation
+
+* aponta para @gba/harness antes de arquivar ([c97b24b](https://github.com/DouglasPrado/agentx-sdk/commit/c97b24b662c02b16aa984027eb85a1d8faea3c54))
+
 ## [0.7.6](https://github.com/DouglasPrado/agentx-sdk/compare/v0.7.5...v0.7.6) (2026-05-15)
 
 
