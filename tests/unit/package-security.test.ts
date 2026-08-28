@@ -16,11 +16,11 @@ describe('package.json security overrides (issue #26)', () => {
     expect(typeof pkg.overrides).toBe('object');
   });
 
-  it('should pin hono to >=4.12.16 to fix GHSA-26pp, GHSA-r5rp, GHSA-xf4j, GHSA-wmmm, GHSA-458j, GHSA-xpcf, GHSA-9vqf, GHSA-69xw', () => {
+  it('should pin hono to >=4.12.25 to fix GHSA-26pp, GHSA-r5rp, GHSA-xf4j, GHSA-wmmm, GHSA-458j, GHSA-xpcf, GHSA-9vqf, GHSA-69xw, GHSA-88fw', () => {
     const overrides = pkg.overrides as Record<string, string>;
     expect(overrides).toHaveProperty('hono');
-    // Must satisfy >=4.12.16 (minimum for all hono CVEs including issue #143)
-    expect(overrides.hono).toBe('>=4.12.16');
+    // Must satisfy >=4.12.25 (minimum for all hono CVEs incl. GHSA-88fw CORS origin reflection)
+    expect(overrides.hono).toBe('>=4.12.25');
   });
 
   it('should pin @hono/node-server to >=1.19.13 to fix GHSA-92pp', () => {
@@ -36,16 +36,16 @@ describe('package.json security overrides (issue #26)', () => {
   });
 });
 
-describe('pnpm overrides — hono >=4.12.16 (GHSA-9vqf + GHSA-69xw) (issue #143)', () => {
-  it('pins hono to >=4.12.16 in pnpm.overrides to fix bodyLimit bypass and JSX HTML Injection', () => {
+describe('pnpm overrides — hono >=4.12.25 (incl. GHSA-88fw CORS) (issue #143)', () => {
+  it('pins hono to >=4.12.25 in pnpm.overrides to fix bodyLimit bypass, JSX HTML Injection and CORS origin reflection', () => {
     const pnpmSection = pkg.pnpm as { overrides?: Record<string, string> } | undefined;
     const overrides = pnpmSection?.overrides ?? {};
-    expect(overrides.hono).toMatch(/^>=4\.12\.(1[6-9]|[2-9]\d|\d{3,})/);
+    expect(overrides.hono).toMatch(/^>=4\.12\.(2[5-9]|[3-9]\d|\d{3,})/);
   });
 
-  it('pins hono to >=4.12.16 in top-level overrides for npm compatibility (issue #143)', () => {
+  it('pins hono to >=4.12.25 in top-level overrides for npm compatibility (issue #143)', () => {
     const overrides = pkg.overrides as Record<string, string>;
-    expect(overrides.hono).toMatch(/^>=4\.12\.(1[6-9]|[2-9]\d|\d{3,})/);
+    expect(overrides.hono).toMatch(/^>=4\.12\.(2[5-9]|[3-9]\d|\d{3,})/);
   });
 });
 
