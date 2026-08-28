@@ -701,6 +701,53 @@ describe('MCPAdapter', () => {
 
       delete (mockClient as Record<string, unknown>).getPrompt;
     });
+
+    // Issue #274: prototype pollution via unsanitized key in getPrompt args parsing
+    it('should filter out __proto__ key from parsed args', async () => {
+      const getPromptFn = vi.fn().mockResolvedValue({
+        messages: [{ role: 'user', content: 'ok' }],
+      });
+      (mockClient as Record<string, unknown>).getPrompt = getPromptFn;
+
+      await adapter.connect({ name: 'proto-srv', transport: 'stdio', command: 'node' });
+      await adapter.getPrompt('proto-srv', 'p', '__proto__=danger foo=bar');
+
+      const call = getPromptFn.mock.calls[0][0] as { arguments: Record<string, string> };
+      expect(Object.prototype.hasOwnProperty.call(call.arguments, '__proto__')).toBe(false);
+      expect(call.arguments.foo).toBe('bar');
+
+      delete (mockClient as Record<string, unknown>).getPrompt;
+    });
+
+    it('should filter out constructor key from parsed args', async () => {
+      const getPromptFn = vi.fn().mockResolvedValue({
+        messages: [{ role: 'user', content: 'ok' }],
+      });
+      (mockClient as Record<string, unknown>).getPrompt = getPromptFn;
+
+      await adapter.connect({ name: 'ctor-srv', transport: 'stdio', command: 'node' });
+      await adapter.getPrompt('ctor-srv', 'p', 'constructor=danger name=Alice');
+
+      const call = getPromptFn.mock.calls[0][0] as { arguments: Record<string, string> };
+      expect(Object.prototype.hasOwnProperty.call(call.arguments, 'constructor')).toBe(false);
+      expect(call.arguments.name).toBe('Alice');
+
+      delete (mockClient as Record<string, unknown>).getPrompt;
+    });
+
+    it('should not pollute Object.prototype when __proto__ key is in args', async () => {
+      const getPromptFn = vi.fn().mockResolvedValue({
+        messages: [{ role: 'user', content: 'ok' }],
+      });
+      (mockClient as Record<string, unknown>).getPrompt = getPromptFn;
+
+      await adapter.connect({ name: 'no-pollute-srv', transport: 'stdio', command: 'node' });
+      await adapter.getPrompt('no-pollute-srv', 'p', '__proto__[isAdmin]=true');
+
+      expect(({} as Record<string, unknown>).isAdmin).toBeUndefined();
+
+      delete (mockClient as Record<string, unknown>).getPrompt;
+    });
   });
 
   describe('Zod validation of server responses (issue #28)', () => {
