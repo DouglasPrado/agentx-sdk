@@ -216,6 +216,31 @@ Review $file carefully.`,
       const skill = await loadSkillFile(join(skillDir, 'SKILL.md'));
       expect(skill).toBeNull();
     });
+
+    // issue #240 — no size limit before readFile — large file DoS
+    it('should return null for SKILL.md exceeding 512 KB (DoS guard)', async () => {
+      const skillDir = join(tempDir, 'huge');
+      await mkdir(skillDir);
+      // Write a file slightly over 512 KB
+      const oversized = 'x'.repeat(513 * 1024);
+      await writeFile(join(skillDir, 'SKILL.md'), oversized);
+
+      const skill = await loadSkillFile(join(skillDir, 'SKILL.md'));
+      expect(skill).toBeNull();
+    });
+
+    it('should load a SKILL.md exactly at the 512 KB limit', async () => {
+      const skillDir = join(tempDir, 'maxsize');
+      await mkdir(skillDir);
+      // Frontmatter + instructions padded to just under 512 KB
+      const header = '---\nname: big-skill\ndescription: Big\n---\n\n';
+      const padding = 'a'.repeat(512 * 1024 - header.length);
+      await writeFile(join(skillDir, 'SKILL.md'), header + padding);
+
+      const skill = await loadSkillFile(join(skillDir, 'SKILL.md'));
+      expect(skill).not.toBeNull();
+      expect(skill!.name).toBe('big-skill');
+    });
   });
 
   describe('scanSkillFiles', () => {

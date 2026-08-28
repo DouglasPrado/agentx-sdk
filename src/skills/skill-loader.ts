@@ -116,8 +116,12 @@ export function extractBody(content: string): string {
 /**
  * Load a single SKILL.md file into an AgentSkill.
  */
+const MAX_SKILL_FILE_BYTES = 512 * 1024; // 512 KB
+
 export async function loadSkillFile(filePath: string): Promise<AgentSkill | null> {
   try {
+    const fileInfo = await stat(filePath);
+    if (fileInfo.size > MAX_SKILL_FILE_BYTES) return null;
     const content = await readFile(filePath, 'utf-8');
     const fm = parseSkillFrontmatter(content);
     const body = extractBody(content);
