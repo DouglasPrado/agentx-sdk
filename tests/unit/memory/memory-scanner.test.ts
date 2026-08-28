@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -203,6 +203,55 @@ Content here`,
 
     it('should return empty string for empty array', () => {
       expect(formatMemoryManifest([])).toBe('');
+    });
+  });
+
+  // Issue #273: scanMemoryFiles must not follow symlinks during traversal
+  describe('scanMemoryFiles — symlink safety', () => {
+    let tempDir: string;
+    let externalDir: string;
+
+    beforeEach(async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'scanner-symlink-'));
+      externalDir = await mkdtemp(join(tmpdir(), 'scanner-external-'));
+    });
+
+    afterEach(async () => {
+      await rm(tempDir, { recursive: true, force: true });
+      await rm(externalDir, { recursive: true, force: true });
+    });
+
+    it('should not enumerate .md files inside a symlinked directory', async () => {
+      // Real file inside memoryDir — should appear in results
+      await writeFile(join(tempDir, 'real.md'), '---\nname: Real\ntype: user\n---\n');
+
+      // .md file in the external directory — must NOT appear in results
+      await writeFile(join(externalDir, 'leaked.md'), '---\nname: Leaked\ntype: user\n---\n');
+
+      // Symlink inside memoryDir pointing to external directory
+      await symlink(externalDir, join(tempDir, 'escape-link'));
+
+      const result = await scanMemoryFiles(tempDir);
+      const filenames = result.map((m) => m.filename);
+
+      expect(filenames).toContain('real.md');
+      expect(filenames.some((f) => f.includes('leaked.md'))).toBe(false);
+    });
+
+    it('should not enumerate .md files inside a nested symlinked directory', async () => {
+      const subDir = join(tempDir, 'sub');
+      await mkdir(subDir, { recursive: true });
+      await writeFile(join(subDir, 'inner.md'), '---\nname: Inner\ntype: user\n---\n');
+
+      // Symlink inside a subdirectory
+      await writeFile(join(externalDir, 'outside.md'), '---\nname: Outside\ntype: user\n---\n');
+      await symlink(externalDir, join(subDir, 'escape-nested'));
+
+      const result = await scanMemoryFiles(tempDir);
+      const filenames = result.map((m) => m.filename);
+
+      expect(filenames.some((f) => f.includes('inner.md'))).toBe(true);
+      expect(filenames.some((f) => f.includes('outside.md'))).toBe(false);
     });
   });
 
