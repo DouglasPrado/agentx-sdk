@@ -132,13 +132,15 @@ export class FileMemorySystem {
    * When threadId is provided, reads from thread subdirectory.
    */
   async readMemory(filename: string, threadId?: string): Promise<MemoryFile | null> {
+    const MAX_MEMORY_FILE_BYTES = 512 * 1024; // 512 KB
     try {
       const dir = this.resolveDir(threadId);
       const candidate = join(dir, filename);
       const filePath = await validateMemoryPathResolved(candidate, this.memoryDir);
       if (!filePath) return null;
-      const content = await readFile(filePath, 'utf-8');
       const fileStat = await stat(filePath);
+      if (fileStat.size > MAX_MEMORY_FILE_BYTES) return null;
+      const content = await readFile(filePath, 'utf-8');
       const frontmatter = parseFrontmatter(content);
 
       const bodyMatch = /^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/.exec(content);
