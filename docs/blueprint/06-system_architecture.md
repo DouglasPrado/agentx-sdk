@@ -91,6 +91,22 @@ Esta seção descreve a arquitetura de alto nível do **AgentX SDK**, incluindo 
 | **Tecnologia**   | TypeScript puro, zero dependências             |
 | **Interface**    | Funções e classes utilitárias                   |
 
+### Evaluator Subsystem (G-Eval)
+
+| Campo            | Descrição                                      |
+| ---------------- | ---------------------------------------------- |
+| **Nome**         | Evaluator + run-evaluation + SQLiteEvaluationStore |
+| **Responsabilidade** | Avalia cada turno do Agent usando um LLM-juiz separado no estilo G-Eval. Constrói prompt com rubrica + CoT, parse JSON com retry e Zod, agrega scores (mean/min), e persiste em `evaluations` (SQLite). Fire-and-forget — falhas no juiz nunca afetam o turno principal |
+| **Tecnologia**   | LLMClient dedicado, Zod, better-sqlite3        |
+| **Interface**    | `EvaluatorConfig` em `AgentConfig`. API pública: `Evaluator.evaluate()`, `EvaluationStore`. Opt-in via `evaluator.enabled` |
+
+**Decisões-chave:**
+- Judge separado do generator (default: `anthropic/claude-haiku-4-5`) — mitiga self-grading bias; warning se forem iguais
+- Conteúdo do usuário/assistente delimitado por tags `<USER_REQUEST>` / `<ASSISTANT_RESPONSE>` com escape de tags reservadas — defesa contra prompt injection
+- `temperature: 0` + `responseFormat: json_object` no juiz para estabilidade do parse
+- `sampleRate` configurável (default 1.0) para controlar custo; bucket de tokens do juiz **não** entra no `CostPolicy` do generator
+- Persistência via `EvaluationStore` pluggable — SQLite por padrão; aggregateByCriterion fornece base para dashboards de qualidade
+
 <!-- APPEND:components -->
 
 ---

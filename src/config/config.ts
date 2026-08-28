@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
+import { EVALUATION_CRITERIA, type EvaluationStore } from '../contracts/entities/evaluation.js';
 
 /** MCP server connection configuration */
 const MCPConnectionConfigSchema = z.object({
@@ -61,6 +62,22 @@ const EmbeddingProviderConfigSchema = z.object({
   model: z.string().optional(),
 });
 
+/** Evaluator (G-Eval) subsystem configuration */
+const EvaluatorConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  judgeModel: z.string().min(1).default('anthropic/claude-haiku-4-5'),
+  judgeApiKey: z.string().min(1).optional(),
+  judgeBaseUrl: z.string().url().optional(),
+  criteria: z
+    .array(z.enum(EVALUATION_CRITERIA))
+    .min(1)
+    .default(['factuality', 'coherence', 'safety', 'completeness']),
+  sampleRate: z.number().min(0).max(1).default(1.0),
+  scoreAggregation: z.enum(['mean', 'min']).default('mean'),
+  timeout: z.number().positive().default(15_000),
+  store: z.custom<EvaluationStore>().optional(),
+});
+
 /** Full Agent configuration — validated with Zod */
 export const AgentConfigSchema = z.object({
   apiKey: z.string().min(1, 'apiKey is required'),
@@ -73,6 +90,7 @@ export const AgentConfigSchema = z.object({
   knowledge: KnowledgeConfigSchema.optional(),
   skills: SkillsConfigSchema.optional(),
   costPolicy: CostPolicySchema.optional(),
+  evaluator: EvaluatorConfigSchema.optional(),
 
   // Pluggable stores
   conversation: z
@@ -136,3 +154,5 @@ export type AgentConfig = z.output<typeof AgentConfigSchema>;
 export type MCPConnectionConfig = z.output<typeof MCPConnectionConfigSchema>;
 export type MCPConnectionConfigInput = z.input<typeof MCPConnectionConfigSchema>;
 export type CostPolicy = z.infer<typeof CostPolicySchema>;
+export type EvaluatorConfig = z.output<typeof EvaluatorConfigSchema>;
+export type EvaluatorConfigInput = z.input<typeof EvaluatorConfigSchema>;

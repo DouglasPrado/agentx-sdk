@@ -108,6 +108,25 @@ export class SQLiteDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(thread_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(thread_id, pinned);
+
+      CREATE TABLE IF NOT EXISTS evaluations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trace_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        turn_index INTEGER NOT NULL,
+        judge_model TEXT NOT NULL,
+        final_score REAL NOT NULL,
+        scores_json TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL,
+        output_tokens INTEGER NOT NULL,
+        total_tokens INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_evaluations_thread ON evaluations(thread_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_evaluations_trace ON evaluations(trace_id);
+      CREATE INDEX IF NOT EXISTS idx_evaluations_final_score ON evaluations(final_score);
     `);
   }
 }
