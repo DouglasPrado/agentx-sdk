@@ -202,6 +202,34 @@ describe('FileMemorySystem', () => {
       const result = await system.buildContextPrompt();
       expect(result).toBe('');
     });
+
+    // Issue #272: buildContextPrompt must not load oversized MEMORY.md into heap
+    it('should skip global MEMORY.md when file exceeds 512 KB', async () => {
+      const oversized = Buffer.alloc(513 * 1024, '-').toString();
+      await writeFile(join(tempDir, 'MEMORY.md'), oversized);
+
+      const result = await system.buildContextPrompt();
+      expect(result).toBe('');
+    });
+
+    it('should skip thread MEMORY.md when file exceeds 512 KB', async () => {
+      const { mkdir } = await import('node:fs/promises');
+      const threadDir = join(tempDir, 'threads', 'mythread');
+      await mkdir(threadDir, { recursive: true });
+      const oversized = Buffer.alloc(513 * 1024, '-').toString();
+      await writeFile(join(threadDir, 'MEMORY.md'), oversized);
+
+      const result = await system.buildContextPrompt('mythread');
+      expect(result).toBe('');
+    });
+
+    it('should still return content when MEMORY.md is within 512 KB', async () => {
+      const content = '- [Test](test.md) — within limit\n';
+      await writeFile(join(tempDir, 'MEMORY.md'), content);
+
+      const result = await system.buildContextPrompt();
+      expect(result).toContain('within limit');
+    });
   });
 
   describe('buildFullContext', () => {
