@@ -88,6 +88,7 @@ function rowToMessage(row: ConversationRow, logger: Logger): ChatMessage {
       );
       throw new Error(
         `Corrupted tool_calls JSON for rowId=${row.id} (threadId=${row.thread_id}): ${errMsg}`,
+        { cause: e },
       );
     }
   }

@@ -130,6 +130,7 @@ export class LLMClient {
       });
       throw new Error(
         `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
       );
     }
 
@@ -175,6 +176,7 @@ export class LLMClient {
       });
       throw new Error(
         `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
       );
     }
 
