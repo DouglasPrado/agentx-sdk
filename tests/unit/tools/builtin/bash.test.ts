@@ -184,6 +184,50 @@ describe('builtin/bash', () => {
     });
   });
 
+  describe('SHELL env validation (issue #238)', () => {
+    it('uses /bin/sh when SHELL is not set', async () => {
+      const saved = process.env.SHELL;
+      delete process.env.SHELL;
+      try {
+        const tool = createBashTool();
+        const result = await tool.execute({ command: 'echo ok' }, signal);
+        const content = typeof result === 'string' ? result : result.content;
+        expect(content).toContain('ok');
+      } finally {
+        if (saved !== undefined) process.env.SHELL = saved;
+      }
+    });
+
+    it('accepts /bin/bash as an allowed shell', async () => {
+      const saved = process.env.SHELL;
+      process.env.SHELL = '/bin/bash';
+      try {
+        const tool = createBashTool();
+        const result = await tool.execute({ command: 'echo bash-ok' }, signal);
+        const content = typeof result === 'string' ? result : result.content;
+        expect(content).toContain('bash-ok');
+      } finally {
+        if (saved !== undefined) process.env.SHELL = saved;
+        else delete process.env.SHELL;
+      }
+    });
+
+    it('falls back to /bin/sh when SHELL is not in allowlist', async () => {
+      const saved = process.env.SHELL;
+      process.env.SHELL = '/tmp/malicious-shell';
+      try {
+        const tool = createBashTool();
+        // Command must still execute — just not with the untrusted shell
+        const result = await tool.execute({ command: 'echo fallback-ok' }, signal);
+        const content = typeof result === 'string' ? result : result.content;
+        expect(content).toContain('fallback-ok');
+      } finally {
+        if (saved !== undefined) process.env.SHELL = saved;
+        else delete process.env.SHELL;
+      }
+    });
+  });
+
   describe('brace expansion blocked (issue #235)', () => {
     it('blocks { in command — brace expansion bypass', async () => {
       const tool = createBashTool();
